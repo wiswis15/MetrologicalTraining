@@ -1,0 +1,54 @@
+CppUnit demo
+
+===============
+
+INTRODUCTION
+_______________
+
+The purpose of this basic demo application is to show how-to use the cppunit
+framework for unit testing source code, in particular C++ sources. It further
+serves as a demo application for Jenkins on how-to build, run and show cppunit
+test application output within Jenkins in an auto-magical way.
+
+INSTALL
+_______________
+
+Before compiling and running this demo app, the cppunit library needs to be
+compiled and present. The cppunit library is used in LibreOffice and is now
+being maintained at FreeDesktop, see [1] on the how-to. The cppunit library
+is statically linked into the unit-test application.
+
+TARGETS
+_______________
+
+all (default)        : creates the .depend file, after which it compiles both
+                       the regular application as well as the unit-test one
+run                  : builds and runs the regular application
+runtest              : builds and runs the unit-test application, copies the
+                       'testreport.xsl' file to current folder and fires up
+                       firefox to display the unit-test end results
+[out/]calculator     : builds the regular application
+[out/]calculatortest : builds the unit-test application
+clean                : removes all generated object files from the bin folder
+clobber              : removes the bin folder including its contents
+distclean            : resets project tree to virgin/clean checkout state by
+                       removing all make generated output
+depend               : auto-creates a .depend file containing the dependency
+                       on sources and header files for the incremental build
+                       after changes in source and/or header files
+
+EXTENDING
+_______________
+
+To extend the project by adding a class/file including an unit-test class,
+rules.mk needs to be updated as well as the UnitTest.h header file. A good
+practice would be when adding a new class/file to the project to have the
+unit-test class/file called similar, but extended with 'Test'.  E.g.
+  class Calc -> class CalcTest,
+  Calc.h -> CalcTest.h.
+
+REFERENCES
+_______________
+
+[1] http://www.freedesktop.org/wiki/Software/cppunit
+
