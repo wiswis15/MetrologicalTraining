@@ -11,7 +11,7 @@ TSTOBJS := $(addprefix $(OBJDIR)/,$(notdir $(TSTSRCS:.cpp=.o)))
 
 
 CXX = g++
-CXXFLAGS = -Wall -pedantic -Wno-unknown-pragmas -Wno-format -O3 $(INCS) -DLINUX
+CXXFLAGS = -Wall -pedantic -Wno-unknown-pragmas -Wno-format -O3 $(INCS) -DLINUX $(JENKINS)
 
 all : $(APP) $(TSTAPP)
 

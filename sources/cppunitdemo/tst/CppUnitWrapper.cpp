@@ -25,6 +25,9 @@ public:
 	virtual ~MyXmlOutputterHook() {
 	};
 
+// Do not add extra info to Test.xml when executed under Jenkins,
+//  since Jenkins will choke on it!
+#ifndef __JENKINS
 	virtual void beginDocument (CPPUNIT_NS::XmlDocument* inDocument) {
 		if (!inDocument) {
 			return;
@@ -34,16 +37,10 @@ public:
 		theElement->addElement (new CPPUNIT_NS::XmlElement ("Project", mProjectName));
 
 		const time_t rawtime = time (0);
-/*
-    //  Windows calls, not supported under Linux
-		const int kTimeStringLength = 40;
-		char timeString [kTimeStringLength + 1];
-		ctime_s (timeString, kTimeStringLength, &rawtime);
-		theElement->addElement (new CPPUNIT_NS::XmlElement ("Date", timeString));
-*/
 		theElement->addElement (new CPPUNIT_NS::XmlElement ("Date", ctime (&rawtime)));
 		inDocument->rootElement ().addElement (theElement);
 	};
+#endif  //  __JENKINS
 
 private:
 	std::string mProjectName;
