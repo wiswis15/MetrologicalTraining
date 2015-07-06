@@ -1,0 +1,71 @@
+
+============================= S99_QTBROWSER -> Debug-7002
+#!/bin/sh
+
+start()
+{
+    URL=$(eval cat /mnt/nand/seachange/config_appli/emmy.ini | grep ^firstUrl | cut -d= -f2)
+    URIPARAM=""
+        
+    if [ "x$URL" = "x" ]; then
+      echo "## Do the actual start using the default URL!!"
+    else
+      echo "## Do the actual start using a configured URL <$URL> !!"
+      URIPARAM="--url=$URL"
+    fi
+
+    #NOTE: only one line should be enabled from below two lines!!!
+    #Enable below line for receiving an avalance of JavaScript Memory Inspector (JSMI) information
+    #JSC_showAllocationBacktraces=1 JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=0 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+    #Enable below line for no JSMI information (default)
+    JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=0 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+}
+
+$1
+
+============================= S99_QTBROWSER -> Release-7002
+#!/bin/sh
+
+start()
+{
+    URL=$(eval cat /mnt/nand/seachange/config_appli/emmy.ini | grep ^firstUrl | cut -d= -f2)
+    URIPARAM=""
+    
+    if [ "x$URL" = "x" ]; then
+      echo "## Do the actual start using the default URL!!"
+    else
+      echo "## Do the actual start using a configured URL <$URL> !!"
+      URIPARAM="--url=$URL"
+    fi
+
+    #NOTE: only one line should be enabled from below two lines!!!
+    #Enable below line for full development information
+    #JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=1 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+    #Enable below line for no development information (default)
+    ICU_DATA=/etc /usr/bin/qtbrowser --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+}
+
+$1
+
+
+============================= S99_QTBROWSER -> Production-7002; Production/Release/Debug-7000
+Furthermore, for these builds the following flags should be set:
+WEBKIT_CONFIG -= inspector; optional, as not being used by Metrological: WEBKIT_CONFIG -= svg
+=============================================================================================
+#!/bin/sh
+
+start()
+{
+    URL=$(eval cat /mnt/nand/seachange/config_appli/emmy.ini | grep: ^firstUrl | cut -d= -f2)
+    URIPARAM=""
+    
+    if [ "x$URL" = "x" ]; then
+    else
+      URIPARAM="--url=$URL"
+    fi
+    
+    ICU_DATA=/etc /usr/bin/qtbrowser --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+}
+
+$1
+
