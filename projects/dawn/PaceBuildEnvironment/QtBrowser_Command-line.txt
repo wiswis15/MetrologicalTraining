@@ -64,7 +64,7 @@ start()
       URIPARAM="--url=$URL"
     fi
     
-    ICU_DATA=/etc /usr/bin/qtbrowser --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+    ICU_DATA=/etc /usr/bin/qtbrowser --no-console-log --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
 }
 
 $1
