@@ -41,8 +41,8 @@ start()
     #NOTE: only one line should be enabled from below two lines!!!
     #Enable below line for full development information
     #JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=1 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
-    #Enable below line for no development information (default)
-    ICU_DATA=/etc /usr/bin/qtbrowser --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+    #Enable below line for no development information (default) and less debug output
+    ICU_DATA=/etc /usr/bin/qtbrowser --short-console-log --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
 }
 
 $1
