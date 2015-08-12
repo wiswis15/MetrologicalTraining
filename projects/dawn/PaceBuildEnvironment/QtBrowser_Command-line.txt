@@ -1,5 +1,6 @@
-Revision number: 8
-Revision date  : 29 July 2015
+Revision number: 9
+Revision date  : 12 August 2015
+Revision info  : added extra check for existence of cookieJar before removing specific cookie from it
 
 
 ============================= S99_QTBROWSER -> Debug-7002
@@ -7,14 +8,13 @@ Revision date  : 29 July 2015
 
 start()
 {
+    cookieJar="/mnt/nand/browser/cookies.db"
     cmp -s /version.txt /mnt/nand/browser/version.txt > /dev/null
-    if [ $? != 0 ]; then
-      # Version files differ so remove the YT HttpOnly cookie from cookie-jar
-      sqlite3 /mnt/nand/browser/cookies.db "DELETE FROM cookies WHERE cookieId='.youtube.comVISITOR_INFO1_LIVE';"
+    if [ $? != 0 ] && [ -f "$cookieJar" ]; then
+      # Version files differ and cookieJar exists so remove the YT HttpOnly cookie
+      sqlite3 $cookieJar "DELETE FROM cookies WHERE cookieId='.youtube.comVISITOR_INFO1_LIVE';"
       cp /version.txt /mnt/nand/browser/version.txt
       echo "Removed YouTube HttpOnly-cookie"
-    else
-      echo "YouTube HttpOnly-cookie already removed"
     fi
 
     URL=$(eval cat /mnt/nand/seachange/config_appli/emmy.ini | grep ^firstUrl | cut -d= -f2)
@@ -31,7 +31,7 @@ start()
     #Enable below line for receiving an avalance of JavaScript Memory Inspector (JSMI) information
     #JSC_showAllocationBacktraces=1 JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=0 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
     #Enable below line for no JSMI information (default)
-    JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=0 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --validate-ca=off --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+    JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=0 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
 }
 
 $1
@@ -41,14 +41,13 @@ $1
 
 start()
 {
+    cookieJar="/mnt/nand/browser/cookies.db"
     cmp -s /version.txt /mnt/nand/browser/version.txt > /dev/null
-    if [ $? != 0 ]; then
-      # Version files differ so remove the YT HttpOnly cookie from cookie-jar
-      sqlite3 /mnt/nand/browser/cookies.db "DELETE FROM cookies WHERE cookieId='.youtube.comVISITOR_INFO1_LIVE';"
+    if [ $? != 0 ] && [ -f "$cookieJar" ]; then
+      # Version files differ and cookieJar exists so remove the YT HttpOnly cookie
+      sqlite3 $cookieJar "DELETE FROM cookies WHERE cookieId='.youtube.comVISITOR_INFO1_LIVE';"
       cp /version.txt /mnt/nand/browser/version.txt
       echo "Removed YouTube HttpOnly-cookie"
-    else
-      echo "YouTube HttpOnly-cookie already removed"
     fi
 
     URL=$(eval cat /mnt/nand/seachange/config_appli/emmy.ini | grep ^firstUrl | cut -d= -f2)
@@ -65,28 +64,22 @@ start()
     #Enable below line for full development information
     #JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=1 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
     #Enable below line for no development information (default) and less debug output
-    ICU_DATA=/etc /usr/bin/qtbrowser --validate-ca=off --short-console-log --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+    ICU_DATA=/etc /usr/bin/qtbrowser --short-console-log --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
 }
 
 $1
 
 
 ============================= S99_QTBROWSER -> Production-7002; Production/Release/Debug-7000
-Furthermore, for these builds the following flags should be set:
-WEBKIT_CONFIG -= inspector; optional, as not being used by Metrological: WEBKIT_CONFIG -= svg
-=============================================================================================
 #!/bin/sh
 
 start()
 {
+    cookieJar="/mnt/nand/browser/cookies.db"
     cmp -s /version.txt /mnt/nand/browser/version.txt > /dev/null
-    if [ $? != 0 ]; then
-      # Version files differ so remove the YT HttpOnly cookie from cookie-jar
-      sqlite3 /mnt/nand/browser/cookies.db "DELETE FROM cookies WHERE cookieId='.youtube.comVISITOR_INFO1_LIVE';"
+    if [ $? != 0 ] && [ -f "$cookieJar" ]; then
+      sqlite3 $cookieJar "DELETE FROM cookies WHERE cookieId='.youtube.comVISITOR_INFO1_LIVE';"
       cp /version.txt /mnt/nand/browser/version.txt
-      echo "Removed YouTube HttpOnly-cookie"
-    else
-      echo "YouTube HttpOnly-cookie already removed"
     fi
 
     URL=$(eval cat /mnt/nand/seachange/config_appli/emmy.ini | grep: ^firstUrl | cut -d= -f2)
@@ -97,7 +90,7 @@ start()
       URIPARAM="--url=$URL"
     fi
     
-    ICU_DATA=/etc /usr/bin/qtbrowser --validate-ca=off --no-console-log --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+    ICU_DATA=/etc /usr/bin/qtbrowser --no-console-log --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
 }
 
 $1
