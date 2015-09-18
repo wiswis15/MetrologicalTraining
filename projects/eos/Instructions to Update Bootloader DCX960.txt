@@ -1,0 +1,30 @@
+1)      Put all 3 attached files onto a usb stick (recommend usb 3.0, sometimes the usb 2.0 sticks are 
+        not recognized quick enough during the actual reload process and will halt reload execution).  
+        There should be no permanent issue if you get an error because of this during reload.
+2)      Start DCX960 and break into the SSBL prompt by repeatedly hitting CTRL-C during bootup.
+3)     At the SSBL> prompt, Enter the DEBUG menu by typing: 'd' <enter> 
+4)     At the DEBUG> prompt, Initialize the usb port by typing: usb init<enter>
+5)     At the DEBUG> prompt, Load the reloader into memory by typing: load –addr=0x18000000 –raw usbdisk0:package.bin<enter>
+6)     At the DEBUG> prompt, Execute the reloader by typing: go 0x1800020c<enter>
+
+
+Successful Completion should show:
+
+MAIN: Done update!
+MAIN: executing GOTO
+MAIN: executing NOOP
+********************************
+Finished script MAIN
+********************************
+
+15)     Power cycle box upon completion.  The first boot will take a bit longer than successive boots, due to housekeeping
+16)     Depending on the current state of your box, you will probably need to reflash your platform image into your box.  There will also probably be differences in mtd names within the kernel which may require an updated kernel/application
+
+
+Failed Completion should show:
+
+ERROR: ../Src/Reloader/Reloader.cpp(314): MAIN: Step failed, no error handler specified, exiting
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+********************************
+Finished script MAIN
+********************************
