@@ -1,3 +1,8 @@
+qtbrowser 2.0.11, 8 October 2015; commit 7193f983d5/7193f983d5a07207a67dd22ec0ef0877b885e4fc
+
+Release Note: Fixed syslog issue; Inserted formatting parameter instead of using the log message itself.
+___________
+
 qtbrowser 2.0.10, 4 September 2015; commit 10c09a0589/10c09a0589129af0f9b5963f719ed6fa2790e922
 
 Release note: Conditionally added syslog functionality; depending on the define QT_BUILD_WITH_SYSLOG any output will be redirected to syslog or simply to the console [default]. To have the syslog functionality, simply add -DQT_BUILD_WITH_SYSLOG to the Makefile of the qtbrowser.
