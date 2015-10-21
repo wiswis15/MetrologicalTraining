@@ -1,0 +1,3 @@
+qtbrowser 2.0.9, 27 August 2015; commit a3e8448726/a3e844872639992072f8f81830f67e8a56a592f0
+
+Release note: enabled websecurity by toggling the default from off to on, thus not requiring any start-up script change.
