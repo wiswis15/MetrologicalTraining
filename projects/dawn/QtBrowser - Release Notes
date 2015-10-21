@@ -1,3 +1,8 @@
+qtbrowser 2.0.10, 4 September 2015; commit 10c09a0589/10c09a0589129af0f9b5963f719ed6fa2790e922
+
+Release note: Conditionally added syslog functionality; depending on the define QT_BUILD_WITH_SYSLOG any output will be redirected to syslog or simply to the console [default]. To have the syslog functionality, simply add -DQT_BUILD_WITH_SYSLOG to the Makefile of the qtbrowser.
+___________
+
 qtbrowser 2.0.9, 27 August 2015; commit a3e8448726/a3e844872639992072f8f81830f67e8a56a592f0
 
 Release note: enabled websecurity by toggling the default from off to on, thus not requiring any start-up script change.
