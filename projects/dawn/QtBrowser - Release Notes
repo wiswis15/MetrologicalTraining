@@ -1,12 +1,44 @@
+QtBrowser Delivery, 21 October 2015
+===================================
+QtBrowser Release Notes: this document
+qtbrowser 2.0.11; git-commit 7193f98/7193f983d5a07207a67dd22ec0ef0877b885e4fc
+qtwebkit   qt5.4; git-commit bf14b0e/bf14b0e5b3178efe9326df8cb4a3c21214199cd5
+Patches: qtwebkit-0030-fontcache.patch
+
+Release Notes
+=============
+ - For the syslog functionality to work define QT_BUILD_WITH_SYSLOG to both the qtbrowser code base as well as the qtwebkit code base
+ - Engage # 18448: conditionally redirecting qtbrowser logging to syslog as well, in qtbrowser 2.0.10 only JS logging got redirected to syslog
+ - Engage # 18262: patch file to be applied to qtwebkit-5.4.1, lowering browser memory foot-print by effectively disabling the font cache
+
+Test Scenario
+=============
+Test Case: Enabled Garbage Collector configuration by adding: -e JSC_showObjectStatistics=1 to /container/QTBROWSER/launcher/start.sh
+Expected : GC output/Heap Statistics seen in syslog
+Result   : GC output/Heap Statistics correctly seen in syslog
+
+Definitions
+===========
+QtBrowser - Administrative package consisting out of qtbrowser, qtwebkit and qtbase code packages
+qtbrowser - browser application code package using qtwebkit
+qtwebkit  - webkit library code package based on Qt
+
+___________
+
+
 qtbrowser 2.0.11, 8 October 2015; commit 7193f983d5/7193f983d5a07207a67dd22ec0ef0877b885e4fc
 
 Release Note: Fixed syslog issue; Inserted formatting parameter instead of using the log message itself.
+
 ___________
+
 
 qtbrowser 2.0.10, 4 September 2015; commit 10c09a0589/10c09a0589129af0f9b5963f719ed6fa2790e922
 
 Release note: Conditionally added syslog functionality; depending on the define QT_BUILD_WITH_SYSLOG any output will be redirected to syslog or simply to the console [default]. To have the syslog functionality, simply add -DQT_BUILD_WITH_SYSLOG to the Makefile of the qtbrowser.
+
 ___________
+
 
 qtbrowser 2.0.9, 27 August 2015; commit a3e8448726/a3e844872639992072f8f81830f67e8a56a592f0
 
