@@ -1,3 +1,46 @@
+
+Definitions
+===========
+Browser   - administrative package consisting out of qtbrowser, qtwebkit and qtbase code packages
+qtbrowser - browser application code package using qtwebkit and qtbase
+qtwebkit  - webkit library code package based on Qt
+qtbase    - basic Qt library packages
+
+___________
+
+
+Browser Delivery, 26 November 2015
+==================================
+Browser Release Notes: this document
+qtbrowser 2.0.12; git-commit 
+qtwebkit   qt5.4; git-commit bf14b0e/bf14b0e5b3178efe9326df8cb4a3c21214199cd5
+whitelist.json  ; sample configuration file containing to be whitelisted origins with their sub-domains
+
+Release Notes
+=============
+ - Engage # 18706/JIRA PACEDAWN-46834
+    Implemented whitelist support via a JSON-formatted configuration file, presented to the browser
+    via the command-line option: --whitelist-config=<path-to-JSON-configuration-file>. As a working
+    example of the whitelist JSON configuration file, see the delivered whitelist.json config file.
+
+Test Scenario
+=============
+Test Case:
+  1) No whitelist-config command-line parameter
+  2) Whitelist-config command-line parameter, with invalid path
+  3) Whitelist-config command-line parameter, with valid path
+Expected :
+  1) qtbrowser start-up okay, but launching YouTube from AppStore results in error
+  2) qtbrowser start-up with warning, launching YT from Appstore results in error
+  3) qtbrowser start-up okay, launching YT from Appstore will play YT assests
+Result   : 
+  1) as expected
+  2) as expected
+  3) as expected
+
+___________
+
+
 QtBrowser Delivery, 21 October 2015
 ===================================
 QtBrowser Release Notes: this document
@@ -16,12 +59,6 @@ Test Scenario
 Test Case: Enabled Garbage Collector configuration by adding: -e JSC_showObjectStatistics=1 to /container/QTBROWSER/launcher/start.sh
 Expected : GC output/Heap Statistics seen in syslog
 Result   : GC output/Heap Statistics correctly seen in syslog
-
-Definitions
-===========
-QtBrowser - Administrative package consisting out of qtbrowser, qtwebkit and qtbase code packages
-qtbrowser - browser application code package using qtwebkit
-qtwebkit  - webkit library code package based on Qt
 
 ___________
 

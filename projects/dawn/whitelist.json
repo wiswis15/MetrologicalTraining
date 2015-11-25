@@ -1,0 +1,26 @@
+[
+  {
+    "origin" : "http://widgets.metrological.com",
+    "domain" :
+    [
+      "http://www.youtube.com", "https://www.youtube.com"
+    ]
+  },
+  
+  {
+    "origin" : "https://widgets.metrological.com",
+    "domain" :
+    [
+      "http://www.youtube.com", "https://www.youtube.com"
+    ]
+  },
+  
+  {
+    "origin" : "http://127.0.0.1:8081",
+    "domain" :
+    [
+      "http://dawncmpriv", "http://dawnwifi"
+    ]
+  }
+]
+
