@@ -12,7 +12,7 @@ ___________
 Browser Delivery, 26 November 2015
 ==================================
 Browser Release Notes: this document
-qtbrowser 2.0.12; git-commit 
+qtbrowser 2.0.12; git-commit dc65898/dc65898cd4a3d0bae6aabc55564e27dec1434258
 qtwebkit   qt5.4; git-commit bf14b0e/bf14b0e5b3178efe9326df8cb4a3c21214199cd5
 whitelist.json  ; sample configuration file containing to be whitelisted origins with their sub-domains
 
