@@ -9,6 +9,23 @@ qtbase    - basic Qt library packages
 ___________
 
 
+Browser Delivery, 2 December 2015
+==================================
+Browser Release Notes: this document
+QtBrowser_Command-line.txt: revision 11, 2 December 2015
+
+Release Notes
+=============
+ - Delta on Browser Delivery, 26 November 2015, where the updated qtbrowser
+    startup script was accidentally left out of the delivery package.
+
+Test Scenario
+=============
+Not Applicable
+
+___________
+
+
 Browser Delivery, 26 November 2015
 ==================================
 Browser Release Notes: this document

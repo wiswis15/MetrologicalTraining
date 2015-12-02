@@ -1,6 +1,8 @@
-Revision number: 10
-Revision date  : 12 August 2015
-Revision info  : splitted configuration into an S0 release (w/o ca-cert validation) and an S2 release (with ca-cert validation)
+Revision number: 11
+Revision date  : 2 December 2015
+Revision info  :
+  Updated command-line options, added the whitelist-config parameter containing the full path to the JSON-formatted configuration file.
+  Using below configuration, the file is named 'whitelist.json' and is located in: /mnt/nand/browser
 
 ######################################### S0 #########################################
 
@@ -30,9 +32,9 @@ start()
 
     #NOTE: only one line should be enabled from below two lines!!!
     #Enable below line for receiving an avalance of JavaScript Memory Inspector (JSMI) information
-    #JSC_showAllocationBacktraces=1 JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=0 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --validate-ca=off --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+    #JSC_showAllocationBacktraces=1 JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=0 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --whitelist-config=/mnt/nand/browser/whitelist.json --validate-ca=off --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
     #Enable below line for no JSMI information (default)
-    JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=0 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --validate-ca=off --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+    JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=0 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --whitelist-config=/mnt/nand/browser/whitelist.json --validate-ca=off --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
 }
 
 $1
@@ -63,9 +65,9 @@ start()
 
     #NOTE: only one line should be enabled from below two lines!!!
     #Enable below line for full development information
-    #JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=1 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --validate-ca=off --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+    #JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=1 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --whitelist-config=/mnt/nand/browser/whitelist.json --validate-ca=off --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
     #Enable below line for no development information (default) and less debug output
-    ICU_DATA=/etc /usr/bin/qtbrowser --validate-ca=off --short-console-log --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+    ICU_DATA=/etc /usr/bin/qtbrowser --whitelist-config=/mnt/nand/browser/whitelist.json --validate-ca=off --short-console-log --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
 }
 
 $1
@@ -90,7 +92,7 @@ start()
       URIPARAM="--url=$URL"
     fi
     
-    ICU_DATA=/etc /usr/bin/qtbrowser --validate-ca=off --no-console-log --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+    ICU_DATA=/etc /usr/bin/qtbrowser --whitelist-config=/mnt/nand/browser/whitelist.json --validate-ca=off --no-console-log --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
 }
 
 $1
@@ -123,9 +125,9 @@ start()
 
     #NOTE: only one line should be enabled from below two lines!!!
     #Enable below line for receiving an avalance of JavaScript Memory Inspector (JSMI) information
-    #JSC_showAllocationBacktraces=1 JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=0 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+    #JSC_showAllocationBacktraces=1 JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=0 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --whitelist-config=/mnt/nand/browser/whitelist.json --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
     #Enable below line for no JSMI information (default)
-    JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=0 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+    JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=0 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --whitelist-config=/mnt/nand/browser/whitelist.json --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
 }
 
 $1
@@ -156,9 +158,9 @@ start()
 
     #NOTE: only one line should be enabled from below two lines!!!
     #Enable below line for full development information
-    #JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=1 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+    #JSC_showObjectStatistics=1 WEBKIT_SHOW_COMPOSITING_DEBUG_VISUALS=1 WEBKIT_SHOW_FPS=0.5 ICU_DATA=/etc /usr/bin/qtbrowser --whitelist-config=/mnt/nand/browser/whitelist.json --inspector=9998 --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
     #Enable below line for no development information (default) and less debug output
-    ICU_DATA=/etc /usr/bin/qtbrowser --short-console-log --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+    ICU_DATA=/etc /usr/bin/qtbrowser --whitelist-config=/mnt/nand/browser/whitelist.json --short-console-log --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
 }
 
 $1
@@ -183,7 +185,7 @@ start()
       URIPARAM="--url=$URL"
     fi
     
-    ICU_DATA=/etc /usr/bin/qtbrowser --no-console-log --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
+    ICU_DATA=/etc /usr/bin/qtbrowser --whitelist-config=/mnt/nand/browser/whitelist.json --no-console-log --cookie-storage=/mnt/nand/browser --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent $URIPARAM &
 }
 
 $1
