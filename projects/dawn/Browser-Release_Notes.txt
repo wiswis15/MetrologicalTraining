@@ -9,6 +9,44 @@ qtbase    - basic Qt library packages
 ___________
 
 
+Browser Delivery, 3 December 2015
+==================================
+Browser Release Notes: this document
+qtwebkit5.4.1-0030-ImageBufferQt-render.patch: source code patch file
+
+Release Notes
+=============
+ - Fixed ticket "PACEDAWN-47261/RDKBROWSER-1: Faulty rendering on Canvas (QT5)".
+   This patch is to be applied to the qtwebkit 5.4.1 package
+
+Test Scenario
+=============
+Test Case:
+  1) Flash same image as found in the ticket
+      =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+      Nucleus_Dawn1_iSTB_DMC7002KLG_FR10b_S2d-v1.0s10c2b25_RELEASE-29Jul2015-1552
+      =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+      RDK       :RDK_rel_DMC7002KLG_CADA_r12439_FR10b_RELEASE_v1.0s10c2b71-28Jul2015-1505
+      Mediaware :mwserver-v1.0s4c2b209_fr10b-cadb-release-2015-07-22-1732
+      =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  2) Load onto the box the received HZN4UI: ui-2.0.custom.5
+      {"dawn_version":"ui-2.0.custom.5","naf_version":"NAF-1.2.7s10r9p2_FR11"}
+  3) Navigate to the TV GUIDE and scroll down to the bottom channel of the first page
+  4) Scroll one channel down (showing the second page) and one channel back up (back to first page)
+  5) Replace libQt5WebKit.so.5.4.1 from the image by the patched version
+  6) Stop qtbrowser and restart using the new/patched webkit library
+  7) Navigate to the TV GUIDE and scroll down to the bottom channel of the first page
+  8) Scroll one channel down (showing the second page) and one channel up (back at first page)
+Expected :
+  4) Issue should be reproduced at page transitions
+  8) Issue should no longer be reproducible at page transitions
+Result   : 
+  4) As expected
+  8) As expected
+
+___________
+
+
 Browser Delivery, 2 December 2015
 ==================================
 Browser Release Notes: this document
