@@ -9,8 +9,31 @@ qtbase    - basic Qt library packages
 ___________
 
 
-Browser Delivery, 3 December 2015
+Browser Delivery, 28 December 2015
 ==================================
+Browser Release Notes: this document
+qtbrowser 2.0.13; git-commit 3c0c3d5/3c0c3d5e4cabfc76a1742db6259c1d7ce3ace366
+qtwebkit   qt5.4; git-commit fe3dba3/fe3dba3a52ca361458be25f5bb6a4711fffc6c19
+qtbrowser-patch/001-enable-syslog.patch
+qtwebkit-5.4.1-patch/001-qtwebkit-revert-canvas.patch
+
+Release Notes
+=============
+ - Ticket "PACEDAWN-47197: browser sending spurious logs"
+   Redesigned the log message handling by replacing the default qDebug/qWarning
+   functions by an own implementation (WTF::sysLogF) within qtwebkit. Redirect
+   of the log message from console to syslog is enabled by compiling the qtbrowser
+   project using the QT_BUILD_WITH_SYSLOG flag (see supplied qtbrowser-patch file).
+
+Test Scenario
+=============
+Not Applicable
+
+___________
+
+
+Browser Delivery, 3 December 2015
+==================================	
 Browser Release Notes: this document
 qtwebkit5.4.1-0030-ImageBufferQt-render.patch: source code patch file
 
