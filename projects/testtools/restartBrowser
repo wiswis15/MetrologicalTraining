@@ -1,0 +1,5 @@
+ulimit -c unlimited
+killall -q qtbrowser
+sleep 1
+qtbrowser --validate-ca=off --cookie-storage=/root --object-cache=0,10,16 --pixmap-cache=2 --max-cached-pages=0 --user-agent="Mozilla/5.0 (QtEmbedded; Linux) AppleWebKit/535.7 (KHTML, like Gecko) TNT Browser Safari/535.7" --transparent --url=http://10.1.77.123/ &
+

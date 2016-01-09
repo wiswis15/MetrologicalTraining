@@ -1,0 +1,30 @@
+MAXRUN=60
+
+DATE=$(date +%s)
+VERSION=$DATE-0
+echo Application.waitForUserIdle >> /tmp/mwb.$VERSION.log
+
+num=0
+UNEXPECTED=0
+
+for i in $(seq 1 1000000)
+do
+ # echo $(date) $PID $( cat /proc/loadavg) num=$num $(ps -eo pcpu,args| grep brows | grep -v lxc | grep -v sh_daemon | grep -v grep| awk '{printf("%i ", $1)}') 
+ # if $(egrep 'Application.initialize|Application.waitForUserIdle|NAF.Controller: removed focus from application 1' /tmp/mwb.$VERSION.log > /dev/null)  || [ "$num" -gt $MAXRUN ]
+ if $(grep -E 'Application.initialize|Application.waitForUserIdle|NAF.Controller: removed focus from application 1' /tmp/mwb.$VERSION.log > /dev/null)  || [ "$num" -gt $MAXRUN ]
+ then 
+       restart=$(( $restart + 1))
+       [ "$num" -gt $MAXRUN ] && UNEXPECTED=$((UNEXPECTED + 1))
+       rm -rf /tmp/*.log
+       VERSION=$DATE-$restart
+       echo $(date) RESTART $restart /tmp/mwb.$VERSION.log  UNEXPECTED=$UNEXPECTED
+       sh ./restartBrowser 2> /tmp/mwb.$VERSION.log  
+       num=0
+ fi
+ 
+ # ps -ef | grep browser | grep -v grep > /dev/null || echo "!!!!!!!!!!BROWSER NOT RUNNING!!!!!!!!!!"
+ num=$((num + 1))
+ sleep 5
+    
+done
+
