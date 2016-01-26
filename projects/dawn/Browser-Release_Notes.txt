@@ -1,10 +1,48 @@
 
 Definitions
 ===========
-Browser   - administrative package consisting out of qtbrowser, qtwebkit and qtbase code packages
-qtbrowser - browser application code package using qtwebkit and qtbase
-qtwebkit  - webkit library code package based on Qt
-qtbase    - basic Qt library packages
+Browser     - administrative package consisting out of qtbrowser, qtwebkit and qtbase code packages
+qtbrowser   - browser application code package using qtwebkit and qtbase
+qtwebdriver - web driver code package providing a browser automation interface
+qtwebkit    - webkit library code package based on Qt
+qtbase      - basic Qt library packages
+
+___________
+
+
+Browser Delivery, 26 January 2016
+==================================
+Browser Release Notes: this document
+TN010 - QtWebDriver.pdf: QtWebDriver integration Release Note
+qtbrowser 2.0.14: git-commit 8baebf/8baebf79e799d037b3a061f71aee9c59cf6d062e
+qtwebdriver WD_1.X_dev: git-commit 7d56ff5/7d56ff5e9cdf0a36a9776d96ca085ac7578e9ad9
+wd.gypi: qtwebdriver configuration file
+
+Release Notes
+=============
+ - Ticket "RDKBROWSER-4: Implement WebDriver on QT5.4 browser"
+   Please have a look at TN010 for integration information.
+
+Test Scenario
+=============
+Not Applicable
+
+___________
+
+
+Browser Delivery, 29 December 2015
+==================================
+Browser Release Notes: this document
+002-qtwebkit-memory_leakage-font.patch
+
+Release Notes
+=============
+ - Patch-file for ticket "PACEDAWN-47464: QTBROWSER - Fontcache leak - operator-new(unsigned-int)"
+   This patch-file was missed in previous release
+
+Test Scenario
+=============
+Not Applicable
 
 ___________
 
