@@ -4,7 +4,7 @@ project(Documentation)
 set(CMAKE_CXX_STANDARD 11)
 
 set(SOURCE_FILES
-        documents/team-meeting/Code_agreements.md
+        wiki/documents/Code_agreements.md
         documents/team-meeting/DevMeeting_2017-01-11.md
         documents/team-meeting/DevMeeting_2017-01-18.md
         documents/team-meeting/DevMeeting_2017-01-25.md
