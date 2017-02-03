@@ -31,3 +31,9 @@ in, to adhere to this coding style.
 * Don't be over-exposing, keep internal details internal
 
 * Do not expose platform specific details
+
+* Use asserts
+
+  Rationale: Assert should be used to check for a condition that should never fail. If an asser triggers, this means 
+  something is wrong. It is better to know something is wrong at the point where things could go wrong, that find out 
+  as part of an obscure failure or crash. 
