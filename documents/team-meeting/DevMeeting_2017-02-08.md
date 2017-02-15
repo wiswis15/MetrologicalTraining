@@ -75,7 +75,7 @@ Open issues
   * How to revive Jenkins and Continuous Integration (CI)
   * How to enforce coding guidelines, as a tool but possibly even as part of CI
 
-8. Actions
+5. Actions
   * Bram and Rene: Investigate how to integrate coding style conversion to the process by adding it as
     a pre-commit plugin in Github. This can now be tested on the new server Bram brought in.
   * All: prepare review of new and updated plugins: DeviceInfo, Provisioning, TimeSync, LocationSync, SkeletonWebPlugin, 
