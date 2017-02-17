@@ -76,10 +76,12 @@ Rene:
   the system starts.
   * So some things will change state over time, and this also includes network connectivity (IPV4/V6), system time, 
   location info, hardware state.
-  
+
+
     Controller implements ISystemInfo
     Provisioning implements INotification, and IProvisioning, and registers to notification of ISystemInfo
     Netflix implements IProvisioning::INotification
+
   
     NXResourceCenter will eventually call SetID on ISystemInfo.
     SystemInfo will then call the Notification
