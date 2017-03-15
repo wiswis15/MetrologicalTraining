@@ -1,51 +1,25 @@
 #Metrological
 
 ##Team Meeting Embedded
-##Date: 2017-03-15
+##Date: 2017-03-22
 
 Agenda:
 
 1. Team update
 
 Ozgur:
-  * Worked on wpe on Dawn box. Found that Netflix is extremely slow. Gets stuck after a few seconds of play-out.
-  * Seemed to have to do with wpe, but also occurs in stand-alone version.
-  * On RPi, loading gets stuck at 25%. This may have to do with rights.
-  * Trying to integrate perf tool on Dawn to measure performance issues.
-  * Building for Dawn with uclibc results in very slow UI.
 
 Sander:
-  * Working on renaming action for repositories.
-  * Trying to finalize before end of the week.
   
 Coen:
-  * Investigating how to use gtest with plugins tests
-  * Worked on acquisition of HTM project. A POC will be developed. POC would start in two weeks and last for 2 months
-   (End of May).
   
 Bram:
-  * Revived puck. Now is able to displaying wpe.
-  * Built applications (32 bit), now able to run webbridge on the puck.
-  * Also working on resource center. For some reason the build is currently not working. Calls for Nexus while it is not 
-  started yet.
   
 Mischa:
-  * Continued work on pipes and std stream reassignment
-  * Writing down technical aspects of HTM POC proposal
   
 Pierre:
-  * Finalizing Horizon 342 with Netflix. Releasing single binary.
-  * Now working on Nexus resource center for this.
-  * Added to Netflix and Webkit plugins to wait for hardware.
-  * After wake-up do focus again.
-  * 1MW dicussion on WhiteVine (Google's PlayReady version) and OpenCDMI (abstract interface for WhiteVine and PlayReady).
 
 Rene:
-  * Worked on DVB SI parsing. Now waiting for demo from US to see what they have created.
-  * Tried to reproduce and fix bug in live stream playback: Processor usage for wpe goes up to over 50% on one core, 
-  * resulting in playback hiccups. After some time playback is smooth again. This probably has to do with "garbage 
-    collection" in wpe.
-  * Now working with Bram to make sure we can build and deploy on the LGI puck.
   
 2. RPC discussion
 
