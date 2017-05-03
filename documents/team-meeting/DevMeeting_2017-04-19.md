@@ -31,15 +31,12 @@ Bram:
   * Starting to work on EOS Resource center, to integrate westeros
   
 Rene:
-  * Rene and Bram are working on 
   * Progress with Realtek is slow, now still issues with stable playback 
    
 Pierre:
   * Absent due to urgent work at LGI
 
-2. Sander on static libraries
-
-3. Actions
+2. Actions
   * Pierre: Do presentation on wpe as presented by Albert
   * Rene: Do a presentation on Wayland
   * Sander: Create repository for shared scripting.
