@@ -1,0 +1,25 @@
+{
+ "locator":"libWPEFrameworkWebProxy.so",
+ "classname":"WebProxy",
+ "configuration":{
+  "connections":10,
+  "links":[
+   {
+    "name":"upnp",
+    "type":"udp",
+    "host":"239.255.255.250:1900"
+   },
+   {
+    "name":"serial",
+    "type":"serial",
+    "device":"/dev/ttyACM0",
+    "configuration":{
+     "baudrate":115200,
+     "parity":"none",
+     "data":8,
+     "stop":1
+    }
+   }
+  ]
+ }
+}

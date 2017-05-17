@@ -1,0 +1,10 @@
+{
+ "locator":"libWPEFrameworkLocationSync.so",
+ "classname":"LocationSync",
+ "configuration":{
+  "system":"Controller",
+  "interval":10,
+  "retries":20,
+  "source":"jsonip.metrological.com:80"
+ }
+}
