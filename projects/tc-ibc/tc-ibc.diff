@@ -1,0 +1,95 @@
+File rootfs/dev/console is a character special file while file rootfs.modified/dev/console is a character special file
+diff -ruNP rootfs/etc/init.d/S80WPEFramework rootfs.modified/etc/init.d/S80WPEFramework
+--- rootfs/etc/init.d/S80WPEFramework	2017-09-15 15:07:31.000000000 +0200
++++ rootfs.modified/etc/init.d/S80WPEFramework	2017-09-15 15:10:53.039237370 +0200
+@@ -1,21 +1,21 @@
+ #!/bin/sh
+ 
+ start() {
++    ifconfig eth0 up
++    udhcpc
++    
+ 	# Core dumps
+ 	#echo 1 > /proc/sys/kernel/core_uses_pid
+ 	#echo 2 > /proc/sys/fs/suid_dumpable
+ 	#echo "/root/cores/core-pid_%p--process%E" > /proc/sys/kernel/core_pattern
+ 	#mkdir -p /root/cores
+ 	#ulimit -c unlimited
+-	if [ ! -d /root/Netflix/dpi ]; then
+-		mkdir -p /root/Netflix/dpi
+-		ln -sfn /etc/playready /root/Netflix/dpi/playready
+-	fi
+-	mount -a
+ 	export TZ=$(wget -qO- http://jsonip.metrological.com/ | sed -e 's/^.*"tz":"\([^"]*\)".*$/\1/')
+     
+     # needed for wayland/westeros/weston
+     export XDG_RUNTIME_DIR=/tmp
++    export B_REFSW_BOXMODE=1
++    export NEXUS_IR_MODE=23
+     
+ 	echo -n "Starting WPEFramework: "
+ 	start-stop-daemon -S -q -b -m -p /var/run/WPEFramework.pid --exec /usr/bin/WPEFramework -- -b </dev/null >/dev/null 2>&1
+diff -ruNP rootfs/etc/WPEFramework/plugins/LocationSync.json rootfs.modified/etc/WPEFramework/plugins/LocationSync.json
+--- rootfs/etc/WPEFramework/plugins/LocationSync.json	2017-09-15 15:07:37.000000000 +0200
++++ rootfs.modified/etc/WPEFramework/plugins/LocationSync.json	2017-09-15 15:11:51.780830239 +0200
+@@ -5,6 +5,6 @@
+   "system":"Controller",
+   "interval":10,
+   "retries":20,
+-  "source":"location.webplatformforembedded.org:80"
++  "source":"jsonip.metrological.com:80"
+  }
+-}
+\ No newline at end of file
++}
+diff -ruNP rootfs/etc/WPEFramework/plugins/WebKitBrowser.json rootfs.modified/etc/WPEFramework/plugins/WebKitBrowser.json
+--- rootfs/etc/WPEFramework/plugins/WebKitBrowser.json	2017-09-15 15:07:38.000000000 +0200
++++ rootfs.modified/etc/WPEFramework/plugins/WebKitBrowser.json	2017-09-15 15:11:58.956536944 +0200
+@@ -3,7 +3,7 @@
+  "classname":"WebKitBrowser",
+  "autostart":true,
+  "configuration":{
+-  "url":"about:blank",
++  "url":"http://37.153.111.234/index.html?theme=yellow&live=0&technicolor=1",
+   "useragent":"Mozilla/5.0 (Macintosh, Intel Mac OS X 10_11_4) AppleWebKit/602.1.28+ (KHTML, like Gecko) Version/9.1 Safari/601.5.17",
+   "injectedbundle":"libWPEInjectedBundle.so",
+   "transparent":true,
+@@ -19,4 +19,4 @@
+   "diskcache":0,
+   "xhrcache":false
+  }
+-}
+\ No newline at end of file
++}
+diff -ruNP rootfs/etc/WPEFramework/plugins/YouTube.json rootfs.modified/etc/WPEFramework/plugins/YouTube.json
+--- rootfs/etc/WPEFramework/plugins/YouTube.json	2017-09-15 15:07:38.000000000 +0200
++++ rootfs.modified/etc/WPEFramework/plugins/YouTube.json	2017-09-15 15:11:44.445130073 +0200
+@@ -3,20 +3,20 @@
+  "classname":"WebKitBrowser",
+  "autostart":false,
+  "configuration":{
+-  "url":"about:blank",
+-  "useragent":"Mozilla/5.0 (Macintosh, Intel Mac OS X 10_11_4) AppleWebKit/602.1.28+ (KHTML, like Gecko) Version/9.1 Safari/601.5.17",
++  "url":"http://youtube.com/tv",
++  "useragent":"Mozilla/5.0 (Macintosh, Intel Mac OS X 10_11_4) AppleWebKit/602.1.28+ (KHTML, like Gecko) Version/9.1 Safari/601.5.17 WPE-Reference",
+   "injectedbundle":"libWPEInjectedBundle.so",
+-  "transparent":true,
++  "transparent":false,
+   "compositor":"noaa",
+   "inspector":"0.0.0.0:9999",
+   "fps":true,
+   "cursor":false,
+   "touch":false,
+   "msebuffers":"audio:2m,video:12m,text:1m",
+-  "memoryprofile":"128m",
+-  "memorypressure":"databaseprocess:50m,networkprocess:100m,webprocess:300m,rpcprocess:50m",
++  "memoryprofile":"n",
++  "memorypressure":"databaseprocess:100m,networkprocess:100m,webprocess:400m,rpcprocess:100m",
+   "mediadiskcache":false,
+-  "diskcache":0,
+-  "xhrcache":false
++  "diskcache":"512m",
++  "xhrcache":true
+  }
+ }
+\ No newline at end of file
