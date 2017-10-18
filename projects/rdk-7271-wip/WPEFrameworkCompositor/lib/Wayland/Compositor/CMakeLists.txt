@@ -1,0 +1,35 @@
+set(target_name platformplugin)
+
+set(WPEFRAMEWORK_PLATFORM_PLUGIN_LIBS WPEFrameworkPlugins)
+
+option(WPEFRAMEWORK_PLUGIN_COMPOSITOR_VIRTUALINPUT "Enable WPEFramework virtual input support. [ON, OFF]." OFF)
+
+find_package(WaylandServer REQUIRED)
+find_package(Westeros REQUIRED)
+
+include_directories(${WESTEROS_INCLUDE_DIRS})
+include_directories(${WAYLANDSERVER_INCLUDE_DIRS})
+
+set(WPEFRAMEWORK_PLATFORM_PLUGIN_SOURCES Wayland.cpp)
+list(APPEND WPEFRAMEWORK_PLATFORM_PLUGIN_LIBS ${WAYLANDSERVER_LIBRARIES} waylandeglclient)
+
+if(WESTEROS_FOUND)
+    find_package(WaylandEGL REQUIRED)
+    find_package(EGL REQUIRED)
+    list(APPEND WPEFRAMEWORK_PLATFORM_PLUGIN_SOURCES Westeros.cpp)
+    list(APPEND WPEFRAMEWORK_PLATFORM_PLUGIN_LIBS ${WESTEROS_LIBRARIES})
+endif(WESTEROS_FOUND)
+
+if(WPEFRAMEWORK_PLUGIN_COMPOSITOR_VIRTUALINPUT)
+    find_package(LibVirtualKeyboard REQUIRED)
+    list(APPEND WPEFRAMEWORK_PLATFORM_PLUGIN_LIBS ${LIBVIRTUAL_KEYBOARD_LIBRARIES})
+    include_directories(${LIBVIRTUAL_KEYBOARD_INCLUDE_DIRS})
+    add_definitions(-DUSE_WPEFRAMEWORK_VIRTUAL_INPUT=1)
+endif(WPEFRAMEWORK_PLUGIN_COMPOSITOR_VIRTUALINPUT)
+
+# add the platformplugin library
+add_library(${target_name} SHARED ${WPEFRAMEWORK_PLATFORM_PLUGIN_SOURCES})
+target_link_libraries(${target_name} ${WPEFRAMEWORK_PLATFORM_PLUGIN_LIBS})
+set_target_properties(${target_name} PROPERTIES DEFINE_SYMBOL WPEFRAMEWORK_PLATFORM_PLUGIN)
+install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX}/share/WPEFramework/Compositor)
+
