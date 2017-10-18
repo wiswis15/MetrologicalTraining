@@ -1,0 +1,168 @@
+cmake_minimum_required(VERSION 2.8)
+project(WPEBackend-rdk)
+
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -fno-exceptions -fno-strict-aliasing")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1y -fno-exceptions -fno-strict-aliasing -fno-rtti")
+
+# TODO: this is a hack, get it from env, or at least RDK specific
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GNU_SOURCE -DHAVE_CONFIG_H -DWESTEROS_PLATFORM_EMBEDDED -DWESTEROS_HAVE_WAYLAND_EGL -DENABLE_SBPROTOCOL -DUSE_XDG_VERSION4 -DWESTEROS_PLATFORM_NEXUS -DVCX=5 -DBSTD_CPU_ENDIAN=BSTD_ENDIAN_LITTLE -I/home/sander/Projects/rdk-westeros/build-brcm97271ip-refboard/tmp/sysroots/brcm97271ip-refboard/usr/include/interface/khronos/include -I/home/sander/Projects/rdk-westeros/build-brcm97271ip-refboard/tmp/sysroots/brcm97271ip-refboard/usr/include/interface/khronos/include/bcg_abstract -I/home/sander/Projects/rdk-westeros/build-brcm97271ip-refboard/tmp/sysroots/brcm97271ip-refboard/usr/include/vcos/include -I/home/sander/Projects/rdk-westeros/build-brcm97271ip-refboard/tmp/sysroots/brcm97271ip-refboard/usr/include/WPEFramework/ -I/home/sander/Projects/rdk-westeros/build-brcm97271ip-refboard/tmp/sysroots/brcm97271ip-refboard/usr/include/WPEFramework/virtualkeyboard")
+
+#add_definitions( -DVCX=5 )
+#add_definitions( -DBSTD_CPU_ENDIAN=BSTD_ENDIAN_LITTLE )
+#add_definitions( -I${PKG_CONFIG_SYSROOT_DIR}/usr/include/interface/khronos/include )
+#add_definitions( -I${PKG_CONFIG_SYSROOT_DIR}/usr/include/interface/khronos/include/bcg_abstract )
+#add_definitions( -I${PKG_CONFIG_SYSROOT_DIR}/usr/include/vcos/include )
+
+# Converted
+option(USE_BACKEND_BCM_NEXUS "Whether to enable support for the BCM_NEXUS WPE backend" OFF)
+option(USE_BACKEND_BCM_NEXUS_WAYLAND "Whether to enable support for the BCM_NEXUS Wayland WPE backend" OFF)
+option(USE_BACKEND_BCM_RPI "Whether to enable support for the BCM_RPi WPE backend" OFF)
+option(USE_BACKEND_INTEL_CE "Whether to enable support for the Intel CE WPE backend" OFF)
+option(USE_BACKEND_WAYLAND_EGL "Whether to enable support for the wayland-egl WPE backend" OFF)
+option(USE_BACKEND_WESTEROS "Whether to enable support for the Westeros WPE backend" OFF)
+option(USE_BACKEND_REALTEK "Whether to enable support for Realtek's Wayland EGL WPE backend" OFF)
+option(USE_BACKEND_WPEFRAMEWORK "WPEFramework abstraction layer is used as WPE backend" OFF)
+
+option(USE_PLATFORM_BROADCOM "Whether the playback is based on Broadcom plugins" OFF)
+option(USE_BACKEND_WESTEROS_MESA "Whether to enable support for the gbm based offscreen target for westeros Mesa only" OFF)
+
+option(USE_INPUT_LIBINPUT "Whether to enable support for the libinput input backend" ON)
+option(USE_INPUT_UDEV "Whether to enable support for the libinput input udev lib" ON)
+option(USE_INPUT_WAYLAND "Whether to enable support for the wayland input backend" OFF)
+set(USE_KEY_INPUT_HANDLING_LINUX_INPUT OFF CACHE BOOL "Whether to use <linux/input.h> event codes for keyboard event handling")
+
+find_package(WPE REQUIRED)
+find_package(GLIB 2.38.0 REQUIRED COMPONENTS gio gio-unix)
+
+if (USE_VIRTUAL_KEYBOARD)
+    find_package(LibVirtualKeyboard REQUIRED)
+    include_directories(${LIBVIRTUAL_KEYBOARD_INCLUDE_DIRS})
+    add_definitions(-DKEY_INPUT_HANDLING_VIRTUAL=1)
+endif()
+
+if (USE_KEY_INPUT_HANDLING_LINUX_INPUT)
+    add_definitions(-DKEY_INPUT_HANDLING_LINUX_INPUT=1)
+else ()
+    find_package(Libxkbcommon 0.4.0 REQUIRED)
+    add_definitions(-DKEY_INPUT_HANDLING_XKB=1)
+endif ()
+
+if (USE_BACKEND_WESTEROS_MESA)
+    add_definitions(-DWPE_BACKEND_MESA=1)
+endif ()
+
+set(WPE_PLATFORM_INCLUDE_DIRECTORIES
+        "${CMAKE_SOURCE_DIR}/src/external"
+        "${CMAKE_SOURCE_DIR}/src/input"
+        "${CMAKE_SOURCE_DIR}/src/util"
+        ${GIO_UNIX_INCLUDE_DIRS}
+        ${GLIB_INCLUDE_DIRS}
+        ${WPE_INCLUDE_DIRS}
+        )
+
+set(WPE_PLATFORM_LIBRARIES
+        ${GLIB_GIO_LIBRARIES}
+        ${GLIB_GOBJECT_LIBRARIES}
+        ${GLIB_LIBRARIES}
+        ${WPE_LIBRARIES}
+        )
+
+set(WPE_PLATFORM_EXTRA_CFLAGS)
+
+if (NOT USE_KEY_INPUT_HANDLING_LINUX_INPUT)
+    list(APPEND WPE_PLATFORM_INCLUDE_DIRECTORIES
+            ${LIBXKBCOMMON_INCLUDE_DIRS}
+            )
+    list(APPEND WPE_PLATFORM_LIBRARIES
+            ${LIBXKBCOMMON_LIBRARIES}
+            )
+endif ()
+
+if (USE_VIRTUAL_KEYBOARD)
+    list(APPEND WPE_PLATFORM_LIBRARIES
+            ${LIBVIRTUAL_KEYBOARD_LIBRARIES}
+            )
+endif ()
+
+set(WPE_PLATFORM_SOURCES
+        src/loader-impl.cpp
+
+        src/input/LinuxInput/KeyboardEventHandlerLinuxInput.cpp
+        src/input/LinuxInput/input-linuxinput.cpp
+
+        src/input/XKB/KeyboardEventHandlerXKB.cpp
+        src/input/XKB/input-libxkbcommon.cpp
+
+        src/util/ipc.cpp
+        )
+
+if (USE_INPUT_LIBINPUT)
+    find_package(Libinput REQUIRED)
+    list(APPEND WPE_PLATFORM_INCLUDE_DIRECTORIES
+            ${LIBINPUT_INCLUDE_DIRS}
+            )
+    list(APPEND WPE_PLATFORM_LIBRARIES
+            ${LIBINPUT_LIBRARIES}
+            )
+    if (USE_INPUT_UDEV)
+        find_package(Libudev REQUIRED)
+        list(APPEND WPE_PLATFORM_INCLUDE_DIRECTORIES
+                ${LIBUDEV_INCLUDE_DIRS}
+                )
+        list(APPEND WPE_PLATFORM_LIBRARIES
+                ${LIBUDEV_LIBRARIES}
+                )
+        add_definitions(-DKEY_INPUT_UDEV=1)
+    endif ()
+    list(APPEND WPE_PLATFORM_SOURCES
+            src/input/Libinput/KeyboardEventRepeating.cpp
+            src/input/Libinput/LibinputServer.cpp
+            )
+endif()
+
+if (USE_BACKEND_BCM_NEXUS)
+    include(src/bcm-nexus/CMakeLists.txt)
+endif ()
+
+if (USE_BACKEND_BCM_NEXUS_WAYLAND)
+    include(src/bcm-nexus-wayland/CMakeLists.txt)
+endif ()
+
+if (USE_BACKEND_BCM_RPI)
+    include(src/bcm-rpi/CMakeLists.txt)
+endif ()
+
+if (USE_BACKEND_INTEL_CE)
+    include(src/intelce/CMakeLists.txt)
+endif ()
+
+if (USE_BACKEND_REALTEK)
+    include(src/realtek-wl-egl/CMakeLists.txt)
+endif ()
+
+if (USE_BACKEND_WPEFRAMEWORK)
+    include(src/wpeframework/CMakeLists.txt)
+endif ()
+
+if (USE_BACKEND_WAYLAND_EGL)
+    include(src/wayland-egl/CMakeLists.txt)
+endif ()
+
+if (USE_BACKEND_WESTEROS)
+    include(src/westeros/CMakeLists.txt)
+endif ()
+
+add_library(WPEBackend-rdk SHARED ${WPE_PLATFORM_SOURCES})
+target_include_directories(WPEBackend-rdk PRIVATE ${WPE_PLATFORM_INCLUDE_DIRECTORIES})
+target_link_libraries(WPEBackend-rdk ${WPE_PLATFORM_LIBRARIES})
+target_compile_options(WPEBackend-rdk PRIVATE ${WPE_PLATFORM_EXTRA_CFLAGS})
+install(TARGETS WPEBackend-rdk DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
+
+# Create a libWPEBackend-default.so symlink to libWPEBackend-rdk.so and install it.
+add_custom_command(TARGET WPEBackend-rdk
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E create_symlink libWPEBackend-rdk.so ${CMAKE_BINARY_DIR}/libWPEBackend-default.so
+        )
+install(FILES ${CMAKE_BINARY_DIR}/libWPEBackend-default.so DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
