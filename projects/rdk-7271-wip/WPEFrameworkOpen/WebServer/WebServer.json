@@ -1,0 +1,14 @@
+{
+ "locator":"libWPEFrameworkWebServer.so",
+ "classname":"WebServer",
+ "configuration":{
+  "port":8080,
+  "binding":"0.0.0.0",
+  "path":"/boot/www",
+  "proxies":{
+   "path":"/Service/DeviceInfo",
+   "subst":"/Service/DeviceInfo",
+   "server":"127.0.0.1:80"
+  }
+ }
+}

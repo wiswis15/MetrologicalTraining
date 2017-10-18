@@ -1,0 +1,9 @@
+{
+ "locator":"libWPEFrameworkRemoteControl.so",
+ "classname":"RemoteControl",
+ "configuration":{
+  "mapfile":"keymap.json",
+  "repeatstart":500,
+  "repeatinterval":100
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "locator":"libWPEFrameworkTimeSync.so",
+ "classname":"TimeSync",
+ "autostart":true,
+ "configuration":{
+  "system":"Controller",
+  "interval":30,
+  "retries":20,
+  "periodicity":24,
+  "sources":[
+   "ntp://0.pool.ntp.org",
+   "ntp://1.pool.ntp.org",
+   "ntp://2.pool.ntp.org",
+   "ntp://3.pool.ntp.org"
+  ]
+ }
+}

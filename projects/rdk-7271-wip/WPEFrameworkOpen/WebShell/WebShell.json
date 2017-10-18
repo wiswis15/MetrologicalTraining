@@ -1,0 +1,4 @@
+{
+ "locator":"libWPEFrameworkWebShell.so",
+ "classname":"WebShell"
+}
