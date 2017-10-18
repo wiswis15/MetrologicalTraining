@@ -1,0 +1,17 @@
+project(SimpleWebClient)
+
+set(WPEFRAMEWORK_TEST_SERVERCLIENT_LIBS
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${CMAKE_DL_LIBS}
+    generics
+    websocket)
+
+set(WPEFRAMEWORK_TEST_SERVERCLIENT_SOURCES
+    WebClient.cpp
+    main.cpp)
+
+add_executable(${PROJECT_NAME} ${WPEFRAMEWORK_TEST_SERVERCLIENT_SOURCES})
+target_link_libraries(${PROJECT_NAME} ${WPEFRAMEWORK_TEST_SERVERCLIENT_LIBS} )
+target_include_directories(${PROJECT_NAME} PRIVATE ${WPEFRAMEWORK_GENERICS_INCLUDE_DIR})
+
+install(TARGETS ${PROJECT_NAME} DESTINATION bin)

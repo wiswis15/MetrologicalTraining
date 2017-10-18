@@ -1,0 +1,15 @@
+CMakeFiles/
+.cproject
+.project
+.idea/
+build/
+output/
+cmake-build-*/
+CMakeCache.txt
+uninstall.cmake
+*/cmake_install.cmake
+*.pc
+*.so.*
+*.so
+/cppcheck_report.txt
+/cppcheck_log.txt

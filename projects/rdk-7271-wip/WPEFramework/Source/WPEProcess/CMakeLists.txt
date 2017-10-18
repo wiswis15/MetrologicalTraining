@@ -1,0 +1,47 @@
+project(WPEProcess)
+
+include(setup_target_properties_executable)
+include(show_target_properties)
+
+message("Setting up rpcprocess")
+
+set(WPEFRAMEWORK_RPCPROCESS_DEFINITIONS
+    CACHE INTERNAL "${PROJECT_NAME}: Definitions" FORCE)
+
+set(WPEFRAMEWORK_RPCPROCESS_INCLUDE
+    CACHE INTERNAL "${PROJECT_NAME}: Include Directories" FORCE)
+
+set(WPEFRAMEWORK_RPCPROCESS_LIBS
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${CMAKE_DL_LIBS}
+    WPEFrameworkCore
+    WPEFrameworkProtocols)
+
+file(GLOB WPEFRAMEWORK_RPCPROCESS_INCLUDES *.h)
+file(GLOB WPEFRAMEWORK_RPCPROCESS_SOURCES *.cpp)
+
+if(INSTALL_HEADERS_TO_TARGET)
+    install(FILES ${WPEFRAMEWORK_RPCPROCESS_INCLUDES} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/WPEFramework/process)
+else()
+    foreach(path ${CMAKE_FIND_ROOT_PATH})
+        file(COPY ${WPEFRAMEWORK_RPCPROCESS_INCLUDES} DESTINATION ${path}/usr/include/WPEFramework/process)
+    endforeach()
+endif()
+
+set(WPEFRAMEWORK_RPCPROCESS_INPUT
+    ${WPEFRAMEWORK_RPCPROCESS_SOURCES}
+    ${WPEFRAMEWORK_RPCPROCESS_INCLUDES}
+    CACHE INTERNAL "${PROJECT_NAME}: Source files" FORCE)
+
+add_executable(${PROJECT_NAME} ${WPEFRAMEWORK_RPCPROCESS_INPUT})
+target_compile_definitions(${PROJECT_NAME} PRIVATE ${WPEFRAMEWORK_RPCPROCESS_DEFINITIONS})
+target_include_directories(${PROJECT_NAME} PRIVATE ${WPEFRAMEWORK_RPCPROCESS_INCLUDE})
+target_link_libraries(${PROJECT_NAME} ${WPEFRAMEWORK_RPCPROCESS_LIBS})
+set_target_properties(${PROJECT_NAME} PROPERTIES DEFINE_SYMBOL WPEFRAMEWORK_RPCPROCESS)
+set_target_properties(${PROJECT_NAME} PROPERTIES SOVERSION ${WPEFRAMEWORK_VERSION})
+
+#setup_target_properties_executable(${PROJECT_NAME})
+
+#show_target_properties(${PROJECT_NAME})
+
+install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)

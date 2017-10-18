@@ -1,0 +1,107 @@
+project(WPEFrameworkCore)
+
+include(setup_target_properties_library)
+include(show_target_properties)
+
+message("Setting up Core")
+
+## clock-monotonic, just see if we need to link with rt
+set(CMAKE_REQUIRED_LIBRARIES_SAVE ${CMAKE_REQUIRED_LIBRARIES})
+set(CMAKE_REQUIRED_LIBRARIES rt)
+CHECK_SYMBOL_EXISTS(_POSIX_TIMERS "unistd.h;time.h" LIBWPEFRAMEWORK_POSIX_TIMERS)
+set(CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES_SAVE})
+
+if(LIBWPEFRAMEWORK_POSIX_TIMERS)
+  find_library(LIBWPEFRAMEWORK_RT_LIBRARY NAMES rt)
+  mark_as_advanced(LIBWPEFRAMEWORK_RT_LIBRARY)
+endif()
+
+find_library(GENERICS_EXECINFO_LIBRARY NAMES execinfo)
+mark_as_advanced(GENERICS_EXECINFO_LIBRARY)
+list(APPEND WPEFRAMEWORK_LIBWPEFRAMEWORK_LIBS ${GENERICS_EXECINFO_LIBRARY})
+
+set(WPEFRAMEWORK_LIBWPEFRAMEWORK_DEFINITIONS
+        CACHE INTERNAL "${PROJECT_NAME}: Definitions" FORCE)
+
+set(WPEFRAMEWORK_LIBWPEFRAMEWORK_INCLUDE
+        CACHE INTERNAL "${PROJECT_NAME}: Include Directories" FORCE)
+
+set(WPEFRAMEWORK_LIBWPEFRAMEWORK_LIBS
+    )
+
+if(${WPEFRAMEWORK_PLATFORM} STREQUAL "INTELCE")
+    list(APPEND WPEFRAMEWORK_LIBWPEFRAMEWORK_INCLUDE ${INTELCE_OSAL_INCLUDE_DIRS} ${INTELCE_GDL_INCLUDE_DIRS})
+    list(APPEND WPEFRAMEWORK_LIBWPEFRAMEWORK_LIBS ${INTELCE_OSAL_LIBRARIES} ${INTELCE_GDL_LIBRARIES})
+endif()
+
+find_package(BCMHost QUIET)
+
+if (BCMHOST_FOUND)
+    add_definitions(-DRPI)
+    list(APPEND WPEFRAMEWORK_LIBWPEFRAMEWORK_INCLUDE ${BCM_HOST_INCLUDE_DIRS})
+    list(APPEND WPEFRAMEWORK_LIBWPEFRAMEWORK_LIBS ${BCM_HOST_LIBRARIES})
+    list(APPEND WPEFRAMEWORK_LIBWPEFRAMEWORK_LIBS -lvchostif)
+endif (BCMHOST_FOUND)
+
+
+set(WPEFRAMEWORK_LIBWPEFRAMEWORK_LIBS
+        ${CMAKE_THREAD_LIBS_INIT}
+        ${CMAKE_DL_LIBS}
+        ${WPEFRAMEWORK_LIBWPEFRAMEWORK_LIBS}
+        CACHE INTERNAL "${PROJECT_NAME}: Link libraries" FORCE)
+
+file(GLOB WPEFRAMEWORK_LIBWPEFRAMEWORK_INCLUDES *.h)
+#file(GLOB WPEFRAMEWORK_LIBWPEFRAMEWORK_SOURCES *.cpp)
+set(WPEFRAMEWORK_LIBWPEFRAMEWORK_SOURCES
+    CyclicBuffer.cpp
+    DataElement.cpp
+    DataElementFile.cpp
+    FileSystem.cpp
+    ISO639.cpp
+    JSON.cpp
+    Library.cpp
+    MessageException.cpp
+    NetworkInfo.cpp
+    NodeId.cpp
+    Number.cpp
+    Parser.cpp
+    Portability.cpp
+    ProcessInfo.cpp
+    Serialization.cpp
+    SerialPort.cpp
+    Services.cpp
+    Singleton.cpp
+    SocketPort.cpp
+    Sync.cpp
+    SystemInfo.cpp
+    TextReader.cpp
+    Thread.cpp
+    Time.cpp
+    Trace.cpp
+    XGetopt.cpp)
+
+if (INSTALL_HEADERS_TO_TARGET)
+  install(FILES ${WPEFRAMEWORK_LIBWPEFRAMEWORK_INCLUDES} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/WPEFramework/core)
+else()
+    foreach(path ${CMAKE_FIND_ROOT_PATH})
+      file(COPY ${WPEFRAMEWORK_LIBWPEFRAMEWORK_INCLUDES} DESTINATION ${path}/usr/include/WPEFramework/core)
+    endforeach()
+endif()
+
+set(WPEFRAMEWORK_LIBWPEFRAMEWORK_INPUT
+    ${WPEFRAMEWORK_LIBWPEFRAMEWORK_SOURCES}
+    ${WPEFRAMEWORK_LIBWPEFRAMEWORK_INCLUDES}
+    CACHE INTERNAL "${PROJECT_NAME}: Source files" FORCE)
+
+add_library(${PROJECT_NAME} ${WPEFRAMEWORK_LIBWPEFRAMEWORK_INPUT})
+target_compile_definitions(${PROJECT_NAME} PRIVATE ${WPEFRAMEWORK_LIBWPEFRAMEWORK_DEFINITIONS})
+target_include_directories(${PROJECT_NAME} PRIVATE ${WPEFRAMEWORK_LIBWPEFRAMEWORK_INCLUDE})
+target_link_libraries(${PROJECT_NAME} ${WPEFRAMEWORK_LIBWPEFRAMEWORK_LIBS})
+set_target_properties(${PROJECT_NAME} PROPERTIES DEFINE_SYMBOL WPEFRAMEWORK_LIBWPEFRAMEWORK)
+set_target_properties(${PROJECT_NAME} PROPERTIES SOVERSION ${WPEFRAMEWORK_VERSION})
+
+setup_target_properties_library(WPEFrameworkCore)
+
+#show_target_properties(${PROJECT_NAME})
+
+install(TARGETS WPEFrameworkCore DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)

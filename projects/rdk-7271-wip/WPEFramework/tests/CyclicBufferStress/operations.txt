@@ -1,0 +1,16 @@
+This file contains the operations performed by the cyclic buffer server and client.
+
+Time after start   | Operation
+-------------------+----------------------------------------------------------
+0s                 | Server and client create buffer
+                   |
+2s                 | Server writes string to buffer
+                   |
+3s                 | Client reads buffer twice
+                   |
+5s                 | Client lets buffer object go out of scope (closes its handle)
+                   |
+6s                 | Server closes buffer
+                   |
+
+

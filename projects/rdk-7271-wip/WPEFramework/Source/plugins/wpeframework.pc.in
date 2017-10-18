@@ -1,0 +1,9 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: wpeframework 
+Description: Library for WPEFramework plugins.
+Version: 1.0
+Cflags: -I${includedir}

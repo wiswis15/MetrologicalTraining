@@ -1,0 +1,16 @@
+include_directories( ${WPEFRAMEWORK_GENERICS_INCLUDE_DIR} )
+
+set (WPEFRAMEWORK_TEST_CYCLICBUFFER_LIBS 
+       ${CMAKE_THREAD_LIBS_INIT}
+       ${CMAKE_DL_LIBS}
+       generics
+)
+
+set (WPEFRAMEWORK_TEST_CYCLICBUFFER_SOURCES
+    main.cpp
+)
+
+add_executable(CyclicBuffer ${WPEFRAMEWORK_TEST_CYCLICBUFFER_SOURCES})
+target_link_libraries(CyclicBuffer ${WPEFRAMEWORK_TEST_CYCLICBUFFER_LIBS})
+
+install(TARGETS CyclicBuffer DESTINATION bin)
