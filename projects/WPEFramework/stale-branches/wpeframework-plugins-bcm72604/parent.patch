@@ -1,0 +1,586 @@
+commit a100977bf457fbb8a5f2322eb37c5fcc1d341528
+Author: modeveci <o.deveci@metrological.com>
+Date:   Wed Aug 9 16:34:20 2017 +0200
+
+    [REMOTECONTROL]: Add POST and DELETE methods. Update HTTP return codes
+
+diff --git a/RemoteControl/RemoteControl.cpp b/RemoteControl/RemoteControl.cpp
+index 06e84ec..a7e9daa 100644
+--- a/RemoteControl/RemoteControl.cpp
++++ b/RemoteControl/RemoteControl.cpp
+@@ -8,6 +8,7 @@ namespace Plugin {
+ 
+     static const string DefaultMappingTable (_T("keymap"));
+     static Core::ProxyPoolType<Web::JSONBodyType<RemoteControl::Data> > jsonResponseFactory(4);
++    static Core::ProxyPoolType<Web::JSONBodyType<PluginHost::VirtualInput::KeyMap::KeyMapEntry> > jsonCodeFactory(1);
+ 
+     SERVICE_REGISTRATION(RemoteControl, 1, 0);
+ 
+@@ -268,6 +269,14 @@ namespace Plugin {
+ 
+             result = PutMethod(index, request);
+         }
++        else if (request.Verb == Web::Request::HTTP_POST) {
++
++            result = PostMethod(index, request);
++        }
++        else if (request.Verb == Web::Request::HTTP_DELETE) {
++
++            result = DeleteMethod(index);
++        }
+         else {
+             result = PluginHost::Factories::Instance().Response();
+             result->ErrorCode = Web::STATUS_NOT_IMPLEMENTED;
+@@ -277,7 +286,7 @@ namespace Plugin {
+         return (result);
+     }
+ 
+-    /* virtual */ void RemoteControl::KeyEvent(const bool pressed, const uint32 code, const string& mapName)
++    /* virtual */ uint32 RemoteControl::KeyEvent(const bool pressed, const uint32 code, const string& mapName)
+     {
+ 
+         uint32 result = _inputHandler->KeyEvent(pressed, code, mapName);
+@@ -288,6 +297,32 @@ namespace Plugin {
+         else {
+             TRACE(UnknownKey, (mapName, code, pressed, result));
+         }
++        return (result);
++    }
++
++    const string RemoteControl::FindDevice(Core::TextSegmentIterator& index) const
++    {
++        string deviceName;
++
++        if (index.Next() == true) {
++            if (index.Current() != DefaultMappingTable) {
++
++                Remotes::RemoteAdministrator &admin(Remotes::RemoteAdministrator::Instance());
++                Remotes::RemoteAdministrator::Iterator remoteDevices(admin.Producers());
++
++                while (remoteDevices.Next() == true) {
++                    const TCHAR *producer((*remoteDevices)->Name());
++                    if (index.Current() == producer) {
++                        deviceName = producer;
++                        break;
++                    }
++                }
++            } else {
++
++                deviceName = DefaultMappingTable;
++            }
++        }
++        return (deviceName);
+     }
+ 
+     Core::ProxyType<Web::Response> RemoteControl::GetMethod(Core::TextSegmentIterator& index) const
+@@ -298,39 +333,105 @@ namespace Plugin {
+         result->ErrorCode = Web::STATUS_NOT_IMPLEMENTED;
+         result->Message = string(_T("Unknown request path specified."));
+ 
+-        // GET .../RemoteControl/<DEVICE_NAME> : Return metadata of specific DEVICE_NAME
+-        // GET .../RemoteControl/ : Return status of default device
+-        // GET .../RemoteControl/keymap : Return status of default device
+         if (index.IsValid() == true) {
++            // Perform operations on that specific device
++            const string deviceName = FindDevice(index);
++
++            if (deviceName.empty() == false) {
++                // GET .../RemoteControl/<DEVICE_NAME>/Code/XXX : Get code of DEVICE_NAME
++                if (index.Next() == true) {
++
++                    if (index.Current() == _T("Code")) {
++                        // move over the Code keyword.
++                        if (index.Next() == true) {
++
++                            result->ErrorCode = Web::STATUS_NO_CONTENT;
++                            result->Message = string(_T("Key does not exist in ") + deviceName);
++
++                            Core::NumberType <uint32> code(index.Current());
++
++                            if (code.Value() != 0) {
++                                // Load default or specific device mapping
++                                PluginHost::VirtualInput::KeyMap &map(_inputHandler->Table(deviceName));
++
++                                const PluginHost::VirtualInput::KeyMap::ConversionInfo *codeElements = map[code];
++                                if (codeElements != nullptr) {
++
++                                    Core::ProxyType<Web::JSONBodyType<PluginHost::VirtualInput::KeyMap::KeyMapEntry> > response(jsonCodeFactory.Element());
++
++                                    response->Code = code;
++                                    response->Key = codeElements->Code;
++
++                                    uint16 flag(1);
++                                    uint16 modifiers(codeElements->Modifiers);
++
++                                    while (modifiers != 0) {
++
++                                        if ((modifiers & 0x01) != 0) {
++                                            switch (flag) {
++                                                case PluginHost::VirtualInput::KeyMap::modifier::LEFTSHIFT:
++                                                case PluginHost::VirtualInput::KeyMap::modifier::RIGHTSHIFT:
++                                                case PluginHost::VirtualInput::KeyMap::modifier::LEFTALT:
++                                                case PluginHost::VirtualInput::KeyMap::modifier::RIGHTALT:
++                                                case PluginHost::VirtualInput::KeyMap::modifier::LEFTCTRL:
++                                                case PluginHost::VirtualInput::KeyMap::modifier::RIGHTCTRL: {
++                                                    Core::JSON::EnumType <PluginHost::VirtualInput::KeyMap::modifier> &jsonRef = response->Modifiers.Add();
++                                                    jsonRef = static_cast<PluginHost::VirtualInput::KeyMap::modifier>(flag);
++                                                    break;
++                                                }
++                                                default:
++                                                    ASSERT(false);
++                                                    break;
++                                            }
++                                        }
++
++                                        flag = flag << 1;
++                                        modifiers = modifiers >> 1;
++                                    }
++
++                                    result->ErrorCode = Web::STATUS_OK;
++                                    result->Message = string(_T("Get key info of ") + deviceName);
++                                    result->ContentType = Web::MIMETypes::MIME_JSON;
++                                    result->Body(Core::proxy_cast<Web::IBody>(response));
++                                }
++                            }
++                        }
++                        else {
++                            result->ErrorCode = Web::STATUS_NOT_FOUND;
++                            result->Message = string(_T("No key code in request"));
++                        }
++                    }
++                }
++                // GET .../RemoteControl/<DEVICE_NAME> : Return metadata of specific DEVICE_NAME
++                else {
+ 
+-            Core::ProxyType<Web::TextBody> body(_remoteInfo.Element());
+-            string device((index.Next() && index.Current().Text() != DefaultMappingTable ) ? index.Current().Text() : DefaultMappingTable);
++                    if (deviceName == DefaultMappingTable) {
+ 
+-            if (device == DefaultMappingTable) {
++                        result->ErrorCode = Web::STATUS_OK;
++                        result->Message = string(_T("Default device is loaded"));
++                    } else {
+ 
+-                result->ErrorCode = Web::STATUS_OK;
+-                result->Message = string(_T("Default Module loaded, "));
+-            }
+-            else {
++                        uint32 error = Remotes::RemoteAdministrator::Instance().Error(deviceName);
+ 
+-                uint32 error = Remotes::RemoteAdministrator::Instance().Error(device);
++                        if (error == Core::ERROR_NONE) {
+ 
+-                if (error == Core::ERROR_NONE) {
++                            result->ErrorCode = Web::STATUS_OK;
++                            result->Message = string(_T("Specific device is loaded"));
+ 
+-                    result->ErrorCode = Web::STATUS_OK;
+-                    result->Message = string(_T("Remote Module loaded, "));
++                            Core::ProxyType<Web::TextBody> body(_remoteInfo.Element());
+ 
+-                    (*body) = Remotes::RemoteAdministrator::Instance().MetaData(device);
+-                }
+-                else {
++                            (*body) = Remotes::RemoteAdministrator::Instance().MetaData(deviceName);
++                            result->Body<Web::TextBody>(body);
++                        } else {
+ 
+-                    result->ErrorCode = Web::STATUS_BAD_GATEWAY;
+-                    result->Message = string(_T("Remote Module in error.")) + Core::NumberType<uint32>(error).Text();
+-                }
++                            result->ErrorCode = Web::STATUS_BAD_GATEWAY;
++                            result->Message = string(_T("Error during loading of device. ErrorCode: ")) +
++                                              Core::NumberType<uint32>(error).Text();
++                        }
+ 
++                    }
++                }
+             }
+-
+-            result->Body<Web::TextBody>(body);
+         }
+         // GET .../RemoteControl : Return name-list of all registered devices
+         else {
+@@ -354,7 +455,7 @@ namespace Plugin {
+             }
+ 
+             result->ErrorCode  = Web::STATUS_OK;
+-            result->Message = string(_T("Remote Devices are found"));
++            result->Message = string(_T("List of loaded remote devices"));
+             result->ContentType = Web::MIMETypes::MIME_JSON;
+             result->Body(Core::proxy_cast<Web::IBody>(response));
+         }
+@@ -372,178 +473,220 @@ namespace Plugin {
+ 
+         // This is a PUT request, search command
+         // PUT RemoteControl/<DEVICE_NAME>/<COMMAND>?<QUERY-1>&<QUERY-2>&<QUERY-N>
+-        if (index.Next() == true) {
+-
+-            // If DEVICE_NAME is provided, perform operations on that specific device
+-            // move index to handle COMMAND
+-            string deviceName(DefaultMappingTable);
++        if (index.IsValid() == true) {
++            // Perform operations on that specific device
++            const string deviceName = FindDevice(index);
+ 
+-            if (index.Current() != DefaultMappingTable) {
++            if (deviceName.empty() == false) {
+ 
+-                Remotes::RemoteAdministrator& admin(Remotes::RemoteAdministrator::Instance());
+-                Remotes::RemoteAdministrator::Iterator remoteDevices (admin.Producers());
++                if (index.Next() == true) {
++                    // PUT .../RemoteControl/<DEVICE_NAME>/PairingMode : activate pairing mode of specific DEVICE_NAME
++                    if (index.Current() == _T("PairingMode")) {
+ 
+-                while (remoteDevices.Next() == true) {
+-                    const TCHAR *producer((*remoteDevices)->Name());
+-                    if (index.Current() == producer) {
+-                        deviceName = producer;
+-                        index.Next();
+-                        break;
++                        if (Remotes::RemoteAdministrator::Instance().Pairing(deviceName) == true) {
++                            result->ErrorCode = Web::STATUS_OK;
++                            result->Message = string(_T("Pairing mode active: ") + deviceName);
++                        }
++                        else {
++                            result->ErrorCode = Web::STATUS_BAD_REQUEST;
++                            result->Message = string(_T("Failed to activate pairing: ") + deviceName);
++                        }
+                     }
+-                }
+-            } else {
+-                index.Next();
+-            }
++                    // PUT .../RemoteControl/<DEVICE_NAME>/Code/XXX : send a code to DEVICE_NAME
++                    else if (index.Current() == _T("Code")) {
++                        // move over the Code keyword.
++                        if (index.Next() == true) {
+ 
+-            if (index.IsValid() == true) {
++                            result->ErrorCode = Web::STATUS_NO_CONTENT;
++                            result->Message = string(_T("Key does not exist in ") + deviceName);
+ 
+-                // PUT .../RemoteControl/<DEVICE_NAME>/PairingMode : activate pairing mode of specific DEVICE_NAME
+-                // PUT .../RemoteControl/PairingMode : activate default device pairing mode
+-                if (index.Current() == _T("PairingMode")) {
++                            // Send the keypress if it can be found...
++                            Core::NumberType <uint32> code(index.Current());
++                            if (code.Value() != 0) {
+ 
+-                    if (Remotes::RemoteAdministrator::Instance().Pairing(deviceName) == true) {
+-                        result->ErrorCode = Web::STATUS_OK;
+-                        result->Message = string(_T("Pairing mode active: ") + deviceName);
+-                    }
+-                    else {
+-                        result->ErrorCode = Web::STATUS_BAD_REQUEST;
+-                        result->Message = string(_T("Failed to activate pairing: ")  + deviceName);
++                                uint32 errCode = KeyEvent(true, code, deviceName);
++                                if (errCode ==  Core::ERROR_NONE) {
++
++                                    errCode = KeyEvent(false, code, deviceName);
++                                    if (errCode ==  Core::ERROR_NONE) {
++
++                                        result->ErrorCode = Web::STATUS_OK;
++                                        result->Message = string(_T("Soft key is sent to ") + deviceName);
++                                    }
++                                }
++                            }
++                        }
++                        else {
++                            result->ErrorCode = Web::STATUS_NOT_FOUND;
++                            result->Message = string(_T("No key code in request"));
++                        }
+                     }
+-                }
+-                // PUT .../RemoteControl/<DEVICE_NAME>/Send?Code=XXX : send a code to specific DEVICE_NAME
+-                // PUT .../RemoteControl/Send?Code=XXX : send a code to default device
+-                else if (index.Current() == _T("Send")) {
++                        // PUT .../RemoteControl/<DEVICE_NAME>/Add?Code=XXX&Key=YYY&[Modifier=0xZZZ] : add a new pair to specific DEVICE_NAME
++                    else if (index.Current() == _T("Add")) {
+ 
+-                    // For Send command; we need Code query
+-                    Core::URL::KeyValue options(request.Query.Value());
+-                    Core::NumberType<uint32> code(options.Number<uint32>(_T("Code"), 0));
++                        // For Add command; we need Code, Key and Modifier queries
++                        Core::URL::KeyValue options(request.Query.Value());
+ 
+-                    // Send the keypress if it can be found...
+-                    KeyEvent(true, code, deviceName);
+-                    KeyEvent(false, code, deviceName);
++                        Core::NumberType <uint32> code(options.Number<uint32>(_T("Code"), 0));
++                        Core::NumberType <uint16> key(options.Number<uint16>(_T("Key"), 0));
++                        Core::NumberType <uint32> modifier(options.Number<uint32>(_T("Modifier"), 0));
+ 
+-                    result->ErrorCode = Web::STATUS_OK;
+-                    result->Message = string(_T("Soft Remote Send: ") + deviceName);
+-                }
+-                // PUT .../RemoteControl/<DEVICE_NAME>/Add?Code=XXX&Key=YYY&[Modifier=0xZZZ] : add a new pair to specific DEVICE_NAME
+-                // PUT .../RemoteControl/Add?Code=XXX&Key=YYY&[Modifier=0xZZZ] : add a new pair to default device
+-                else if (index.Current() == _T("Add")) {
++                        result->ErrorCode = Web::STATUS_METHOD_NOT_ALLOWED;
++                        result->Message = string(_T("Code is not added"));
+ 
+-                    // For Add command; we need Code, Key and Modifier queries
+-                    Core::URL::KeyValue options(request.Query.Value());
++                        // Valid code-key pair
++                        if (code.Value() != 0 && key.Value() != 0) {
++                            // Load default or specific device mapping
++                            PluginHost::VirtualInput::KeyMap &map(_inputHandler->Table(deviceName));
++
++                            if (map.Add(code, key, modifier) == true) {
++                                result->ErrorCode = Web::STATUS_OK;
++                                result->Message = string(_T("Code is added"));
++                            }
++                            else {
++                                result->Message = string(_T("Code already exists"));
++                            }
++                        }
++                    }
++                    // PUT .../RemoteControl/<DEVICE_NAME>/Save : Save the loaded key map as DEVICE_NAME.json into persistent path
++                    else if (index.Current() == _T("Save")) {
+ 
+-                    Core::NumberType<uint32> code(options.Number<uint32>(_T("Code"), 0));
+-                    Core::NumberType<uint16> key(options.Number<uint16>(_T("Key"), 0));
+-                    Core::NumberType<uint32> modifier(options.Number<uint32>(_T("Modifier"), 0));
++                        result->ErrorCode = Web::STATUS_METHOD_NOT_ALLOWED;
++                        result->Message = string(_T("File is not created"));
+ 
+-                    result->ErrorCode = Web::STATUS_METHOD_NOT_ALLOWED;
+-                    result->Message = string(_T("The new code is not added"));
++                        string fileName;
++                        if (_persistentPath.empty() == false) {
++                            Core::Directory directory(_persistentPath.c_str());
++                            if (directory.CreatePath()) {
++                                fileName = _persistentPath + deviceName + _T(".json");
++                            }
++                        }
+ 
+-                    // Valid code-key pair
+-                    if (code.Value() != 0 && key.Value() != 0) {
+-                        // Load default or specific device mapping
+-                        PluginHost::VirtualInput::KeyMap& map (_inputHandler->Table(deviceName));
++                        if (fileName.empty() == false) {
++                            // Seems like we have a default mapping file. Load it..
++                            PluginHost::VirtualInput::KeyMap &map(_inputHandler->Table(deviceName));
+ 
+-                        if (map.Add(code, key, modifier) == true) {
+-                            result->ErrorCode = Web::STATUS_OK;
+-                            result->Message = string(_T("The new code is added"));
++                            if (map.Save(fileName) == Core::ERROR_NONE) {
++                                result->ErrorCode = Web::STATUS_OK;
++                                result->Message = string(_T("File is created: " + fileName));
++                            }
+                         }
+-                        else {
+-                            result->Message = string(_T("The code is already exist"));
++                    }
++                    // PUT .../RemoteControl/<DEVICE_NAME>/Load : Re-load DEVICE_NAME.json into memory
++                    else if (index.Current() == _T("Load")) {
++
++                        result->ErrorCode = Web::STATUS_METHOD_NOT_ALLOWED;
++                        result->Message = string(_T("File does not exist"));
++
++                        string fileName;
++                        if (_persistentPath.empty() == false) {
++                            Core::Directory directory(_persistentPath.c_str());
++                            if (directory.CreatePath()) {
++                                fileName = _persistentPath + deviceName + _T(".json");
++                            }
++                        }
++
++                        if (fileName.empty() == false) {
++                            PluginHost::VirtualInput::KeyMap &map(_inputHandler->Table(deviceName));
++
++                            if (map.Load(fileName) == Core::ERROR_NONE) {
++                                result->ErrorCode = Web::STATUS_OK;
++                                result->Message = string(_T("File is reloaded: " + deviceName));
++                            }
+                         }
+                     }
+                 }
+-                // PUT .../RemoteControl/<DEVICE_NAME>/Modify?Code=XXX&Key=YYY&[Modifier=0xZZZ] : Modify a new pair in specific DEVICE_NAME
+-                // PUT .../RemoteControl/Modify?Code=XXX&Key=YYY&[Modifier=0xZZZ] : modify a new pair in default device
+-                else if (index.Current() == _T("Modify")) {
++            }
++        }
++        return (result);
++    }
++
++    Core::ProxyType<Web::Response> RemoteControl::DeleteMethod(Core::TextSegmentIterator& index)
++    {
++        Core::ProxyType<Web::Response> result(PluginHost::Factories::Instance().Response());
+ 
+-                    // For Modify command; we need Code, Key and Modifier queries
+-                    Core::URL::KeyValue options(request.Query.Value());
++        result->ErrorCode = Web::STATUS_NOT_IMPLEMENTED;
++        result->Message = string(_T("Unknown request path specified."));
+ 
+-                    Core::NumberType<uint32> code(options.Number<uint32>(_T("Code"), 0));
+-                    Core::NumberType<uint16> key(options.Number<uint16>(_T("Key"), 0));
+-                    Core::NumberType<uint32> modifier(options.Number<uint32>(_T("Modifier"), 0));
++        // All delete commands require an additional parameter, so go look for it.
++        // DELETE .../RemoteControl/<DEVICE_NAME>/Code/XXX : delete code from mapping of DEVICE_NAME
++        if (index.IsValid() == true) {
++            // Perform operations on that specific device
++            const string deviceName = FindDevice(index);
+ 
+-                    result->ErrorCode = Web::STATUS_METHOD_NOT_ALLOWED;
+-                    result->Message = string(_T("The new code is not modified"));
++            if (deviceName.empty() == false) {
+ 
+-                    // Valid code-key pair
+-                    if (code.Value() != 0 && key.Value() != 0) {
+-                        // Load default or specific device mapping
+-                        PluginHost::VirtualInput::KeyMap& map (_inputHandler->Table(deviceName));
++                if (index.Next() == true) {
+ 
+-                        if (map.Modify(code, key, modifier) == true) {
+-                            result->ErrorCode = Web::STATUS_OK;
+-                            result->Message = string(_T("The code is modified"));
++                    if (index.Current() == _T("Code")) {
++                        // move over the Code keyword.
++                        if (index.Next() == true) {
++
++                            result->ErrorCode = Web::STATUS_NO_CONTENT;
++                            result->Message = string(_T("Key does not exist in ") + deviceName);
++
++                            // Send the keypress if it can be found...
++                            Core::NumberType <uint32> code(index.Current());
++                            if (code.Value() != 0) {
++
++                                // Load default or specific device mapping
++                                PluginHost::VirtualInput::KeyMap &map(_inputHandler->Table(deviceName));
++
++                                map.Delete(code);
++
++                                result->ErrorCode = Web::STATUS_OK;
++                                result->Message = string(_T("Code is deleted"));
++                            }
+                         }
+                         else {
+-                            result->Message = string(_T("The code is not exist"));
++                            result->ErrorCode = Web::STATUS_NOT_FOUND;
++                            result->Message = string(_T("No key code in request"));
+                         }
+                     }
+                 }
+-                // PUT .../RemoteControl/<DEVICE_NAME>/Delete?Code=XXX : delete code from mapping of specific DEVICE_NAME
+-                // PUT .../RemoteControl/Delete?Code=XXX : delete code from mapping of default device
+-                // NOTE: Instead of PUT request, we may use DELETE request
+-                else if (index.Current() == _T("Delete")) {
++            }
++        }
++        return (result);
++    }
+ 
+-                    Core::URL::KeyValue options(request.Query.Value());
++    Core::ProxyType<Web::Response> RemoteControl::PostMethod(Core::TextSegmentIterator& index, const Web::Request& request)
++    {
++        Core::ProxyType<Web::Response> result(PluginHost::Factories::Instance().Response());
+ 
+-                    Core::NumberType<uint32> code(options.Number<uint32>(_T("Code"), 0));
++        result->ErrorCode = Web::STATUS_NOT_IMPLEMENTED;
++        result->Message = string(_T("Unknown request path specified."));
+ 
+-                    // Load default or specific device mapping
+-                    PluginHost::VirtualInput::KeyMap& map (_inputHandler->Table(deviceName));
++        if (index.IsValid() == true) {
+ 
+-                    map.Delete(code);
++            // Perform operations on that specific device
++            const string deviceName = FindDevice(index);
+ 
+-                    result->ErrorCode = Web::STATUS_OK;
+-                    result->Message = string(_T("The code is deleted"));
+-                }
+-                // PUT .../RemoteControl/<DEVICE_NAME>/Save : Save the loaded key map as DEVICE_NAME.json into persistent path
+-                // PUT .../RemoteControl/Save : Save the default loaded key map as keymap.json into persistent path
+-                else if (index.Current() == _T("Save")) {
+-
+-                    result->ErrorCode = Web::STATUS_METHOD_NOT_ALLOWED;
+-                    result->Message = string(_T("File is not created"));
+-
+-                    string fileName;
+-                    if (_persistentPath.empty() == false) {
+-                        Core::Directory directory(_persistentPath.c_str());
+-                        if (directory.CreatePath()) {
+-                             fileName = _persistentPath + deviceName + _T(".json");
+-                        }
+-                    }
++            if (deviceName.empty() == false) {
+ 
+-                    if (fileName.empty() == false) {
+-                        // Seems like we have a default mapping file. Load it..
+-                        PluginHost::VirtualInput::KeyMap &map(_inputHandler->Table(deviceName));
++                if (index.Next() == true) {
++                    // POST .../RemoteControl/<DEVICE_NAME>/Modify?Code=XXX&Key=YYY&[Modifier=0xZZZ] : Modify a new pair in specific DEVICE_NAME
++                    if (index.Current() == _T("Modify")) {
++                        // For Modify command; we need Code, Key and Modifier queries
++                        Core::URL::KeyValue options(request.Query.Value());
+ 
+-                        if (map.Save(fileName) == Core::ERROR_NONE) {
+-                            result->ErrorCode = Web::STATUS_OK;
+-                            result->Message = string(_T("Keys are saved in file: " + fileName));
+-                        }
+-                    }
+-                }
+-                // PUT .../RemoteControl/<DEVICE_NAME>/Load : Re-load DEVICE_NAME.json into memory
+-                // PUT .../RemoteControl/Load : Re-load keymap.json into memory
+-                else if (index.Current() == _T("Load")) {
+-
+-                    result->ErrorCode = Web::STATUS_METHOD_NOT_ALLOWED;
+-                    result->Message = string(_T("File is not exist"));
+-
+-                    string fileName;
+-                    if (_persistentPath.empty() == false) {
+-                        Core::Directory directory(_persistentPath.c_str());
+-                        if (directory.CreatePath()) {
+-                            fileName = _persistentPath + deviceName + _T(".json");
+-                        }
+-                    }
++                        Core::NumberType <uint32> code(options.Number<uint32>(_T("Code"), 0));
++                        Core::NumberType <uint16> key(options.Number<uint16>(_T("Key"), 0));
++                        Core::NumberType <uint32> modifier(options.Number<uint32>(_T("Modifier"), 0));
+ 
+-                    if (fileName.empty() == false) {
+-                        PluginHost::VirtualInput::KeyMap &map(_inputHandler->Table(deviceName));
++                        result->ErrorCode = Web::STATUS_METHOD_NOT_ALLOWED;
++                        result->Message = string(_T("Code is not modified"));
+ 
+-                        if (map.Load(fileName) == Core::ERROR_NONE) {
+-                            result->ErrorCode = Web::STATUS_OK;
+-                            result->Message = string(_T("Keys are re-loaded: " + deviceName));
++                        // Valid code-key pair
++                        if (code.Value() != 0 && key.Value() != 0) {
++                            // Load default or specific device mapping
++                            PluginHost::VirtualInput::KeyMap &map(_inputHandler->Table(deviceName));
++
++                            if (map.Modify(code, key, modifier) == true) {
++                                result->ErrorCode = Web::STATUS_OK;
++                                result->Message = string(_T("Code is modified"));
++                            } else {
++                                result->Message = string(_T("Code does not exist"));
++                            }
+                         }
+                     }
+                 }
+diff --git a/RemoteControl/RemoteControl.h b/RemoteControl/RemoteControl.h
+index 11c7a0e..0733e5f 100644
+--- a/RemoteControl/RemoteControl.h
++++ b/RemoteControl/RemoteControl.h
+@@ -343,11 +343,14 @@ namespace Plugin {
+         // Whnever a key is pressed or release, let this plugin now, it will take the proper arrangements and timings
+         // to announce this key event to the linux system. Repeat event is triggered by the watchdog implementation
+         // in this plugin. No need to signal this.
+-        virtual void KeyEvent(const bool pressed, const uint32 code, const string& table);
++        virtual uint32 KeyEvent(const bool pressed, const uint32 code, const string& table);
+ 
+     private:
+         Core::ProxyType<Web::Response> GetMethod(Core::TextSegmentIterator& index) const;
+         Core::ProxyType<Web::Response> PutMethod(Core::TextSegmentIterator& index, const Web::Request& request);
++        Core::ProxyType<Web::Response> DeleteMethod(Core::TextSegmentIterator& index);
++        Core::ProxyType<Web::Response> PostMethod(Core::TextSegmentIterator& index, const Web::Request& request);
++        const string FindDevice(Core::TextSegmentIterator& index) const;
+ 
+     private:
+         uint32 _skipURL;

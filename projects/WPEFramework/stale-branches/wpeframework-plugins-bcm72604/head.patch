@@ -1,0 +1,32 @@
+commit 2463430ba7bc3c94811c737e3b4f5711120c4c81
+Author: Sander van der Maar <sandervandermaar@gmail.com>
+Date:   Wed Sep 6 11:05:28 2017 +0200
+
+    [YOCTO] For now hard-code some paths
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 4474294..f8b3689 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,6 +1,7 @@
+ cmake_minimum_required(VERSION 2.8)
+ 
+-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
++#TODO: also here a hack, just like compositor plugin. Needs to be more RDK friendly.
++set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -D_GNU_SOURCE -DHAVE_CONFIG_H -DWESTEROS_PLATFORM_EMBEDDED -DWESTEROS_HAVE_WAYLAND_EGL -DENABLE_SBPROTOCOL -DUSE_XDG_VERSION4 -DWESTEROS_PLATFORM_NEXUS -DVCX=5 -DBSTD_CPU_ENDIAN=BSTD_ENDIAN_LITTLE -I/home/sander/Projects/rdk-westeros/build-brcm97271ip-refboard/tmp/sysroots/brcm97271ip-refboard/usr/include/interface/khronos/include -I/home/sander/Projects/rdk-westeros/build-brcm97271ip-refboard/tmp/sysroots/brcm97271ip-refboard/usr/include/interface/khronos/include/bcg_abstract -I/home/sander/Projects/rdk-westeros/build-brcm97271ip-refboard/tmp/sysroots/brcm97271ip-refboard/usr/include/vcos/include -I/home/sander/Projects/rdk-westeros/build-brcm97271ip-refboard/tmp/sysroots/brcm97271ip-refboard/usr/include/WPEFramework/ -I/home/sander/Projects/rdk-westeros/build-brcm97271ip-refboard/tmp/sysroots/brcm97271ip-refboard/usr/include/WPEFramework/virtualkeyboard")
+ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+ 
+ if(CMAKE_CROSSCOMPILING)
+diff --git a/RemoteControl/RemoteControl.cpp b/RemoteControl/RemoteControl.cpp
+index a7e9daa..60e2134 100644
+--- a/RemoteControl/RemoteControl.cpp
++++ b/RemoteControl/RemoteControl.cpp
+@@ -136,7 +136,7 @@ namespace Plugin {
+             , _sink(this)
+             , _persistentPath()
+     {
+-        ASSERT(_inputHandler == nullptr);
++        //ASSERT(_inputHandler == nullptr);
+     }
+ #ifdef __WIN32__
+ #pragma warning( default : 4355 )

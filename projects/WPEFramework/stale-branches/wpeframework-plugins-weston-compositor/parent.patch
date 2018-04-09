@@ -1,0 +1,3681 @@
+commit d8b435273aa86a4905dc058d51eccae5f3849156
+Author: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date:   Thu Nov 2 13:43:18 2017 +0100
+
+    [EGL test] :construction_worker: Safe WIP for now.
+
+diff --git a/EGLTest/CMakeLists.txt b/EGLTest/CMakeLists.txt
+new file mode 100644
+index 0000000..6acdae8
+--- /dev/null
++++ b/EGLTest/CMakeLists.txt
+@@ -0,0 +1,146 @@
++# WPEFRAMEWORK_ROOT acts as the root directory for this project, in case it is embedded in a larger, surrounding project.
++# COMPONENT_NAME is used to group multiple install targets (one per module).
++# MODULE_NAME is used as a replacement for PROJECT_NAME, as using project(x) and PROJECT_NAME seems to interfere with
++# Yocto builds. In some cases where PROJECT_NAME is defined, we simple assign this variable to MODULE_NAME.
++# Be careful to correctly set MODULE_NAME, as it is also used in the uninstall.cmake.in files for naming the uninstall manifest.
++# Additionally, install targets are linked to the MODULE_NAME and COMPONENT_NAME.
++
++set(PLUGIN_NAME EGLTest)
++set(MODULE_NAME WPEFramework${PLUGIN_NAME})
++
++include(setup_target_properties_library)
++include(show_target_properties)
++
++message("Setting up ${MODULE_NAME}")
++
++find_package(WPEFramework QUIET)
++find_package(EGL QUIET)
++find_package(GLESv2 QUIET)
++
++if(CLION_ENVIRONMENT)
++    set(WPEFRAMEWORK_LIBRARY_WPEFrameworkPlugins WPEFrameworkPlugins)
++    set(WPEFRAMEWORK_INCLUDE_DIRS ${WPEFRAMEWORK_ROOT}/Source)
++endif()
++
++set(PLUGIN_EGLTEST_DEFINITIONS
++    )
++
++set(PLUGIN_EGLTEST_INCLUDE_DIRS
++        ${WPEFRAMEWORK_INCLUDE_DIRS}
++        egl
++        Common)
++
++set(PLUGIN_EGLTEST_OPTIONS)
++
++set(PLUGIN_EGLTEST_LINK_OPTIONS)
++
++set(PLUGIN_EGLTEST_DEPENDENCIES
++    )
++
++
++
++set(PLUGIN_EGLTEST_LIBS
++    ${CMAKE_THREAD_LIBS_INIT}
++    ${CMAKE_DL_LIBS}
++    ${WPEFRAMEWORK_LIBRARY_WPEFrameworkPlugins}
++    ${PLUGIN_EGLTEST_DEPENDENCIES}
++        ${GLESV2_LIBRARIES}
++        ${EGL_LIBRARIES})
++
++
++file(GLOB PLUGIN_EGLTEST_INCLUDES_MAIN *.h)
++file(GLOB PLUGIN_EGLTEST_INCLUDES_EGL egl/*.h)
++file(GLOB PLUGIN_EGLTEST_EGL_SRCS egl/*cpp)
++
++set(PLUGIN_EGLTEST_INCLUDES
++        ${PLUGIN_EGLTEST_INCLUDES_MAIN}
++        ${PLUGIN_EGLTEST_INCLUDES_EGL}
++        ${GLESV2_INCLUDE_DIRS}
++        ${EGL_INCLUDE_DIRS}
++        )
++
++set(PLUGIN_EGLTEST_SOURCES
++        Module.cpp
++        EGLTest.cpp
++        ${PLUGIN_EGLTEST_EGL_SRCS}
++)
++
++set(PLUGIN_EGLTEST_INPUT
++    ${PLUGIN_EGLTEST_SOURCES}
++    ${PLUGIN_EGLTEST_INCLUDES}
++    )
++
++display_list("Defines                     : " ${PLUGIN_EGLTEST_DEFINITIONS} )
++display_list("Compiler options            : " ${PLUGIN_EGLTEST_OPTIONS} )
++display_list("Source files                : " ${PLUGIN_EGLTEST_SOURCES} )
++display_list("Include files               : " ${PLUGIN_EGLTEST_INCLUDES} )
++display_list("Include dirs                : " ${PLUGIN_EGLTEST_INCLUDE_DIRS} )
++display_list("Link libs                   : " ${PLUGIN_EGLTEST_LIBS} )
++display_list("Linker options              : " ${PLUGIN_EGLTEST_LINK_OPTIONS} )
++display_list("Dependencies                : " ${PLUGIN_EGLTEST_DEPENDENCIES} )
++
++add_library(${MODULE_NAME} SHARED ${PLUGIN_EGLTEST_INPUT})
++target_compile_definitions(${MODULE_NAME} PRIVATE ${PLUGIN_EGLTEST_DEFINITIONS})
++target_include_directories(${MODULE_NAME} PRIVATE ${PLUGIN_EGLTEST_INCLUDE_DIRS})
++target_link_libraries(${MODULE_NAME} ${PLUGIN_EGLTEST_LIBS})
++list_to_string(PLUGIN_EGLTEST_LINK_OPTIONS PLUGIN_EGLTEST_LINK_OPTIONS_STRING)
++if (NOT "${PLUGIN_EGLTEST_LINK_OPTIONS_STRING}" STREQUAL "")
++    set_target_properties(${MODULE_NAME} PROPERTIES LINK_FLAGS "${PLUGIN_EGLTEST_LINK_OPTIONS_STRING}")
++endif()
++set_target_properties(${MODULE_NAME} PROPERTIES OUTPUT_NAME ${MODULE_NAME})
++
++setup_target_properties_library(${MODULE_NAME})
++
++show_target_properties(${MODULE_NAME})
++
++# uninstall target
++configure_file(
++    ${WPEFRAMEWORK_PLUGINS_ROOT}/cmake/uninstall.cmake.in
++    ${CMAKE_CURRENT_BINARY_DIR}/uninstall.cmake
++    IMMEDIATE @ONLY)
++
++add_custom_target(uninstall_${MODULE_NAME}
++    COMMAND ${CMAKE_COMMAND} -DCOMPONENT=${MODULE_NAME} -P ${CMAKE_CURRENT_BINARY_DIR}/uninstall.cmake
++    DEPENDS ${MODULE_NAME}
++    COMMENT "Uninstalling ${MODULE_NAME}")
++
++add_custom_target(install_${MODULE_NAME}
++    COMMAND ${CMAKE_COMMAND} -DCOMPONENT=${MODULE_NAME} -P ${CMAKE_BINARY_DIR}/cmake_install.cmake
++    DEPENDS ${MODULE_NAME}
++    COMMENT "Installing ${MODULE_NAME}")
++
++add_dependencies(install-component-${COMPONENT_NAME} install_${MODULE_NAME})
++
++add_dependencies(uninstall-component-${COMPONENT_NAME} uninstall_${MODULE_NAME})
++
++install(
++    TARGETS ${MODULE_NAME}
++    DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/wpeframework/plugins
++    COMPONENT ${MODULE_NAME})
++
++message("WPEFRAMEWORK_PLUGIN_EGLTEST_URI: ${WPEFRAMEWORK_PLUGIN_EGLTEST_URI}")
++
++# default configuration
++map() 
++#    kv(callsign ${PLUGIN_NAME})
++    kv(locator lib${MODULE_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX})
++    kv(classname ${PLUGIN_NAME})
++    key(configuration)
++    map()
++        kv(x 0)
++        kv(y 0)
++        kv(h 720)
++        kv(w 1280)
++        kv(alpha 255)
++        kv(r 255)
++        kv(g 255)
++        kv(b 0)
++    end()
++end()
++ans(PLUGIN_EGLTEST_CONFIG)
++
++json_write("${CMAKE_CURRENT_LIST_DIR}/${PLUGIN_NAME}.json" ${PLUGIN_EGLTEST_CONFIG})
++install(
++    FILES ${PLUGIN_NAME}.json
++    DESTINATION ${CMAKE_INSTALL_PREFIX}/../etc/WPEFramework/plugins/
++    COMPONENT ${MODULE_NAME})
+diff --git a/EGLTest/EGLTest.cpp b/EGLTest/EGLTest.cpp
+new file mode 100644
+index 0000000..e770e15
+--- /dev/null
++++ b/EGLTest/EGLTest.cpp
+@@ -0,0 +1,88 @@
++#include "EGLTest.h"
++
++#define BUFFER_OFFSET(i) ((char*)NULL + (i))
++
++namespace WPEFramework {
++namespace Plugin {
++    SERVICE_REGISTRATION(EGLTest,
++        1, 0);
++
++    EGLTest::EGLTest()
++        : _skipURL()
++        , _display(Graphics::Display::Instance(0))
++    {
++    }
++
++    EGLTest::~EGLTest()
++    {
++    }
++
++    /* virtual */ const string EGLTest::Initialize(PluginHost::IShell* service)
++    {
++        ASSERT(service != nullptr);
++
++        EGLTest::Config configuration;
++        configuration.FromString(service->ConfigLine());
++
++        Graphics::Config::Iterator configs = _display.Configurations();
++
++        if (configs.Next() == true) {
++            Graphics::Config config = *configs;
++
++            printf("Selected config: %d,%d x %d,%d.\n",
++                config.Port().X(),
++                config.Port().Y(),
++                config.Port().Width(),
++                config.Port().Height());
++            printf("Red: %d, Blue: %d, Green: %d, Alpha: %d.\n",
++                config.Red(),
++                config.Blue(),
++                config.Green(),
++                config.Alpha());
++            printf("Depth: %d, Stencil: %d.\n", config.Depth(), config.Stencil());
++
++            // Define the surface we would like to use...
++
++            printf("[%s:%d] BRAMs DEBUG: Add View(%d, %d, %d, %d)\n", __FILE__, __LINE__, configuration.X.Value(), configuration.Y.Value(), configuration.W.Value(), configuration.H.Value() );
++            config.Port(Graphics::View(configuration.X.Value(), configuration.Y.Value(), configuration.W.Value(), configuration.H.Value()));
++
++            printf("[%s:%d] BRAM DEBUG: Create quad \n", __FILE__, __LINE__);
++            Graphics::Config quadPane(config);
++
++            printf("[%s:%d] BRAM DEBUG: Add View 640x360\n", __FILE__, __LINE__);
++            quadPane.Port(Graphics::View(0, 0, 640, 360));
++
++            printf("[%s:%d] BRAM DEBUG: Create surface\n", __FILE__, __LINE__);
++            Graphics::WindowSurface surface(_display, config);
++
++
++
++            //surface.Current();
++
++            // Clear the surface on which we will be rendering
++            printf("[%s:%d] BRAM DEBUG: Set background colour\n", __FILE__, __LINE__);
++            Graphics::Color background( configuration.R.Value(), configuration.G.Value(), configuration.B.Value(), configuration.Alpha.Value() );
++            surface.Clear(background);
++
++            // Render all attached textures to the surface
++            printf("[%s:%d] BRAM DEBUG: Draw\n", __FILE__, __LINE__);
++            surface.Draw();
++        }
++        else {
++            printf("No config found!\n");
++        }
++        // On success return empty, to indicate there is no error text.
++        return _T("");
++    }
++
++    /* virtual */ void EGLTest::Deinitialize(PluginHost::IShell* service)
++    {
++    }
++
++    /* virtual */ string EGLTest::Information() const
++    {
++        // No additional info to report.
++        return (string());
++    }
++}
++} // WPEFramework::Plugin
+\ No newline at end of file
+diff --git a/EGLTest/EGLTest.h b/EGLTest/EGLTest.h
+new file mode 100644
+index 0000000..808ae06
+--- /dev/null
++++ b/EGLTest/EGLTest.h
+@@ -0,0 +1,109 @@
++#ifndef PROJECT_EGLTEST_H
++#define PROJECT_EGLTEST_H
++
++#include "Module.h"
++
++#include "egl/graphics.h"
++#include "egl/rectangle.h"
++#include "egl/triangle.h"
++
++namespace WPEFramework {
++namespace Plugin {
++    class EGLTest : public PluginHost::IPlugin {
++
++    private:
++        class Config : public Core::JSON::Container {
++        private:
++            Config(const Config&) = delete;
++            Config& operator=(const Config&) = delete;
++
++        public:
++            Config()
++                : X(0)
++                , Y(0)
++                , W(1280)
++                , H(720)
++                , Alpha(255)
++                , R(0)
++                , G(0)
++                , B(0)
++            {
++                Add(_T("x"), &X);
++                Add(_T("y"), &Y);
++                Add(_T("w"), &W);
++                Add(_T("h"), &H);
++                Add(_T("alpha"), &Alpha);
++                Add(_T("r"), &R);
++                Add(_T("g"), &G);
++                Add(_T("b"), &B);
++            }
++            ~Config()
++            {
++            }
++
++        public:
++            Core::JSON::DecUInt16 X;
++            Core::JSON::DecUInt16 Y;
++            Core::JSON::DecUInt16 W;
++            Core::JSON::DecUInt16 H;
++            Core::JSON::DecUInt8 Alpha;
++          Core::JSON::DecUInt8 R;
++          Core::JSON::DecUInt8 G;
++          Core::JSON::DecUInt8 B;
++
++        };
++
++        class Job : public Core::Thread {
++        private:
++            Job() = delete;
++            Job(const Job&) = delete;
++            Job& operator=(const Job&) = delete;
++
++        public:
++            Job(EGLTest& parent)
++                : _parent(parent)
++            {
++            }
++            virtual ~Job()
++            {
++            }
++
++        public:
++            uint32 Worker()
++            {
++                Block();
++                return (Core::infinite);
++            }
++
++        private:
++            EGLTest& _parent;
++        };
++
++    private:
++        EGLTest(const EGLTest&) = delete;
++        EGLTest& operator=(const EGLTest&) = delete;
++
++    public:
++        EGLTest();
++        virtual ~EGLTest();
++
++        BEGIN_INTERFACE_MAP(EGLTest)
++        INTERFACE_ENTRY(PluginHost::IPlugin)
++        END_INTERFACE_MAP
++
++    public:
++        //   IPlugin methods
++        // -------------------------------------------------------------------------------------------------------
++        virtual const string Initialize(PluginHost::IShell* service) override;
++        virtual void Deinitialize(PluginHost::IShell* service) override;
++        virtual string Information() const override;
++
++    private:
++        uint16 _skipURL;
++        Graphics::Display& _display;
++        Graphics::WindowSurface* _surface;
++    }; // EGLTest
++}
++} // WPEFramework::Plugin
++
++#endif // PROJECT_EGLTEST_H
+diff --git a/EGLTest/Module.cpp b/EGLTest/Module.cpp
+new file mode 100644
+index 0000000..2d85ed9
+--- /dev/null
++++ b/EGLTest/Module.cpp
+@@ -0,0 +1,3 @@
++#include "Module.h"
++
++MODULE_NAME_DECLARATION(BUILD_REFERENCE)
+diff --git a/EGLTest/Module.h b/EGLTest/Module.h
+new file mode 100644
+index 0000000..6a7a25a
+--- /dev/null
++++ b/EGLTest/Module.h
+@@ -0,0 +1,13 @@
++#ifndef EGLTEST_MODULE_H
++#define EGLTEST_MODULE_H
++
++#ifndef MODULE_NAME
++#define MODULE_NAME Plugin_EGLTest
++#endif
++
++#include <plugins/plugins.h>
++
++#undef EXTERNAL
++#define EXTERNAL
++
++#endif // EGLTEST_MODULE_H
+diff --git a/EGLTest/egl/assets/image1.png b/EGLTest/egl/assets/image1.png
+new file mode 100644
+index 0000000..39a37da
+Binary files /dev/null and b/EGLTest/egl/assets/image1.png differ
+diff --git a/EGLTest/egl/assets/image2.png b/EGLTest/egl/assets/image2.png
+new file mode 100644
+index 0000000..42daec2
+Binary files /dev/null and b/EGLTest/egl/assets/image2.png differ
+diff --git a/EGLTest/egl/cube.cpp b/EGLTest/egl/cube.cpp
+new file mode 100644
+index 0000000..b976a55
+--- /dev/null
++++ b/EGLTest/egl/cube.cpp
+@@ -0,0 +1,187 @@
++#include <string.h>
++#include <assert.h>
++#include <GLES2/gl2.h>
++
++#include "cube.h"
++#include "graphics.h"
++
++namespace WPEFramework {
++namespace Graphics {
++    namespace Examples {
++        static const char vertexShader[] = "attribute vec4 position;                    \n"
++                                           "attribute vec4 color;                       \n"
++                                           "uniform mat4 mvp;                           \n"
++                                           "varying vec4 vcolor;                        \n"
++                                           "void main()                                 \n"
++                                           "{                                           \n"
++                                           "  gl_Position = position * mvp;             \n"
++                                           "  vcolor = color;                           \n"
++                                           "}                                           \n";
++
++        static const char fragmentShader[] = "precision mediump float;                  \n"
++                                             "varying vec4 v_color;                     \n"
++                                             "void main()                               \n"
++                                             "{                                         \n"
++                                             "  gl_FragColor = v_color;                 \n"
++                                             "}                                         \n";
++
++
++        Cube::Cube()
++            : WPEFramework::Graphics::Texture(Texture::TEXTURE_2D)
++            , _color(0)
++            , _position(0)
++            , _rotation(0)
++            , _mvp(-1)
++            , _x(0)
++            , _y(0)
++            , _z(0)
++        {
++        }
++
++        /* virtual */ Cube::~Cube()
++        {
++        }
++
++        void Cube::Rotation(const signed int rotation)
++        {
++            _rotation = rotation;
++        }
++
++        /* virtual */ void Cube::Shaders()
++        {
++            CreateShader(GL_VERTEX_SHADER, vertexShader);
++            assert(GetStatus().Error == 0);
++
++            CreateShader(GL_FRAGMENT_SHADER, fragmentShader);
++            assert(GetStatus().Error == 0);
++        }
++
++        /* virtual */ void Cube::Links()
++        {
++            _position = CreateAttribute("position");
++            assert(GetStatus().Error == 0);
++
++            _color = CreateAttribute("color");
++            assert(GetStatus().Error == 0);
++
++            _mvp = CreateUniform("mvp");
++        }
++
++        /* virtual */ void Cube::Render()
++        {
++            static const GLfloat vertices[] = {
++                /* front */
++                -0.5f, -0.5f, 0.5f, 1.0f,
++                0.5f, -0.5f, 0.5f, 1.0f,
++                0.5f, 0.5f, 0.5f, 1.0f,
++                -0.5f, 0.5f, 0.5f, 1.0f,
++                /* back */
++                -0.5f, -0.5f, -0.5f, 1.0f,
++                0.5f, -0.5f, -0.5f, 1.0f,
++                0.5f, 0.5f, -0.5f, 1.0f,
++                -0.5f, 0.5f, -0.5f, 1.0f,
++                /* left */
++                -0.5f, -0.5f, 0.5f, 1.0f,
++                -0.5f, 0.5f, 0.5f, 1.0f,
++                -0.5f, 0.5f, -0.5f, 1.0f,
++                -0.5f, -0.5f, -0.5f, 1.0f,
++                /* right */
++                0.5f, -0.5f, 0.5f, 1.0f,
++                0.5f, 0.5f, 0.5f, 1.0f,
++                0.5f, 0.5f, -0.5f, 1.0f,
++                0.5f, -0.5f, -0.5f, 1.0f,
++                /* top */
++                -0.5f, 0.5f, 0.5f, 1.0f,
++                0.5f, 0.5f, 0.5f, 1.0f,
++                0.5f, 0.5f, -0.5f, 1.0f,
++                -0.5f, 0.5f, -0.5f, 1.0f,
++                /* bottom */
++                -0.5f, -0.5f, 0.5f, 1.0f,
++                0.5f, -0.5f, 0.5f, 1.0f,
++                0.5f, -0.5f, -0.5f, 1.0f,
++                -0.5f, -0.5f, -0.5f, 1.0f,
++            };
++
++            static const GLfloat colors[] = {
++                /* front */
++                1.0f, 0.0f, 0.0f, 1.0f,
++                1.0f, 0.0f, 0.0f, 1.0f,
++                1.0f, 0.0f, 0.0f, 1.0f,
++                1.0f, 0.0f, 0.0f, 1.0f,
++                /* back */
++                1.0f, 1.0f, 0.0f, 1.0f,
++                1.0f, 1.0f, 0.0f, 1.0f,
++                1.0f, 1.0f, 0.0f, 1.0f,
++                1.0f, 1.0f, 0.0f, 1.0f,
++                /* left */
++                0.0f, 0.0f, 1.0f, 1.0f,
++                0.0f, 0.0f, 1.0f, 1.0f,
++                0.0f, 0.0f, 1.0f, 1.0f,
++                0.0f, 0.0f, 1.0f, 1.0f,
++                /* right */
++                1.0f, 0.0f, 1.0f, 1.0f,
++                1.0f, 0.0f, 1.0f, 1.0f,
++                1.0f, 0.0f, 1.0f, 1.0f,
++                1.0f, 0.0f, 1.0f, 1.0f,
++                /* top */
++                0.0f, 1.0f, 0.0f, 1.0f,
++                0.0f, 1.0f, 0.0f, 1.0f,
++                0.0f, 1.0f, 0.0f, 1.0f,
++                0.0f, 1.0f, 0.0f, 1.0f,
++                /* bottom */
++                1.0f, 0.5f, 0.0f, 1.0f,
++                1.0f, 0.5f, 0.0f, 1.0f,
++                1.0f, 0.5f, 0.0f, 1.0f,
++                1.0f, 0.5f, 0.0f, 1.0f,
++            };
++
++            static const GLushort indices[] = {
++                /* front */
++                0, 1, 2,
++                0, 2, 3,
++                /* back */
++                4, 5, 6,
++                4, 6, 7,
++                /* left */
++                8, 9, 10,
++                8, 10, 11,
++                /* right */
++                12, 13, 14,
++                12, 14, 15,
++                /* top */
++                16, 17, 18,
++                16, 18, 19,
++                /* bottom */
++                20, 21, 22,
++                20, 22, 23,
++            };
++
++            ESMatrix mvp_matrix;
++
++            /* Scale the cube */
++
++
++            /* Rotate the cube */
++            esRotate(&_modelview_matrix, 1.0f, 1, 0, 0);
++            esRotate(&_modelview_matrix, 0.5f, 0, 1, 0);
++
++            glUniformMatrix4fv(mvp, 1, GL_FALSE, (GLfloat *)&mvp_matrix);
++
++            glEnable(GL_DEPTH_TEST);
++            glDepthFunc(GL_LEQUAL);
++
++            glVertexAttribPointer(_position, 4, GL_FLOAT, GL_FALSE,
++                                  4 * sizeof(GLfloat), vertices);
++            glEnableVertexAttribArray(_position);
++
++            glVertexAttribPointer(_color, 4, GL_FLOAT, GL_FALSE,
++                                  4 * sizeof(GLfloat), colors);
++            glEnableVertexAttribArray(_color);
++
++            glDrawElements(GL_TRIANGLES, ARRAY_SIZE(indices), GL_UNSIGNED_SHORT,
++                           indices);
++
++        }
++    }
++}
++} // namespace WPEFramework::Graphics::Examples
+diff --git a/EGLTest/egl/cube.h b/EGLTest/egl/cube.h
+new file mode 100644
+index 0000000..896f335
+--- /dev/null
++++ b/EGLTest/egl/cube.h
+@@ -0,0 +1,45 @@
++#ifndef PROJECT_CUBE_H
++#define PROJECT_CUBE_H
++
++#include "graphics.h"
++#include "esutil.h"
++
++namespace WPEFramework {
++namespace Graphics {
++    namespace Examples {
++        class Cube : public WPEFramework::Graphics::Texture {
++        private:
++            Cube(const Cube&);
++            Cube& operator=(const Cube&);
++
++        public:
++            Cube();
++            virtual ~Cube();
++
++        public:
++            void Rotation(const signed int rotation);
++
++        private:
++            virtual void Shaders();
++            virtual void Links();
++            virtual void Render();
++
++        private:
++            unsigned int _color;
++            unsigned int _position;
++            signed int _rotation;
++            unsigned int _mvp;
++
++            float _x;
++            float _y;
++            float _z;
++
++            ESMatrix _projection_matrix;
++            ESMatrix _modelview_matrix;
++
++        };
++    }
++}
++} // namespace WPEFramework::Graphics::Examples
++
++#endif //PROJECT_CUBE_H
+diff --git a/EGLTest/egl/esutil.c b/EGLTest/egl/esutil.c
+new file mode 100644
+index 0000000..d30c2ea
+--- /dev/null
++++ b/EGLTest/egl/esutil.c
+@@ -0,0 +1,255 @@
++#include <string.h>
++#include <math.h>
++
++#include "esutil.h"
++
++void esTranslate(ESMatrix *result, float tx, float ty, float tz)
++{
++   result->m[3][0] += (result->m[0][0] * tx + result->m[1][0] * ty + result->m[2][0] * tz);
++   result->m[3][1] += (result->m[0][1] * tx + result->m[1][1] * ty + result->m[2][1] * tz);
++   result->m[3][2] += (result->m[0][2] * tx + result->m[1][2] * ty + result->m[2][2] * tz);
++   result->m[3][3] += (result->m[0][3] * tx + result->m[1][3] * ty + result->m[2][3] * tz);
++}
++
++void esScale(ESMatrix *result, float sx, float sy, float sz)
++{
++   result->m[0][0] *= sx;
++   result->m[0][1] *= sx;
++   result->m[0][2] *= sx;
++   result->m[0][3] *= sx;
++
++   result->m[1][0] *= sy;
++   result->m[1][1] *= sy;
++   result->m[1][2] *= sy;
++   result->m[1][3] *= sy;
++
++   result->m[2][0] *= sz;
++   result->m[2][1] *= sz;
++   result->m[2][2] *= sz;
++   result->m[2][3] *= sz;
++}
++
++void esMatrixMultiply(ESMatrix *result, ESMatrix *srcA, ESMatrix *srcB)
++{
++   ESMatrix tmp;
++   int i;
++
++   for (i=0; i<4; i++)
++   {
++      tmp.m[i][0] =	(srcA->m[i][0] * srcB->m[0][0]) +
++                  (srcA->m[i][1] * srcB->m[1][0]) +
++                  (srcA->m[i][2] * srcB->m[2][0]) +
++                  (srcA->m[i][3] * srcB->m[3][0]) ;
++
++      tmp.m[i][1] =	(srcA->m[i][0] * srcB->m[0][1]) +
++                  (srcA->m[i][1] * srcB->m[1][1]) +
++                  (srcA->m[i][2] * srcB->m[2][1]) +
++                  (srcA->m[i][3] * srcB->m[3][1]) ;
++
++      tmp.m[i][2] =	(srcA->m[i][0] * srcB->m[0][2]) +
++                  (srcA->m[i][1] * srcB->m[1][2]) +
++                  (srcA->m[i][2] * srcB->m[2][2]) +
++                  (srcA->m[i][3] * srcB->m[3][2]) ;
++
++      tmp.m[i][3] =	(srcA->m[i][0] * srcB->m[0][3]) +
++                  (srcA->m[i][1] * srcB->m[1][3]) +
++                  (srcA->m[i][2] * srcB->m[2][3]) +
++                  (srcA->m[i][3] * srcB->m[3][3]) ;
++   }
++   memcpy(result, &tmp, sizeof(ESMatrix));
++}
++
++void esRotate(ESMatrix *result, float angle, float x, float y, float z)
++{
++   float sinAngle, cosAngle;
++   float mag = sqrtf(x * x + y * y + z * z);
++
++   sinAngle = sinf(angle * (float)M_PI / 180.0f);
++   cosAngle = cosf(angle * (float)M_PI / 180.0f);
++   if (mag > 0.0f)
++   {
++      float xx, yy, zz, xy, yz, zx, xs, ys, zs;
++      float oneMinusCos;
++      ESMatrix rotMat;
++
++      x /= mag;
++      y /= mag;
++      z /= mag;
++
++      xx = x * x;
++      yy = y * y;
++      zz = z * z;
++      xy = x * y;
++      yz = y * z;
++      zx = z * x;
++      xs = x * sinAngle;
++      ys = y * sinAngle;
++      zs = z * sinAngle;
++      oneMinusCos = 1.0f - cosAngle;
++
++      rotMat.m[0][0] = (oneMinusCos * xx) + cosAngle;
++      rotMat.m[1][0] = (oneMinusCos * xy) - zs;
++      rotMat.m[2][0] = (oneMinusCos * zx) + ys;
++      rotMat.m[3][0] = 0.0F;
++
++      rotMat.m[0][1] = (oneMinusCos * xy) + zs;
++      rotMat.m[1][1] = (oneMinusCos * yy) + cosAngle;
++      rotMat.m[2][1] = (oneMinusCos * yz) - xs;
++      rotMat.m[3][1] = 0.0F;
++
++      rotMat.m[0][2] = (oneMinusCos * zx) - ys;
++      rotMat.m[1][2] = (oneMinusCos * yz) + xs;
++      rotMat.m[2][2] = (oneMinusCos * zz) + cosAngle;
++      rotMat.m[3][2] = 0.0F;
++
++      rotMat.m[0][3] = 0.0F;
++      rotMat.m[1][3] = 0.0F;
++      rotMat.m[2][3] = 0.0F;
++      rotMat.m[3][3] = 1.0F;
++
++      esMatrixMultiply(result, &rotMat, result);
++   }
++}
++
++void esMatrixLoadIdentity(ESMatrix *result)
++{
++   memset(result, 0x0, sizeof(ESMatrix));
++   result->m[0][0] = 1.0f;
++   result->m[1][1] = 1.0f;
++   result->m[2][2] = 1.0f;
++   result->m[3][3] = 1.0f;
++}
++
++void esFrustum(ESMatrix *result, float left, float right, float bottom, float top, float nearZ, float farZ)
++{
++   float deltaX = right - left;
++   float deltaY = top - bottom;
++   float deltaZ = farZ - nearZ;
++   ESMatrix frust;
++
++   if ((nearZ <= 0.0f) || (farZ <= 0.0f) ||
++      (deltaX <= 0.0f) || (deltaY <= 0.0f) || (deltaZ <= 0.0f))
++      return;
++
++   frust.m[0][0] = 2.0f * nearZ / deltaX;
++   frust.m[0][1] = frust.m[0][2] = frust.m[0][3] = 0.0f;
++
++   frust.m[1][1] = 2.0f * nearZ / deltaY;
++   frust.m[1][0] = frust.m[1][2] = frust.m[1][3] = 0.0f;
++
++   frust.m[2][0] = (right + left) / deltaX;
++   frust.m[2][1] = (top + bottom) / deltaY;
++   frust.m[2][2] = -(nearZ + farZ) / deltaZ;
++   frust.m[2][3] = -1.0f;
++
++   frust.m[3][2] = -2.0f * nearZ * farZ / deltaZ;
++   frust.m[3][0] = frust.m[3][1] = frust.m[3][3] = 0.0f;
++
++   esMatrixMultiply(result, &frust, result);
++}
++
++void esPerspective(ESMatrix *result, float fovy, float aspect, float zNear, float zFar)
++{
++   ESMatrix m;
++   float sine, cotangent, deltaZ;
++   float radians = fovy / 2.0f * (float)M_PI / 180.0f;
++
++   deltaZ = zFar - zNear;
++   sine = sinf(radians);
++   if ((deltaZ == 0) || (sine == 0) || (aspect == 0))
++   {
++      return;
++   }
++   cotangent = cosf(radians) / sine;
++
++   m.m[0][0] = cotangent / aspect; m.m[0][1] =                          0; m.m[0][2] =                          0; m.m[0][3] =  0;
++   m.m[1][0] =                  0; m.m[1][1] =                  cotangent; m.m[1][2] =                          0; m.m[1][3] =  0;
++   m.m[2][0] =                  0; m.m[2][1] =                          0; m.m[2][2] =   -(zFar + zNear) / deltaZ; m.m[2][3] = -1;
++   m.m[3][0] =                  0; m.m[3][1] =                          0; m.m[3][2] = -2 * zNear * zFar / deltaZ; m.m[3][3] =  0;
++
++   esMatrixMultiply(result, &m, result);
++}
++
++void esOrtho(ESMatrix *result, float left, float right, float bottom, float top, float nearZ, float farZ)
++{
++   float deltaX = right - left;
++   float deltaY = top - bottom;
++   float deltaZ = farZ - nearZ;
++   ESMatrix ortho;
++
++   if ((deltaX == 0.0f) || (deltaY == 0.0f) || (deltaZ == 0.0f))
++      return;
++
++   esMatrixLoadIdentity(&ortho);
++   ortho.m[0][0] = 2.0f / deltaX;
++   ortho.m[3][0] = -(right + left) / deltaX;
++   ortho.m[1][1] = 2.0f / deltaY;
++   ortho.m[3][1] = -(top + bottom) / deltaY;
++   ortho.m[2][2] = -2.0f / deltaZ;
++   ortho.m[3][2] = -(nearZ + farZ) / deltaZ;
++
++   esMatrixMultiply(result, &ortho, result);
++}
++
++int esInverse(ESMatrix * in, ESMatrix * out)
++{
++	float det_1;
++	float abssum, temp;
++
++#  define PRECISION_LIMIT (1.0e-15)
++
++   /*
++   Calculate the determinant of submatrix A and determine if the
++   the matrix is singular.
++   */
++   temp =  in->m[0][0] * in->m[1][1] * in->m[2][2];
++   det_1 = temp; abssum = fabsf(temp);
++   temp =  in->m[1][0] * in->m[2][1] * in->m[0][2];
++   det_1 += temp; abssum += fabsf(temp);
++   temp =  in->m[2][0] * in->m[0][1] * in->m[1][2];
++   det_1 += temp; abssum += fabsf(temp);
++   temp = -in->m[2][0] * in->m[1][1] * in->m[0][2];
++   det_1 += temp; abssum += fabsf(temp);
++   temp = -in->m[1][0] * in->m[0][1] * in->m[2][2];
++   det_1 += temp; abssum += fabsf(temp);
++   temp = -in->m[0][0] * in->m[2][1] * in->m[1][2];
++   det_1 += temp; abssum += fabsf(temp);
++
++   /* Is the submatrix A singular? */
++   if ((det_1 == 0.0f) || (fabsf(det_1 / abssum) < PRECISION_LIMIT))
++   {
++      /* Matrix M has no inverse */
++      return 0;
++   }
++   else
++   {
++      /* Calculate inverse(A) = adj(A) / det(A) */
++      det_1 = 1.0f / det_1;
++      out->m[0][0] =   (in->m[1][1] * in->m[2][2] - in->m[2][1] * in->m[1][2]) * det_1;
++      out->m[1][0] = - (in->m[0][1] * in->m[2][2] - in->m[2][1] * in->m[0][2]) * det_1;
++      out->m[2][0] =   (in->m[0][1] * in->m[1][2] - in->m[1][1] * in->m[0][2]) * det_1;
++      out->m[0][1] = - (in->m[1][0] * in->m[2][2] - in->m[2][0] * in->m[1][2]) * det_1;
++      out->m[1][1] =   (in->m[0][0] * in->m[2][2] - in->m[2][0] * in->m[0][2]) * det_1;
++      out->m[2][1] = - (in->m[0][0] * in->m[1][2] - in->m[1][0] * in->m[0][2]) * det_1;
++      out->m[0][2] =   (in->m[1][0] * in->m[2][1] - in->m[2][0] * in->m[1][1]) * det_1;
++      out->m[1][2] = - (in->m[0][0] * in->m[2][1] - in->m[2][0] * in->m[0][1]) * det_1;
++      out->m[2][2] =   (in->m[0][0] * in->m[1][1] - in->m[1][0] * in->m[0][1]) * det_1;
++
++      /* Calculate -C * inverse(A) */
++      out->m[3][0] = - (in->m[0][3] * out->m[0][0] +
++                       in->m[1][3] * out->m[1][0] +
++                       in->m[2][3] * out->m[2][0]);
++      out->m[3][1] = - (in->m[0][3] * out->m[0][1] +
++                       in->m[1][3] * out->m[1][1] +
++                       in->m[2][3] * out->m[2][1]);
++      out->m[3][2] = - (in->m[0][3] * out->m[0][2] +
++                       in->m[1][3] * out->m[1][2] +
++                       in->m[2][3] * out->m[2][2]);
++
++      /* Fill in last column */
++      out->m[0][3] = out->m[1][3] = out->m[2][3] = 0.0;
++      out->m[3][3] = 1.0;
++
++      return 1;
++   }
++}
+diff --git a/EGLTest/egl/esutil.h b/EGLTest/egl/esutil.h
+new file mode 100644
+index 0000000..4362b64
+--- /dev/null
++++ b/EGLTest/egl/esutil.h
+@@ -0,0 +1,33 @@
++#ifndef _ESUTIL_H_
++#define _ESUTIL_H_
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++typedef struct
++{
++   float m[4][4];
++} ESMatrix;
++
++typedef struct
++{
++   float m[3][3];
++} ESMatrix3;
++
++/* Matrix manipulation functions - useful for ES2, which doesn't have them built in */
++void esTranslate(ESMatrix *result, float tx, float ty, float tz);
++void esScale(ESMatrix *result, float sx, float sy, float sz);
++void esMatrixMultiply(ESMatrix *result, ESMatrix *srcA, ESMatrix *srcB);
++int  esInverse(ESMatrix * in, ESMatrix * out);
++void esRotate(ESMatrix *result, float angle, float x, float y, float z);
++void esMatrixLoadIdentity(ESMatrix *result);
++void esFrustum(ESMatrix *result, float left, float right, float bottom, float top, float nearZ, float farZ);
++void esPerspective(ESMatrix *result, float fovy, float aspect, float zNear, float zFar);
++void esOrtho(ESMatrix *result, float left, float right, float bottom, float top, float nearZ, float farZ);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* _ESUTIL_H_ */
+diff --git a/EGLTest/egl/graphics.cpp b/EGLTest/egl/graphics.cpp
+new file mode 100644
+index 0000000..3e0c25d
+--- /dev/null
++++ b/EGLTest/egl/graphics.cpp
+@@ -0,0 +1,1620 @@
++#define EGL_EGLEXT_PROTOTYPES 1
++#undef USE_EGL_EXT_PLATFORM_X11
++
++#include <stdlib.h>
++#include <string.h>
++#include <stdio.h>
++#include <assert.h>
++#include <EGL/egl.h>
++#include <EGL/eglext.h>
++#include <GLES2/gl2.h>
++#ifdef __X11_EXTENSION__
++#include <X11/Xlib.h>
++#endif
++#include <png.h>
++
++#include "graphics.h"
++
++#if defined(__GNUC__)
++#define ALLOCA alloca
++#else
++#define ALLOCA _alloca
++#endif
++
++#define EGL_NO_CONFIG reinterpret_cast<const EGLConfig>(~0)
++
++#ifdef __RPI_PLATFORM__
++#include <bcm_host.h>
++static struct Initialization {
++    Initialization () {
++        bcm_host_init();
++        printf("BCM host init\n");
++    }
++    ~Initialization() {
++    }
++} _singleton;
++#endif
++
++#ifdef __X11_EXTENSION__
++static EGLDisplay GetNativeDisplay(void** host)
++{
++    EGLDisplay result;
++    ::_XDisplay* xdisplay = XOpenDisplay(NULL);
++
++#ifdef USE_EGL_EXT_PLATFORM_X11
++    result = eglGetPlatformDisplayEXT(EGL_PLATFORM_X11_EXT, xdisplay, NULL);
++#else
++    result = eglGetDisplay(xdisplay);
++#endif
++
++    *host = xdisplay;
++
++    assert(result != EGL_NO_DISPLAY);
++
++    return (result);
++}
++
++#else
++
++static EGLDisplay GetNativeDisplay(void* ID)
++{
++    EGLDisplay result = eglGetDisplay(ID);
++
++    assert(result != EGL_NO_DISPLAY);
++
++    return (result);
++}
++
++#endif
++
++namespace WPEFramework {
++namespace Graphics {
++    namespace Colors {
++
++        /* extern */ Color RED(0xFF, 0x00, 0x00, 0x00);
++        /* extern */ Color GREEN(0x00, 0xFF, 0x00, 0x00);
++        /* extern */ Color BLUE(0x00, 0x00, 0xFF, 0x00);
++        /* extern */ Color WHITE(0xFF, 0xFF, 0xFF, 0x00);
++        /* extern */ Color BLACK(0x00, 0x00, 0x00, 0x00);
++    }
++
++    class Context {
++    private:
++        Context();
++        Context(const Context& copy);
++        Context& operator=(const Context& RHS);
++
++    public:
++        Context(Surface& surface, const bool activate = true)
++            : _restore(activate)
++            , _display(surface.DisplayHandle())
++            , _draw(surface.SurfaceHandle())
++            , _read(surface.SurfaceHandle())
++            , _context(surface.ContextHandle())
++        {
++            if (activate == true) {
++                Activate();
++            }
++        }
++        inline ~Context()
++        {
++            Deactivate();
++        }
++
++    public:
++        void Clear();
++        void Activate();
++        void Deactivate();
++        bool IsCurrent() const;
++
++    public:
++        bool _restore;
++        void* _display;
++        void* _draw;
++        void* _read;
++        void* _context;
++    };
++
++    void Context::Activate()
++    {
++        EGLSurface draw = eglGetCurrentSurface(EGL_DRAW);
++        EGLSurface read = eglGetCurrentSurface(EGL_READ);
++
++        if ((_draw != draw) || (_read != read)) {
++            EGLDisplay display = eglGetCurrentDisplay();
++            EGLContext current = eglGetCurrentContext();
++
++            if (_context == EGL_NO_CONTEXT) {
++                _context = current;
++            }
++
++            EGLBoolean result = eglMakeCurrent(
++                static_cast<EGLDisplay>(_display),
++                static_cast<EGLSurface>(_draw),
++                static_cast<EGLSurface>(_read),
++                static_cast<EGLContext>(_context));
++
++            assert(EGL_FALSE != result);
++
++            printf("ActiveSurface: [%p].\n", _draw);
++
++            _display = display;
++            _draw = draw;
++            _read = read;
++            _context = current;
++            _restore = (draw != EGL_NO_SURFACE) || (read != EGL_NO_SURFACE) || (current != EGL_NO_CONTEXT);
++        }
++        else {
++            _restore = false;
++            assert(_display == eglGetCurrentDisplay());
++            assert(_context == eglGetCurrentContext());
++        }
++    }
++
++    void Context::Deactivate()
++    {
++        if (_restore == true) {
++            EGLBoolean result = eglMakeCurrent(
++                static_cast<EGLDisplay>(_display),
++                static_cast<EGLSurface>(_draw),
++                static_cast<EGLSurface>(_read),
++                static_cast<EGLContext>(_context));
++
++            printf("ActiveSurface: [%p].\n", _draw);
++
++            assert(EGL_FALSE != result);
++        }
++    }
++
++    void Context::Clear()
++    {
++        if (IsCurrent() == true) {
++            EGLBoolean result = eglMakeCurrent(
++                static_cast<EGLDisplay>(_display),
++                static_cast<EGLSurface>(NULL),
++                static_cast<EGLSurface>(NULL),
++                static_cast<EGLContext>(_context));
++
++            assert(EGL_FALSE != result);
++
++            printf("No ActiveSurface.\n");
++        }
++    }
++
++    bool Context::IsCurrent() const
++    {
++        return ((_context == eglGetCurrentContext()) && (_draw == eglGetCurrentSurface(EGL_DRAW)) && (_read == eglGetCurrentSurface(EGL_READ)) && (_display == eglGetCurrentDisplay()));
++    }
++
++    // ---------------------------------------------------------------------------------------------------------------------
++    // LOCAL CLASSES, NOT TO BE EXPORTED OR TO BE ACCESSED DIRECTLY !!!!!!!!!!!
++    // ---------------------------------------------------------------------------------------------------------------------
++    // Class::      Initializer
++    // Description: Local class. Not to be exported. Process wide singleton. Responsible for initialisation of the
++    //              EGL specific stuff and the deinitialisation of EGL specific stuff. This is the root of the
++    //              EGL functionality. Here one should get a Display.
++    // ---------------------------------------------------------------------------------------------------------------------
++    class Initializer {
++    private:
++        Initializer(const Initializer&);
++        Initializer& operator=(const Initializer&);
++
++    public:
++        Initializer()
++            : _display(NULL)
++        {
++        }
++        ~Initializer()
++        {
++            if (_display != NULL) {
++                delete _display;
++            }
++        }
++
++        Display& GetDisplay(unsigned int ID)
++        {
++            if (_display == NULL) {
++                _display = new Display(ID);
++
++                assert(_display != NULL);
++            }
++
++            return (*_display);
++        }
++
++    private:
++        WPEFramework::Graphics::Display* _display;
++    };
++
++    static Initializer _EGLService;
++
++    // ---------------------------------------------------------------------------------------------------------------------
++    // WRAPPER CLASSES FOR EGL COMPONENTS. TO BE USED EXTERNALLY.
++    // ---------------------------------------------------------------------------------------------------------------------
++    // Class::      Config
++    // Description: Representation of the EGLConfig object. This holds the attributes for a display, surface.
++    // ---------------------------------------------------------------------------------------------------------------------
++    Config::Iterator::Iterator()
++        : _container(NULL)
++        , _iterator()
++        , _index(0)
++    {
++    }
++
++    Config::Iterator::Iterator(const std::list<Config>& container)
++        : _container(&container)
++        , _iterator(container.begin())
++        , _index(0)
++    {
++    }
++
++    Config::Iterator::Iterator(const Config::Iterator& copy)
++        : _container(copy._container)
++        , _iterator(copy._iterator)
++        , _index(copy._index)
++    {
++    }
++
++    Config::Iterator::~Iterator()
++    {
++    }
++
++    Config::Iterator& Config::Iterator::operator=(const Config::Iterator& RHS)
++    {
++        _container = RHS._container;
++        _iterator = RHS._iterator;
++        _index = RHS._index;
++
++        return (*this);
++    }
++
++    bool Config::Iterator::IsValid() const
++    {
++        return ((_index > 0) && (_index <= Count()));
++    }
++
++    void Config::Iterator::Reset(unsigned int position)
++    {
++        if (_container != NULL) {
++            if (position == 0) {
++                _iterator = _container->begin();
++                _index = 0;
++            }
++            else if (position > Count()) {
++                _iterator = _container->end();
++                _index = Count() + 1;
++            }
++            else if ((position < _index) && ((_index - position) < position)) {
++                // Better that we walk back from where we are ;-)
++                while (_index != position) {
++                    _index--;
++                    _iterator--;
++                }
++            }
++            else {
++                _iterator = _container->begin();
++                _index = position;
++
++                // Move forward the requested number of steps..
++                for (unsigned int teller = 1; teller < position; teller++) {
++                    _iterator++;
++                }
++
++                assert(_iterator != _container->end());
++            }
++        }
++    }
++
++    bool Config::Iterator::Previous()
++    {
++        if ((_container != NULL) && (_index != 0)) {
++            if (_index > 1) {
++                _iterator--;
++            }
++            _index--;
++
++            assert((_index != 0) || (_iterator == _container->begin()));
++        }
++        return (IsValid());
++    }
++
++    bool Config::Iterator::Next()
++    {
++        if (_container != NULL) {
++            if (_index != Count() + 1) {
++                _index++;
++
++                if (_index != 1) {
++                    _iterator++;
++
++                    assert((_index != (Count() + 1)) || (_iterator == _container->end()));
++                }
++            }
++        }
++        return (IsValid());
++    }
++
++    unsigned int Config::Iterator::Index() const
++    {
++        return (_index);
++    }
++
++    unsigned int Config::Iterator::Count() const
++    {
++        unsigned int count = 0;
++
++        if (_container != NULL) {
++            count = _container->size();
++        }
++        return (count);
++    }
++
++    const Config& Config::Iterator::operator->() const
++    {
++        assert(IsValid());
++
++        return (*_iterator);
++    }
++
++    const Config& Config::Iterator::operator*() const
++    {
++        assert(IsValid());
++
++        return (_iterator.operator*());
++    }
++
++    Config::Config()
++        : _view()
++        , _red(8)
++        , _green(8)
++        , _blue(8)
++        , _alpha(8)
++        , _buffer(32)
++        , _depth(~0)
++        , _stencil(~0)
++    {
++    }
++
++    Config::Config(void* display, void* config)
++        : _view()
++    {
++        EGLDisplay eglDisplay = static_cast<EGLDisplay>(display);
++        EGLConfig eglConfig = static_cast<EGLConfig>(config);
++        EGLint value;
++        EGLint height;
++        EGLBoolean result;
++
++        result = eglGetConfigAttrib(eglDisplay, eglConfig, EGL_RED_SIZE, &value);
++        assert(EGL_FALSE != result);
++        _red = value;
++
++        result = eglGetConfigAttrib(eglDisplay, eglConfig, EGL_GREEN_SIZE, &value);
++        assert(EGL_FALSE != result);
++        _green = value;
++
++        result = eglGetConfigAttrib(eglDisplay, eglConfig, EGL_BLUE_SIZE, &value);
++        assert(EGL_FALSE != result);
++        _blue = value;
++
++        result = eglGetConfigAttrib(eglDisplay, eglConfig, EGL_ALPHA_SIZE, &value);
++        assert(EGL_FALSE != result);
++        _alpha = value;
++
++        result = eglGetConfigAttrib(eglDisplay, eglConfig, EGL_BUFFER_SIZE, &value);
++        assert(EGL_FALSE != result);
++        _buffer = value;
++
++        result = eglGetConfigAttrib(eglDisplay, eglConfig, EGL_DEPTH_SIZE, &value);
++        assert(EGL_FALSE != result);
++        _depth = value;
++
++        result = eglGetConfigAttrib(eglDisplay, eglConfig, EGL_STENCIL_SIZE, &value);
++        assert(EGL_FALSE != result);
++        _stencil = value;
++
++        result = eglGetConfigAttrib(eglDisplay, eglConfig, EGL_MAX_PBUFFER_WIDTH, &value);
++        assert(EGL_FALSE != result);
++
++        result = eglGetConfigAttrib(eglDisplay, eglConfig, EGL_MAX_PBUFFER_HEIGHT, &height);
++        assert(EGL_FALSE != result);
++
++        _view = View(0, 0, static_cast<unsigned int>(value), static_cast<unsigned int>(height));
++    }
++
++    Config::Config(
++        unsigned char red,
++        unsigned char green,
++        unsigned char blue,
++        unsigned char alpha,
++        unsigned char buffer,
++        unsigned char depth,
++        unsigned char stencil)
++        : _view()
++        , _red(red)
++        , _green(green)
++        , _blue(blue)
++        , _alpha(alpha)
++        , _buffer(buffer)
++        , _depth(depth)
++        , _stencil(stencil)
++    {
++    }
++
++    Config::Config(const Config& copy)
++        : _view(copy._view)
++        , _red(copy._red)
++        , _green(copy._green)
++        , _blue(copy._blue)
++        , _alpha(copy._alpha)
++        , _buffer(copy._buffer)
++        , _depth(copy._depth)
++        , _stencil(copy._stencil)
++    {
++    }
++
++    Config::~Config()
++    {
++    }
++
++    Config& Config::operator=(const Config& RHS)
++    {
++        _view = RHS._view;
++        _red = RHS._red;
++        _green = RHS._green;
++        _blue = RHS._blue;
++        _alpha = RHS._alpha;
++        _buffer = RHS._buffer;
++        _depth = RHS._depth;
++        _stencil = RHS._stencil;
++
++        return (*this);
++    };
++
++    // ---------------------------------------------------------------------------------------------------------------------
++    // Class::      Display
++    // Description: Representation of the EGLDisplay object. This holds functionality related to the Display.
++    // ---------------------------------------------------------------------------------------------------------------------
++    Display::Display(const unsigned int ID)
++    {
++        EGLDisplay eglDisplay;
++
++#ifdef __X11_EXTENSION__
++        _host = NULL;
++        eglDisplay = ::GetNativeDisplay(&_host);
++#else
++        eglDisplay = ::GetNativeDisplay(static_cast<unsigned int>(~0) != ID ? reinterpret_cast<void*>(ID) : EGL_DEFAULT_DISPLAY);
++#endif
++        _display = eglDisplay;
++
++        // As this is the first call to the EGL system, also initialize everything for the process...
++        EGLint result = eglInitialize(static_cast<EGLDisplay>(eglDisplay), &_major, &_minor);
++
++        assert(result != EGL_FALSE);
++
++#ifdef __X11_EXTENSION__
++#ifdef USE_EGL_EXT_PLATFORM_X11
++        eglBindAPI(EGL_OPENGL_API);
++#else
++        eglBindAPI(EGL_OPENGL_ES_API);
++#endif
++#else
++        eglBindAPI(EGL_OPENGL_ES_API);
++#endif
++
++        // Go get the width and height info from the display.
++        EGLint numConfigs = 0;
++
++        EGLBoolean success = eglGetConfigs(_display, 0, 0, &numConfigs);
++
++        assert(success != EGL_FALSE);
++
++        if (numConfigs > 0) {
++            int index = 0;
++
++            // Convert the configs into the abstraction layer..
++            EGLConfig* configs = static_cast<EGLConfig*>(ALLOCA(sizeof(EGLConfig) * (numConfigs + 1)));
++
++            success = eglGetConfigs(_display, configs, numConfigs, &numConfigs);
++
++            assert(success != EGL_FALSE);
++
++            while (index < numConfigs) {
++                _configs.push_back(Config(_display, configs[index]));
++
++                index++;
++            }
++        }
++    }
++
++    Display::~Display()
++    {
++        printf("Destruct Display.\n");
++        eglTerminate(static_cast<EGLDisplay>(_display));
++    }
++
++    /* static */ Display& Display::Instance(const unsigned int ID)
++    {
++        Display& result = _EGLService.GetDisplay(ID);
++
++        return (result);
++    }
++
++    /* static */ const char* Display::Extensions()
++    {
++#ifdef USE_EGL_EXT_PLATFORM_X11
++        return (eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS));
++#else
++        return ("Unknown");
++#endif
++    }
++
++    /* static */ bool Display::HasValidExtension()
++    {
++        static const char* extensions = Display::Extensions();
++
++#ifdef USE_EGL_EXT_PLATFORM_X11
++        static const char EGL_EXT_PLATFORM[] = "EGL_EXT_platform_x11";
++        return ((extensions != NULL) && (memcmp(extensions, EGL_EXT_PLATFORM, sizeof(EGL_EXT_PLATFORM)) == 0));
++#else
++        return (extensions != NULL);
++#endif
++    }
++
++    Config::Iterator Display::Configurations() const
++    {
++        return (Config::Iterator(_configs));
++    }
++
++    int Display::Major() const
++    {
++        return (_major);
++    }
++
++    int Display::Minor() const
++    {
++        return (_minor);
++    }
++
++#ifdef __X11_EXTENSION__
++    void* Display::GetEvent()
++    {
++        static XEvent event;
++        ::_XDisplay* display = static_cast< ::_XDisplay*>(_host);
++
++        XNextEvent(display, &event);
++
++        return (&event);
++    }
++#endif
++
++    bool Display::ValidConfiguration(const Config& config) const
++    {
++        EGLint num_configs;
++        EGLDisplay eglDisplay = static_cast<EGLDisplay>(_display);
++        EGLConfig eglConfig = NULL;
++        EGLint egl_config_attribs[] = {
++            EGL_BUFFER_SIZE, config.Buffer(),
++            EGL_RED_SIZE, config.Red(),
++            EGL_GREEN_SIZE, config.Green(),
++            EGL_BLUE_SIZE, config.Blue(),
++            EGL_ALPHA_SIZE, config.Alpha(),
++
++            EGL_DEPTH_SIZE, (config.Depth() != static_cast<unsigned char>(~0) ? config.Depth() : EGL_DONT_CARE),
++            EGL_STENCIL_SIZE, (config.Stencil() != static_cast<unsigned char>(~0) ? config.Stencil() : EGL_DONT_CARE),
++
++            EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
++            EGL_NONE,
++        };
++
++        EGLBoolean result = eglChooseConfig(eglDisplay,
++            egl_config_attribs,
++            &eglConfig, 1,
++            &num_configs);
++
++        assert(EGL_FALSE != result);
++
++        return (num_configs > 0);
++    }
++
++    unsigned int Display::Width() const
++    {
++        return (_width);
++    }
++
++    unsigned int Display::Height() const
++    {
++        return (_height);
++    }
++
++    void* Display::DisplayHandle() const
++    {
++        return (_display);
++    }
++
++#ifdef __X11_EXTENSION__
++    void* Display::X11Handle() const
++    {
++        return (_host);
++    }
++#endif
++
++    // ---------------------------------------------------------------------------------------------------------------------
++    // Class::      Surface
++    // Description: Representation of the EGLSurface object. This holds functionality related to the Surface.
++    // ---------------------------------------------------------------------------------------------------------------------
++    Surface::Surface(Display& display, const Config& config, const unsigned int surfaceType)
++        : _view(config.Port())
++    {
++        _context = EGL_NO_CONTEXT;
++        _surface = EGL_NO_SURFACE;
++        EGLint num_configs;
++        EGLDisplay eglDisplay = static_cast<EGLDisplay>(display.DisplayHandle());
++        EGLConfig eglConfig = NULL;
++        EGLint egl_config_attribs[] = {
++            EGL_BUFFER_SIZE, config.Buffer(),
++            EGL_RED_SIZE, config.Red(),
++            EGL_GREEN_SIZE, config.Green(),
++            EGL_BLUE_SIZE, config.Blue(),
++            EGL_ALPHA_SIZE, config.Alpha(),
++
++            EGL_DEPTH_SIZE, (config.Depth() != static_cast<unsigned char>(~0) ? config.Depth() : EGL_DONT_CARE),
++            EGL_STENCIL_SIZE, (config.Stencil() != static_cast<unsigned char>(~0) ? config.Stencil() : EGL_DONT_CARE),
++
++            EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
++            EGL_SURFACE_TYPE, static_cast<EGLint>(surfaceType),
++            EGL_BIND_TO_TEXTURE_RGBA, ((surfaceType & EGL_PBUFFER_BIT) != 0 ? EGL_TRUE : EGL_DONT_CARE),
++
++            EGL_NONE,
++        };
++
++        EGLBoolean result = eglChooseConfig(eglDisplay,
++            egl_config_attribs,
++            &eglConfig, 1,
++            &num_configs);
++
++        assert(EGL_FALSE != result);
++
++        if (num_configs > 0) {
++            printf("Chosen config: [%p].\n", eglConfig);
++
++            assert(eglConfig != EGL_NO_CONFIG);
++
++            EGLint contextAttributes[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
++
++            _context = eglCreateContext(
++                eglDisplay,
++                eglConfig,
++                EGL_NO_CONTEXT,
++                contextAttributes);
++
++            printf("Created a context [%p].\n", _context);
++
++            if (_context == EGL_NO_CONTEXT) {
++                eglConfig = EGL_NO_CONFIG;
++            }
++        }
++
++        if (eglConfig != EGL_NO_CONFIG) {
++            _display = eglDisplay;
++            _config = eglConfig;
++#ifdef __X11_EXTENSION__
++            _x11Display = display.X11Handle();
++#endif
++        }
++    }
++
++    Surface::~Surface()
++    {
++        Context myContext(*this, false);
++
++        // Remove the context from my surface, about to destroy it...
++        myContext.Clear();
++
++        if (_surface != EGL_NO_SURFACE) {
++            eglDestroySurface(static_cast<EGLDisplay>(_display), static_cast<EGLSurface>(_surface));
++        }
++        if (_context != EGL_NO_CONTEXT) {
++            eglDestroyContext(static_cast<EGLDisplay>(_display), static_cast<EGLContext>(_context));
++        }
++
++        // Dump all the textures we own
++        while (_textures.size() > 0) {
++            _textures.back()->Unbind();
++            _textures.pop_back();
++        }
++    }
++
++    bool Surface::IsValid() const
++    {
++        return (_config != EGL_NO_CONFIG);
++    }
++
++    unsigned int Surface::Width() const
++    {
++        assert(static_cast<EGLSurface>(_surface) != EGL_NO_SURFACE);
++
++        EGLint value;
++
++        eglQuerySurface(
++            static_cast<EGLDisplay>(_display),
++            static_cast<EGLSurface>(_surface),
++            EGL_WIDTH,
++            &value);
++
++        return (static_cast<unsigned int>(value));
++    }
++
++    unsigned int Surface::Height() const
++    {
++        assert(static_cast<EGLSurface>(_surface) != EGL_NO_SURFACE);
++        EGLint value;
++
++        eglQuerySurface(
++            static_cast<EGLDisplay>(_display),
++            static_cast<EGLSurface>(_surface),
++            EGL_HEIGHT,
++            &value);
++
++        return (static_cast<unsigned int>(value));
++    }
++
++    signed int Surface::QuerySurface(const unsigned int key) const
++    {
++        assert(static_cast<EGLSurface>(_surface) != EGL_NO_SURFACE);
++        EGLint value;
++
++        EGLBoolean result = eglQuerySurface(
++            static_cast<EGLDisplay>(_display),
++            static_cast<EGLSurface>(_surface),
++            key,
++            &value);
++
++        assert(result == EGL_TRUE);
++
++        return (value);
++    }
++
++    Result Surface::Attach(const ProxyType<Texture>& texture)
++    {
++        return (Attach(texture, _view));
++    }
++
++    Result Surface::Attach(const ProxyType<Texture>& texture, const View& window)
++    {
++        ProxyType<Texture> element(texture);
++
++        Result info;
++
++        Context myContext(*this);
++
++        // Create the program object
++        element->Bind();
++
++        info = element->GetStatus();
++
++        if (info.Error == 0) {
++            assert(std::find(_textures.begin(), _textures.end(), element) == _textures.end());
++            _textures.push_back(Program(element, window));
++            ViewPort(window);
++            element->Draw();
++        }
++
++        return (info);
++    }
++
++    void Surface::Detach(const ProxyType<Texture>& texture)
++    {
++        std::list<Program>::iterator index = std::find(_textures.begin(), _textures.end(), Program(texture));
++
++        assert(index != _textures.end());
++
++        if (index != _textures.end()) {
++            (*index)->Unbind();
++            _textures.erase(index);
++        }
++    }
++
++    void Surface::SurfaceHandle(void* handle)
++    {
++        EGLSurface surface = reinterpret_cast<EGLSurface>(handle);
++
++        assert(surface != EGL_NO_SURFACE);
++
++        if (surface != EGL_NO_SURFACE) {
++            _surface = handle;
++        }
++        else if (_context != EGL_NO_CONTEXT) {
++            eglDestroyContext(static_cast<EGLDisplay>(_display), static_cast<EGLContext>(_context));
++            _context = EGL_NO_CONTEXT;
++        }
++    }
++
++    void Surface::ViewPort(const View& port)
++    {
++        // Set the viewport
++        printf("Set ViewPort on [%p], dimensions [%d,%d x %d,%d].\n", eglGetCurrentSurface(EGL_DRAW), port.X(), port.Y(), port.Width(), port.Height());
++        glViewport(port.X(), port.Y(), port.Width(), port.Height());
++        assert(glGetError() == GL_NO_ERROR);
++    }
++
++    void Surface::Draw()
++    {
++        Context myContext(*this);
++
++        std::list<Program>::iterator index = _textures.begin();
++
++        while (index != _textures.end()) {
++            ViewPort(index->Window());
++            (*index)->Draw();
++            index++;
++        }
++
++        eglSwapBuffers(static_cast<EGLDisplay>(_display), static_cast<EGLSurface>(_surface));
++    }
++
++    void Surface::Clear(const Color& color)
++    {
++        Context myContext(*this);
++
++        GLfloat divider = 255.0;
++
++        glClearColor(
++            static_cast<GLfloat>(color.Red()) / divider,
++            static_cast<GLfloat>(color.Green()) / divider,
++            static_cast<GLfloat>(color.Blue()) / divider,
++            static_cast<GLfloat>(color.Alpha()) / divider);
++        assert(glGetError() == GL_NO_ERROR);
++
++        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
++        assert(glGetError() == GL_NO_ERROR);
++    }
++
++    void Surface::Swap()
++    {
++        eglSwapBuffers(static_cast<EGLDisplay>(_display), static_cast<EGLSurface>(_surface));
++    }
++
++    void* Surface::NativeWindow(const View& window, const unsigned int type)
++    {
++        void* nativeWindow = NULL;
++
++        EGLDisplay display = static_cast<EGLDisplay>(DisplayHandle());
++        EGLConfig config = static_cast<EGLConfig>(ConfigHandle());
++
++#ifdef __X11_EXTENSION__
++        ::_XDisplay* x11Display = static_cast< ::_XDisplay*>(X11Handle());
++        XVisualInfo x11_visual_info_template;
++        XVisualInfo* info = NULL;
++        Colormap colorMap;
++        memset(&x11_visual_info_template, 0, sizeof(x11_visual_info_template));
++        EGLint visualId;
++        if (eglGetConfigAttrib(display,
++                config,
++                EGL_NATIVE_VISUAL_ID,
++                &visualId)) {
++            x11_visual_info_template.visualid = visualId;
++            int num_visuals;
++            info = XGetVisualInfo(x11Display,
++                VisualIDMask,
++                &x11_visual_info_template,
++                &num_visuals);
++            if (info != NULL) {
++                colorMap = XCreateColormap(x11Display,
++                    RootWindow(x11Display, 0),
++                    info->visual,
++                    AllocNone);
++                if (colorMap != None) {
++                    XSetWindowAttributes attr;
++                    attr.colormap = colorMap;
++                    attr.event_mask = StructureNotifyMask | ExposureMask | KeyPressMask;
++                    unsigned long mask;
++                    mask = CWColormap | CWEventMask;
++
++                    if (type == EGL_WINDOW_BIT) {
++                        ::Window parent = XCreateWindow(x11Display,
++                            DefaultRootWindow(x11Display), // parent
++                            window.X(), window.Y(), // x, y
++                            window.Width(), window.Height(), // width, height
++                            0, // border_width
++                            info->depth,
++                            InputOutput, // class
++                            info->visual,
++                            mask, // valuemask
++                            &attr); // attributes
++                        XMapWindow(x11Display, parent);
++                        nativeWindow = reinterpret_cast<void*>(parent);
++                    }
++                    else if (type == EGL_PIXMAP_BIT) {
++                        ::Window parent = XCreatePixmap(x11Display,
++                            DefaultRootWindow(x11Display),
++                            window.Width(), window.Height(), // width, height
++                            info->depth);
++                        nativeWindow = reinterpret_cast<void*>(parent);
++                    }
++                }
++            }
++        }
++#endif
++
++#ifdef _VCOS__EXTENSION__
++
++        VC_RECT_T _dst_rect_, _src_rect_;
++        _dst_rect_.x = window.X();
++        _dst_rect_.y = window.Y();
++        _dst_rect_.width = window.Width();
++        _dst_rect_.height = window.Height();
++
++        _src_rect_.x = 0;
++        _src_rect_.y = 0;
++        _src_rect_.width = window.Width() << 16;
++        _src_rect_.height = window.Height() << 16;
++
++        DISPMANX_DISPLAY_HANDLE_T _dispman_display_ = vc_dispmanx_display_open(0 /* LCD */);
++        DISPMANX_UPDATE_HANDLE_T _dispman_update_ = vc_dispmanx_update_start(0);
++        DISPMANX_ELEMENT_HANDLE_T _dispman_element_ = vc_dispmanx_element_add(
++            _dispman_update_,
++            _dispman_display_,
++            0 /*layer*/,
++            &_dst_rect_,
++            0 /*src*/,
++            &_src_rect_,
++            DISPMANX_PROTECTION_NONE,
++            static_cast<VC_DISPMANX_ALPHA_T*>(0) /*alpha*/,
++            static_cast<DISPMANX_CLAMP_T*>(0) /*clamp*/,
++            static_cast<DISPMANX_TRANSFORM_T>(0) /*transform*/);
++
++        //TODO: check return _value_s
++        _result_ = vc_dispmanx_update_submit_sync(_dispman_update_);
++        assert(0 == _result_);
++
++        static EGL_DISPMANX_WINDOW_T _egl_window_;
++        _egl_window_->element = _dispman_element_;
++        _egl_window_->width = window.Width();
++        _egl_window_->height = window.Height();
++
++    nativeWindow = reinterpret_cast<void*>(&_egl_window_));
++
++#endif
++
++    return (nativeWindow);
++    }
++
++    // ---------------------------------------------------------------------------------------------------------------------
++    // Class::      WindowSurface
++    // Description: Representation of the EGLSurface object. This holds functionality related to the Surface.
++    // ---------------------------------------------------------------------------------------------------------------------
++
++    WindowSurface::WindowSurface(Display& display, const Config& config)
++        : Surface(display, config, EGL_WINDOW_BIT)
++    {
++        if (IsValid() == true) {
++            EGLDisplay eglDisplay = static_cast<EGLDisplay>(Surface::DisplayHandle());
++            EGLConfig eglConfig = static_cast<EGLConfig>(Surface::ConfigHandle());
++
++#ifdef USE_EGL_EXT_PLATFORM_X11
++            EGLSurface eglParent = reinterpret_cast<EGLSurface>(NativeWindow(config.Port(), EGL_WINDOW_BIT));
++            EGLSurface surface = eglCreatePlatformWindowSurfaceEXT(eglDisplay,
++                eglConfig,
++                eglParent,
++                NULL);
++#else
++            EGLNativeWindowType eglParent = reinterpret_cast<EGLNativeWindowType>(NativeWindow(config.Port(), EGL_WINDOW_BIT));
++
++            EGLSurface surface = eglCreateWindowSurface(eglDisplay,
++                eglConfig,
++                eglParent,
++                NULL);
++#endif
++            if (surface == EGL_NO_SURFACE){
++                printf("Created Window Surface Failed.\n", surface);
++            }
++
++            printf("Created Window Surface: [%p].\n", surface);
++
++            SurfaceHandle(surface);
++
++            EGLBoolean result = eglMakeCurrent(eglDisplay, surface, surface, static_cast<EGLContext>(ContextHandle()));
++
++            printf("ActiveSurface: [%p].\n", surface);
++
++            assert(EGL_FALSE != result);
++        }
++    }
++
++    WindowSurface::~WindowSurface()
++    {
++        EGLBoolean result = eglMakeCurrent(static_cast<EGLDisplay>(Surface::DisplayHandle()), NULL, NULL, static_cast<EGLContext>(ContextHandle()));
++
++        printf("DeactiveSurface: [%p].\n", SurfaceHandle());
++
++        assert(EGL_FALSE != result);
++    }
++
++    // ---------------------------------------------------------------------------------------------------------------------
++    // Class::      BufferSurface
++    // Description: Representation of the EGLSurface object. This holds functionality related to the Surface.
++    // ---------------------------------------------------------------------------------------------------------------------
++
++    BufferSurface::BufferSurface(Display& display, const Config& config)
++        : Surface(display, config, EGL_PBUFFER_BIT)
++    {
++        if (IsValid() == true) {
++            EGLDisplay eglDisplay = static_cast<EGLDisplay>(Surface::DisplayHandle());
++            EGLConfig eglConfig = static_cast<EGLConfig>(Surface::ConfigHandle());
++
++            EGLint egl_pbuffer_attribs[] = {
++                EGL_WIDTH, static_cast<signed int>(config.Port().Width()),
++                EGL_HEIGHT, static_cast<signed int>(config.Port().Height()),
++                EGL_LARGEST_PBUFFER, EGL_TRUE,
++                EGL_TEXTURE_FORMAT, (config.Alpha() > 0 ? EGL_TEXTURE_RGBA : EGL_TEXTURE_RGB),
++                EGL_TEXTURE_TARGET, EGL_TEXTURE_2D,
++                EGL_NONE
++            };
++
++            EGLSurface surface = eglCreatePbufferSurface(eglDisplay,
++                eglConfig,
++                egl_pbuffer_attribs);
++
++            printf("Created PBuffer Surface: [%p], dimensions [%d x %d].\n", surface, config.Port().Width(), config.Port().Height());
++
++            SurfaceHandle(surface);
++        }
++    }
++
++    BufferSurface::~BufferSurface()
++    {
++    }
++
++    // ---------------------------------------------------------------------------------------------------------------------
++    // Class::      PixmapSurface
++    // Description: Representation of the EGLSurface object. This holds functionality related to the Surface.
++    // ---------------------------------------------------------------------------------------------------------------------
++
++    PixmapSurface::PixmapSurface(Display& display, const Config& config)
++        : Surface(display, config, EGL_PIXMAP_BIT)
++    {
++        if (IsValid() == true) {
++            EGLDisplay eglDisplay = static_cast<EGLDisplay>(Surface::DisplayHandle());
++            EGLConfig eglConfig = static_cast<EGLConfig>(Surface::ConfigHandle());
++
++#ifdef USE_EGL_EXT_PLATFORM_X11
++            EGLSurface eglParent = reinterpret_cast<EGLSurface>(NativeWindow(config.Port(), EGL_PIXMAP_BIT));
++            EGLSurface surface = eglCreatePlatformPixmapSurfaceEXT(eglDisplay,
++                eglConfig,
++                &eglParent,
++                NULL);
++#else
++            EGLNativeWindowType eglParent = reinterpret_cast<EGLNativeWindowType>(NativeWindow(config.Port(), EGL_PIXMAP_BIT));
++            EGLSurface surface = eglCreatePixmapSurface(eglDisplay,
++                eglConfig,
++                eglParent,
++                NULL);
++#endif
++
++            SurfaceHandle(surface);
++        }
++    }
++
++    PixmapSurface::~PixmapSurface()
++    {
++    }
++
++    // ---------------------------------------------------------------------------------------------------------------------
++    // Class::      Program
++    // Description: Representation of the GL Program object. This holds functionality related to the Programs.
++    // ---------------------------------------------------------------------------------------------------------------------
++    static const char TextureFragmentShader[] = "varying highp vec2 texcoord;\n "
++                                                "uniform sampler2D tex;\n"
++                                                "void main(void)\n"
++                                                "{\n"
++                                                "    gl_FragColor = texture2D(tex, texcoord);\n"
++                                                "}\n";
++
++    static const char TextureVertexShader[] = "attribute vec3 position;\n"
++                                              "varying highp vec2 texcoord;\n "
++                                              "void main(void)\n"
++                                              "{\n"
++                                              "    gl_Position.xyz = position;\n"
++                                              "    gl_Position.w = 1.0;\n"
++                                              "    texcoord = position.xy;\n"
++                                              "}\n";
++
++    static const GLfloat TextureVertices[] = {
++        -1.0f, -1.0f, 0.0f,
++        1.0f, -1.0f, 0.0f,
++        -1.0f, 1.0f, 0.0f,
++        -1.0f, 1.0f, 0.0f,
++        1.0f, -1.0f, 0.0f,
++        1.0f, 1.0f, 0.0f
++    };
++
++    Texture::Texture(const Texture::enumType type)
++        : _referenceCount(0)
++        , _program(static_cast<unsigned int>(~0))
++        , _texture(static_cast<unsigned int>(~0))
++        , _position(static_cast<unsigned int>(~0))
++        , _selected(static_cast<unsigned int>(~0))
++        , _type(type)
++    {
++        // Get the texture ID
++        glGenTextures(1, &_texture);
++        assert(glGetError() != GL_INVALID_VALUE);
++
++        glBindTexture(_type, _texture);
++        assert(glGetError() == GL_NO_ERROR);
++    }
++
++    Texture::~Texture()
++    {
++        assert(_shaders.size() == 0);
++        assert(_program == static_cast<unsigned int>(~0));
++        assert(_texture != static_cast<unsigned int>(~0));
++
++        Unbind();
++
++        glDeleteTextures(1, &_texture);
++    }
++
++    void Texture::Bind()
++    {
++        assert(_program == static_cast<unsigned int>(~0));
++        assert(_shaders.size() == 0);
++
++        _lastAction.Error = 0;
++        _lastAction.Message.clear();
++
++        // Create the program object
++        _program = glCreateProgram();
++
++        Shaders();
++
++        if ((_lastAction.Error == 0) && (_shaders.size() > 0)) {
++            for (std::list<unsigned int>::const_iterator index = _shaders.begin(); index != _shaders.end(); index++) {
++                printf("Attach Shader [%d] on Surface [%p].\n", *index, eglGetCurrentSurface(EGL_DRAW));
++                glAttachShader(_program, *index);
++            }
++
++            // Link the program
++            glLinkProgram(_program);
++
++            GLint linked;
++
++            // Check the link status
++            glGetProgramiv(_program, GL_LINK_STATUS, &linked);
++
++            if (!linked) {
++                GLint infoLen = 0;
++
++                _lastAction.Error = glGetError();
++
++                glGetProgramiv(_program, GL_INFO_LOG_LENGTH, &infoLen);
++
++                if (infoLen > 1) {
++                    char* txt = static_cast<char*>(ALLOCA(infoLen + 1));
++
++                    glGetProgramInfoLog(_program, infoLen, NULL, txt);
++
++                    _lastAction.Message = txt;
++                }
++                else {
++                    _lastAction.Message = "Could not link program.";
++                }
++
++                printf("Linking failed, error %s.\n", _lastAction.Message.c_str());
++            }
++
++            while (_shaders.size() > 0) {
++                glDeleteShader(_shaders.back());
++                _shaders.pop_back();
++            }
++
++            if (_lastAction.Error != 0) {
++                glDeleteProgram(_program);
++                _program = static_cast<unsigned int>(~0);
++            }
++            else {
++                Links();
++            }
++        }
++    }
++
++    unsigned int Texture::CreateUniform(const char uniformName[])
++    {
++        unsigned int result = glGetUniformLocation(_program, uniformName);
++
++        printf("Bind Uniform [%d] : [%s] on Surface [%p].\n", result, uniformName, eglGetCurrentSurface(EGL_DRAW));
++        return (result);
++    }
++
++    unsigned int Texture::CreateAttribute(const char attributeName[])
++    {
++        unsigned int result; // = _attributeId++;
++
++        //glBindAttribLocation ( _id, result, attributeName);
++        result = glGetAttribLocation(_program, attributeName);
++        printf("Bind Attribute [%d] : [%s] on Surface [%p].\n", result, attributeName, eglGetCurrentSurface(EGL_DRAW));
++        assert(glGetError() == GL_NO_ERROR);
++
++        return (result);
++    }
++
++    unsigned int Texture::CreateShader(const int type, const char source[])
++    {
++        GLuint id = glCreateShader(static_cast<GLenum>(type));
++
++        GLint compiled;
++
++        // Load the shader source
++        glShaderSource(id, 1, &source, NULL);
++
++        // Compile the shader
++        glCompileShader(id);
++
++        // Check the compile status
++        glGetShaderiv(id, GL_COMPILE_STATUS, &compiled);
++
++        if (!compiled) {
++            GLint infoLen = 0;
++
++            glGetShaderiv(id, GL_INFO_LOG_LENGTH, &infoLen);
++
++            if (infoLen > 1) {
++                char* info = static_cast<char*>(ALLOCA(infoLen + 1));
++
++                glGetShaderInfoLog(id, infoLen, NULL, info);
++
++                _lastAction.Message = info;
++            }
++            else {
++                _lastAction.Message = "Could not compile shader.";
++            }
++
++            printf("Compiling failed, error %s [%d].\n", _lastAction.Message.c_str(), type);
++
++            glDeleteShader(id);
++            id = static_cast<unsigned int>(~0);
++        }
++        else {
++            printf("Created Shader [%d].\n", id);
++            _shaders.push_back(id);
++
++            assert(glGetError() == GL_NO_ERROR);
++
++            _lastAction.Message.clear();
++        }
++
++        return (id);
++    }
++
++    void Texture::AddRef()
++    {
++        _referenceCount++;
++    }
++
++    void Texture::Release()
++    {
++        _referenceCount--;
++
++        if (_referenceCount == 0) {
++            delete this;
++        }
++    }
++
++    void Texture::Unbind()
++    {
++        if (_program != static_cast<unsigned int>(~0)) {
++            glDeleteProgram(_program);
++            _program = static_cast<unsigned int>(~0);
++        }
++    }
++
++    void Texture::Draw()
++    {
++        glBindTexture(_type, _texture);
++        assert(glGetError() == GL_NO_ERROR);
++
++        glUseProgram(_program);
++        assert(glGetError() == GL_NO_ERROR);
++
++        Render();
++    }
++
++    const struct Result& Texture::GetStatus() const
++    {
++        return (_lastAction);
++    }
++
++    /* virtual */ void Texture::Render()
++    {
++        // texturing
++        glUniform1i(_selected, TextureUnit()); // bind first texture unit to sampler2D
++        assert(glGetError() == GL_NO_ERROR);
++
++        glVertexAttribPointer(
++            _position, // attribute
++            3, // number of elements per vertex, here (x, y, z)
++            GL_FLOAT, // the type of each element
++            GL_FALSE, // take our _value_s as-is, i.e. fixed point no normalization
++            0, // stride, no extra data between each position
++            &TextureVertices[0] // offset, first element
++            );
++        assert(glGetError() == GL_NO_ERROR);
++
++        glEnableVertexAttribArray(_position);
++        assert(glGetError() == GL_NO_ERROR);
++
++        glDrawArrays(GL_TRIANGLE_STRIP, 0, 6); // draw (quad) plane
++        assert(glGetError() == GL_NO_ERROR);
++
++        glDisableVertexAttribArray(_position);
++        assert(glGetError() == GL_NO_ERROR);
++    }
++
++    /* virtual */ void Texture::Shaders()
++    {
++        CreateShader(GL_VERTEX_SHADER, TextureVertexShader);
++        assert(GetStatus().Error == 0);
++
++        CreateShader(GL_FRAGMENT_SHADER, TextureFragmentShader);
++        assert(GetStatus().Error == 0);
++    }
++
++    /* virtual */ void Texture::Links()
++    {
++        _position = CreateAttribute("position");
++        assert(_position != static_cast<unsigned int>(~0));
++
++        _selected = CreateUniform("tex");
++        assert(_selected != static_cast<unsigned int>(~0));
++    }
++
++    // ---------------------------------------------------------------------------------------------------------------------
++    // Class::      SurfaceTexture
++    // Description: Representation of an abstract Texture that can be used as a Surface.
++    // ---------------------------------------------------------------------------------------------------------------------
++
++    SurfaceTexture::SurfaceTexture(Display& display, const Config& config, const Texture::enumType type)
++        : Texture(type)
++        , _surface(display, config)
++    {
++        if (_surface.IsValid() == true) {
++            // set (simple) filter and wrap modes
++            glTexParameterf(type, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++            assert(glGetError() == GL_NO_ERROR);
++
++            glTexParameterf(type, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++            assert(glGetError() == GL_NO_ERROR);
++
++            glTexParameterf(type, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++            assert(glGetError() == GL_NO_ERROR);
++
++            glTexParameterf(type, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++            assert(glGetError() == GL_NO_ERROR);
++
++            EGLDisplay eglDisplay = static_cast<EGLDisplay>(_surface.DisplayHandle());
++            EGLSurface eglSurface = static_cast<EGLSurface>(_surface.SurfaceHandle());
++            eglBindTexImage(eglDisplay, eglSurface, EGL_BACK_BUFFER);
++        }
++    }
++
++    /* static */ ProxyType<SurfaceTexture> SurfaceTexture::Instance(Display& display, const Config& config, const Texture::enumType type)
++    {
++        SurfaceTexture* element = new SurfaceTexture(display, config, type);
++
++        return (ProxyType<SurfaceTexture>(element));
++    }
++
++    /* virtual */ SurfaceTexture::~SurfaceTexture()
++    {
++        if (_surface.IsValid() == true) {
++            EGLDisplay eglDisplay = static_cast<EGLDisplay>(_surface.DisplayHandle());
++            EGLSurface eglSurface = static_cast<EGLSurface>(_surface.SurfaceHandle());
++            eglReleaseTexImage(eglDisplay, eglSurface, EGL_BACK_BUFFER);
++        }
++    }
++
++    // ---------------------------------------------------------------------------------------------------------------------
++    // Class::      SurfaceTexture
++    // Description: Representation of an abstract Texture that can be used as a Surface.
++    // ---------------------------------------------------------------------------------------------------------------------
++
++    PortableNetworkGraphicsTexture::PortableNetworkGraphicsTexture(const char fileName[], const unsigned int width, const unsigned int height, const Texture::enumType type)
++        : Texture(type)
++        , _width(width)
++        , _height(height)
++    {
++        glTexParameterf(type, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++        assert(glGetError() == GL_NO_ERROR);
++
++        glTexParameterf(type, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++        assert(glGetError() == GL_NO_ERROR);
++
++        _id = LoadPortableNetworkGraphics(fileName, _width, _height);
++
++        glEnable(GL_TEXTURE_2D);
++        printf("error on enaling GL2: %d\n\n", glGetError());
++        assert(glGetError() == GL_NO_ERROR);
++    }
++
++    /* static */ ProxyType<PortableNetworkGraphicsTexture> PortableNetworkGraphicsTexture::Instance(const char fileName[], const unsigned int width, const unsigned int height, const Texture::enumType type)
++    {
++        PortableNetworkGraphicsTexture* element = new PortableNetworkGraphicsTexture(fileName, width, height, type);
++
++        return (ProxyType<PortableNetworkGraphicsTexture>(element));
++    }
++
++    /* virtual */ PortableNetworkGraphicsTexture::~PortableNetworkGraphicsTexture()
++    {
++    }
++
++    unsigned int PortableNetworkGraphicsTexture::LoadPortableNetworkGraphics(const char fileName[], unsigned int& width, unsigned int& height)
++    {
++        GLuint texture = static_cast<unsigned int>(~0);
++        FILE* fp = fopen(fileName, "rb");
++
++        if (fp != NULL) {
++            size_t loaded;
++            png_byte header[8];
++
++            // read the header
++            loaded = fread(header, 1, 8, fp);
++
++            if ((loaded == 8) && (png_sig_cmp(header, 0, 8) == 0)) {
++                png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
++
++                if (png_ptr != NULL) {
++                    // create png info struct
++                    png_infop info_ptr = png_create_info_struct(png_ptr);
++
++                    if (info_ptr == NULL) {
++                        png_destroy_read_struct(&png_ptr, (png_infopp)NULL, (png_infopp)NULL);
++                    }
++                    else {
++                        // create png info struct
++                        png_infop end_info = png_create_info_struct(png_ptr);
++
++                        if (end_info == NULL) {
++                            png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)NULL);
++                        }
++                        else if (setjmp(png_jmpbuf(png_ptr))) {
++                            png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)NULL);
++                        }
++                        else {
++                            // init png reading
++                            png_init_io(png_ptr, fp);
++
++                            // let libpng know you already read the first 8 bytes
++                            png_set_sig_bytes(png_ptr, 8);
++
++                            // read all the info up to the image data
++                            png_read_info(png_ptr, info_ptr);
++
++                            // variables to pass to get info
++                            int bit_depth, color_type;
++                            png_uint_32 temp_width, temp_height;
++
++                            // get info about png
++                            png_get_IHDR(png_ptr, info_ptr, &temp_width, &temp_height, &bit_depth, &color_type, NULL, NULL, NULL);
++
++                            width = static_cast<unsigned int>(temp_width);
++                            height = static_cast<unsigned int>(temp_height);
++
++                            if ((bit_depth == 8) && ((color_type == PNG_COLOR_TYPE_RGB) || (color_type == PNG_COLOR_TYPE_RGB_ALPHA))) {
++                                GLint format = (color_type == PNG_COLOR_TYPE_RGB ? GL_RGB : GL_RGBA);
++
++                                // Update the png info struct.
++                                png_read_update_info(png_ptr, info_ptr);
++
++                                // Row size in bytes.
++                                int rowbytes = png_get_rowbytes(png_ptr, info_ptr);
++
++                                // glTexImage2d requires rows to be 4-byte aligned
++                                rowbytes += 3 - ((rowbytes - 1) % 4);
++
++                                unsigned int size = height * (rowbytes * sizeof(png_byte) + sizeof(png_byte*)) + 15;
++
++                                // Allocate the image_data as a big block, to be given to opengl
++                                void* storage = malloc(size);
++
++                                if (storage != NULL) {
++                                    // row_pointers is for pointing to image_data for reading the png with libpng
++                                    png_byte** row_pointers = static_cast<png_byte**>(storage);
++                                    png_byte* image_data = static_cast<png_byte*>(&(static_cast<unsigned char*>(storage)[height * sizeof(png_byte*)]));
++
++                                    // set the individual row_pointers to point at the correct offsets of image_data
++                                    for (unsigned int i = 0; i < height; i++) {
++                                        row_pointers[height - 1 - i] = image_data + i * rowbytes;
++                                    }
++
++                                    // read the png into image_data through row_pointers
++                                    png_read_image(png_ptr, row_pointers);
++
++                                    // Generate the OpenGL texture object
++                                    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, image_data);
++                                    assert(glGetError() == GL_NO_ERROR);
++
++                                    free(storage);
++                                }
++                            }
++                            png_destroy_read_struct(&png_ptr, &info_ptr, &end_info);
++                        }
++                    }
++                }
++            }
++
++            fclose(fp);
++        }
++        return texture;
++    }
++
++    /* to be continued !!!!
++
++#pragma pack(2)  // 2 byte packing
++typedef struct {
++   unsigned char magic1;   // 'B'
++   unsigned char magic2;   // 'M'
++   unsigned int size;      // File size
++   unsigned short int reserved1, reserved2;
++   unsigned int pixelOffset; // offset to image data
++} Header;
++
++#pragma pack() // Default packing
++typedef struct {
++   unsigned int size;    // Size of this info header
++   int cols, rows;       // cols and rows of image
++   unsigned short int planes;
++   unsigned short int bitsPerPixel; // number of bits per pixel
++   unsigned int compression;
++   unsigned int cmpSize;
++   int xScale, yScale;
++   unsigned int numColors;
++   unsigned int importantColors;
++} InfoHeader;
++
++// Destination to be defined in the calling program
++extern unsigned char *imageData;
++extern int imageRows, imageCols;
++
++void loadBMP(char *filename) {
++   Header header;
++   InfoHeader infoHeader;
++   FILE *fin;
++   fin = fopen(filename, "rb+");
++   if (fin == NULL) {
++      printf("Error opening image file: %s\n", filename);
++      exit(1);
++   }
++
++   // Process header
++   fread(&header, sizeof(header), 1, fin);
++   // Test if this is really a BMP file
++   if (!((header.magic1 == 'B') && (header.magic2 == 'M'))) {
++      printf("Not a valid BMP file: %s\n", filename);
++      exit(1);
++   }
++
++   // Process Info Header
++   fread(&infoHeader, sizeof(infoHeader), 1, fin);
++   // Test if this is a 24-bit uncompressed BMP file
++   if (!((infoHeader.bitsPerPixel == 24) && !infoHeader.compression)) {
++      printf("Cannot handle this type of BMP file\n");
++      exit(1);
++   }
++
++   imageRows = infoHeader.rows;
++   imageCols = infoHeader.cols;
++   imageData = (unsigned char*)malloc(3 * sizeof(unsigned char) * infoHeader.cols * infoHeader.rows);
++   int count = 0;
++   for (int row = 0; row < infoHeader.rows; row++) {
++      for (int col = 0; col < infoHeader.cols; col++) {
++         fread(imageData + count + 2, sizeof(unsigned char), 1, fin); // blue
++         fread(imageData + count + 1, sizeof(unsigned char), 1, fin); // green
++         fread(imageData + count, sizeof(unsigned char), 1, fin);     // red
++         count = count + 3;
++      }
++   }
++}
++
++*/
++}
++}
+diff --git a/EGLTest/egl/graphics.h b/EGLTest/egl/graphics.h
+new file mode 100644
+index 0000000..62fbbc6
+--- /dev/null
++++ b/EGLTest/egl/graphics.h
+@@ -0,0 +1,697 @@
++#ifndef __GRAPHICS_H
++#define __GRAPHICS_H
++
++#include <list>
++#include <algorithm>
++#include <string>
++#include <assert.h>
++#include <math.h>
++
++#include <EGL/egl.h>
++#include "GLES2/gl2.h"
++
++// #define __X11_EXTENSION__
++
++#define __RPI_PLATFORM__
++
++namespace WPEFramework {
++namespace Graphics {
++    class Display;
++    class Texture;
++
++    struct Result {
++        unsigned int Error;
++        std::string Message;
++    };
++
++    class Color {
++    public:
++        Color()
++        {
++        }
++        Color(const unsigned char red, const unsigned char green, const unsigned char blue, const unsigned char alpha)
++            : _red(red)
++            , _green(green)
++            , _blue(blue)
++            , _alpha(alpha)
++        {
++        }
++        Color(const Color& copy)
++            : _red(copy._red)
++            , _green(copy._green)
++            , _blue(copy._blue)
++            , _alpha(copy._alpha)
++        {
++        }
++        ~Color()
++        {
++        }
++
++        Color& operator=(const Color& RHS)
++        {
++            _red = RHS._red;
++            _green = RHS._green;
++            _blue = RHS._blue;
++            _alpha = RHS._alpha;
++
++            return (*this);
++        }
++
++    public:
++        inline unsigned int Red() const
++        {
++            return (_red);
++        }
++        inline unsigned int Green() const
++        {
++            return (_green);
++        }
++        inline unsigned int Blue() const
++        {
++            return (_blue);
++        }
++        inline unsigned int Alpha() const
++        {
++            return (_alpha);
++        }
++
++    private:
++        unsigned char _red;
++        unsigned char _green;
++        unsigned char _blue;
++        unsigned char _alpha;
++    };
++
++    class View {
++    public:
++        View()
++            : _X(0)
++            , _Y(0)
++            , _width(0)
++            , _height(0)
++        {
++        }
++        View(signed int X, signed int Y, unsigned int width, unsigned int height)
++            : _X(X)
++            , _Y(Y)
++            , _width(width)
++            , _height(height)
++        {
++        }
++        View(const View& copy)
++            : _X(copy._X)
++            , _Y(copy._Y)
++            , _width(copy._width)
++            , _height(copy._height)
++        {
++        }
++        ~View()
++        {
++        }
++
++        View& operator=(const View& RHS)
++        {
++            _X = RHS._X;
++            _Y = RHS._Y;
++            _width = RHS._width;
++            _height = RHS._height;
++
++            return (*this);
++        }
++
++    public:
++        inline signed int X() const
++        {
++            return (_X);
++        }
++        inline signed int Y() const
++        {
++            return (_Y);
++        }
++        inline unsigned int Width() const
++        {
++            return (_width);
++        }
++        inline unsigned int Height() const
++        {
++            return (_height);
++        }
++
++    private:
++        signed int _X;
++        signed int _Y;
++        unsigned int _width;
++        unsigned int _height;
++    };
++
++    class Config {
++    public:
++        class Iterator {
++        public:
++            Iterator();
++            Iterator(const std::list<Config>& container);
++            Iterator(const Iterator& copy);
++            ~Iterator();
++
++            Iterator& operator=(const Iterator& RHS);
++
++        public:
++            bool IsValid() const;
++            void Reset(unsigned int position);
++            bool Previous();
++            bool Next();
++            unsigned int Index() const;
++            unsigned int Count() const;
++            const Config& operator->() const;
++            const Config& operator*() const;
++
++        private:
++            const std::list<Config>* _container;
++            mutable std::list<Config>::const_iterator _iterator;
++            mutable unsigned int _index;
++        };
++
++    public:
++        Config(void* display, void* config);
++        Config();
++        Config(unsigned char red,
++            unsigned char green,
++            unsigned char blue,
++            unsigned char alpha,
++            unsigned char buffer,
++            unsigned char depth,
++            unsigned char stencil);
++        Config(const Config& copy);
++        ~Config();
++
++        Config& operator=(const Config& RHS);
++
++    public:
++        inline void Port(const View& view)
++        {
++            _view = view;
++        }
++        inline void Red(const unsigned char red)
++        {
++            _red = red;
++        }
++        inline void Green(const unsigned char green)
++        {
++            _green = green;
++        }
++        inline void Blue(const unsigned char blue)
++        {
++            _blue = blue;
++        }
++        inline void Alpha(const unsigned char alpha)
++        {
++            _alpha = alpha;
++        }
++        inline void Buffer(const unsigned char buffer)
++        {
++            _buffer = buffer;
++        }
++        inline void Stencil(const unsigned char stencil)
++        {
++            _stencil = stencil;
++        }
++        inline void Depth(const unsigned char depth)
++        {
++            _depth = depth;
++        }
++        inline const View& Port() const
++        {
++            return (_view);
++        }
++        inline unsigned char Red() const
++        {
++            return (_red);
++        }
++        inline unsigned char Green() const
++        {
++            return (_green);
++        }
++        inline unsigned char Blue() const
++        {
++            return (_blue);
++        }
++        inline unsigned char Alpha() const
++        {
++            return (_alpha);
++        }
++        inline unsigned char Buffer() const
++        {
++            return (_buffer);
++        }
++        inline unsigned char Depth() const
++        {
++            return (_depth);
++        }
++        inline unsigned char Stencil() const
++        {
++            return (_stencil);
++        }
++
++    private:
++        View _view;
++        unsigned char _red;
++        unsigned char _green;
++        unsigned char _blue;
++        unsigned char _alpha;
++        unsigned char _buffer;
++        unsigned char _depth;
++        unsigned char _stencil;
++    };
++
++    class Display {
++    private:
++        Display();
++        Display(const Display&);
++        Display& operator=(const Display&);
++
++    private:
++        friend class Initializer;
++        explicit Display(const unsigned int ID);
++
++    public:
++        static bool HasValidExtension();
++        static const char* Extensions();
++        static Display& Instance(unsigned int id);
++        ~Display();
++
++    public:
++        int Major() const;
++        int Minor() const;
++        unsigned int Width() const;
++        unsigned int Height() const;
++
++        Config::Iterator Configurations() const;
++
++        bool ValidConfiguration(const Config&) const;
++
++#ifdef __X11_EXTENSION__
++        void* GetEvent();
++#endif
++
++    private:
++        friend class Surface;
++
++        void* DisplayHandle() const;
++#ifdef __X11_EXTENSION__
++        void* X11Handle() const;
++#endif
++
++    private:
++        void* _display;
++#ifdef __X11_EXTENSION__
++        void* _host;
++#endif
++        unsigned int _width;
++        unsigned int _height;
++        int _major;
++        int _minor;
++        std::list<Config> _configs;
++    };
++
++    template <typename PROXYOBJECT>
++    class ProxyType {
++    public:
++        ProxyType()
++            : _object(NULL)
++        {
++        }
++        explicit ProxyType(PROXYOBJECT* object)
++            : _object(object)
++        {
++            _object->AddRef();
++        }
++        ProxyType(const ProxyType<PROXYOBJECT>& copy)
++            : _object(copy._object)
++        {
++            if (_object != NULL) {
++                _object->AddRef();
++            }
++        }
++        ~ProxyType()
++        {
++            if (_object != NULL) {
++                _object->Release();
++            }
++        }
++
++        ProxyType<PROXYOBJECT>& operator=(const ProxyType<PROXYOBJECT>& RHS)
++        {
++            if (_object != NULL) {
++                _object->Release();
++            }
++
++            _object = RHS._object;
++
++            if (_object != NULL) {
++                _object->AddRef();
++            }
++
++            return (*this);
++        }
++
++        static inline ProxyType<PROXYOBJECT> Instance()
++        {
++            PROXYOBJECT* newObject = new PROXYOBJECT();
++
++            return (ProxyType<PROXYOBJECT>(newObject));
++        }
++
++    public:
++        PROXYOBJECT* operator->()
++        {
++            assert(_object != NULL);
++            return (_object);
++        }
++        const PROXYOBJECT* operator->() const
++        {
++            assert(_object != NULL);
++            return (_object);
++        }
++        inline operator ProxyType<Texture>()
++        {
++            return ProxyType<Texture>(*reinterpret_cast<ProxyType<Texture>*>(this));
++        }
++        inline operator const ProxyType<Texture>() const
++        {
++            return ProxyType<Texture>(*reinterpret_cast<ProxyType<Texture>*>(this));
++        }
++        bool IsValid() const
++        {
++            return (_object != NULL);
++        }
++        bool operator==(const ProxyType<PROXYOBJECT>& RHS) const
++        {
++            return (_object == RHS._object);
++        }
++        bool operator!=(const ProxyType<PROXYOBJECT>& RHS) const
++        {
++            return (_object != RHS._object);
++        }
++
++    private:
++        PROXYOBJECT* _object;
++    };
++
++    typedef ProxyType<Texture> Proxy;
++
++    class Surface {
++    private:
++        class Program : public ProxyType<Texture> {
++        public:
++            inline Program()
++                : ProxyType<Texture>()
++                , _window()
++            {
++            }
++            inline Program(const ProxyType<Texture>& texture)
++                : ProxyType<Texture>(texture)
++                , _window()
++            {
++            }
++            inline Program(const ProxyType<Texture>& texture, const View& window)
++                : ProxyType<Texture>(texture)
++                , _window(window)
++            {
++            }
++            inline Program(const Program& copy)
++                : ProxyType<Texture>(copy)
++                , _window(copy._window)
++            {
++            }
++            inline ~Program() {}
++
++        public:
++            const View& Window() const { return (_window); }
++
++            inline bool operator==(const Program& RHS) const
++            {
++                return (ProxyType<Texture>::operator==(RHS));
++            }
++            inline bool operator!=(const Program& RHS) const
++            {
++                return (ProxyType<Texture>::operator!=(RHS));
++            }
++
++        private:
++            View _window;
++        };
++
++    private:
++        Surface();
++        Surface(const Surface&);
++        Surface& operator=(const Surface&);
++
++    public:
++        Surface(Display& display, const Config& config, const unsigned int type);
++        virtual ~Surface();
++
++    public:
++        bool IsValid() const;
++
++        Result Attach(const ProxyType<Texture>& texture);
++        Result Attach(const ProxyType<Texture>& texture, const View& window);
++        void Detach(const ProxyType<Texture>& texture);
++
++        Config Configuration() const;
++        unsigned int Width() const;
++        unsigned int Height() const;
++
++        signed int QuerySurface(const unsigned int key) const;
++
++        void Clear(const Color& color);
++        void Draw();
++        void ViewPort(const View& port);
++
++        inline const View& ViewPort() const
++        {
++            return (_view);
++        }
++
++    protected:
++        friend class Context;
++        friend class SurfaceTexture;
++
++        inline void* DisplayHandle()
++        {
++            return (_display);
++        }
++        inline void* SurfaceHandle()
++        {
++            return (_surface);
++        }
++        inline void* ConfigHandle()
++        {
++            return (_config);
++        }
++        inline void* ContextHandle()
++        {
++            return (_context);
++        }
++
++#ifdef __X11_EXTENSION__
++
++        inline void* X11Handle()
++        {
++            return (_x11Display);
++        }
++
++#endif
++
++        void Swap();
++        void SurfaceHandle(void* handle);
++        void* NativeWindow(const View& view, const unsigned int type);
++
++    private:
++        void* _display;
++        void* _config;
++        void* _context;
++        void* _surface;
++        View _view;
++
++        std::list<Program> _textures;
++        Result _lastInfo;
++
++#ifdef __X11_EXTENSION__
++        void* _x11Display;
++#endif
++    };
++
++    class PixmapSurface : public Surface {
++    private:
++        PixmapSurface();
++        PixmapSurface(const PixmapSurface&);
++        PixmapSurface& operator=(const PixmapSurface&);
++
++    public:
++        PixmapSurface(Display& display, const Config& config);
++        virtual ~PixmapSurface();
++    };
++
++    class BufferSurface : public Surface {
++    private:
++        BufferSurface();
++        BufferSurface(const BufferSurface&);
++        BufferSurface& operator=(const BufferSurface&);
++
++    public:
++        BufferSurface(Display& display, const Config& config);
++        virtual ~BufferSurface();
++    };
++
++    class WindowSurface : public Surface {
++    private:
++        WindowSurface();
++        WindowSurface(const WindowSurface&);
++        WindowSurface& operator=(const WindowSurface&);
++
++    public:
++        WindowSurface(Display& display, const Config& config);
++        virtual ~WindowSurface();
++    };
++
++    class Texture {
++        // Do not Copy/Assign this object
++    private:
++        Texture();
++        Texture(const Texture&);
++        Texture& operator=(const Texture&);
++
++    public:
++        enum enumType {
++            TEXTURE_2D = GL_TEXTURE_2D
++        };
++
++    protected:
++        explicit Texture(const enumType type);
++
++    public:
++        virtual ~Texture();
++
++        inline const bool IsBound() const
++        {
++            return (_program != static_cast<unsigned int>(~0));
++        }
++
++        void Bind();
++        void Unbind();
++
++        const Result& GetStatus() const;
++
++        void AddRef();
++        void Release();
++
++    protected:
++        unsigned int CreateAttribute(const char attributeName[]);
++        unsigned int CreateUniform(const char uniformName[]);
++        unsigned int CreateShader(const int type, const char source[]);
++
++    private:
++        friend class Surface;
++        void Draw();
++        virtual void Render();
++        virtual void Shaders();
++        virtual void Links();
++
++        virtual unsigned int TextureUnit() const
++        {
++            return (0);
++        }
++
++    private:
++        unsigned int _referenceCount;
++        unsigned int _id;
++        unsigned int _program;
++        unsigned int _texture;
++        unsigned int _position;
++        unsigned int _selected;
++        enumType _type;
++        std::list<unsigned int> _shaders;
++        Result _lastAction;
++    };
++
++    class SurfaceTexture : public Texture {
++    private:
++        // Do not Copy/Assign this object
++        SurfaceTexture();
++        SurfaceTexture(const SurfaceTexture&);
++        SurfaceTexture& operator=(const SurfaceTexture&);
++
++    protected:
++        SurfaceTexture(Display& display, const Config& config, const Texture::enumType type);
++
++    public:
++        static ProxyType<SurfaceTexture> Instance(Display& display, const Config& config, const Texture::enumType type);
++        virtual ~SurfaceTexture();
++
++    public:
++        inline bool IsValid() const
++        {
++            return (_surface.IsValid());
++        }
++        inline Result Attach(const ProxyType<Texture>& texture)
++        {
++            return (_surface.Attach(texture));
++        }
++        inline void Detach(const ProxyType<Texture>& texture)
++        {
++            _surface.Detach(texture);
++        }
++        inline void Draw()
++        {
++            _surface.Draw();
++        }
++        inline void Clear(const Color& color)
++        {
++            _surface.Clear(color);
++        }
++
++    private:
++        BufferSurface _surface;
++    };
++
++    class PortableNetworkGraphicsTexture : public Texture {
++    private:
++        // Do not Copy/Assign this object
++        PortableNetworkGraphicsTexture();
++        PortableNetworkGraphicsTexture(const PortableNetworkGraphicsTexture&);
++        PortableNetworkGraphicsTexture& operator=(const PortableNetworkGraphicsTexture&);
++
++    protected:
++        PortableNetworkGraphicsTexture(const char fileName[], const unsigned int width, const unsigned int height, const Texture::enumType type);
++
++    public:
++        static ProxyType<PortableNetworkGraphicsTexture> Instance(const char fileName[], const unsigned int width, const unsigned int height, const Texture::enumType type);
++        virtual ~PortableNetworkGraphicsTexture();
++
++    public:
++        inline bool IsValid() const
++        {
++            return (_id != static_cast<unsigned int>(~0));
++        }
++
++    private:
++        unsigned int LoadPortableNetworkGraphics(const char fileName[], unsigned int& width, unsigned int& height);
++
++    private:
++        unsigned int _width;
++        unsigned int _height;
++        unsigned int _id;
++    };
++
++    namespace Colors {
++
++        extern Color RED;
++        extern Color GREEN;
++        extern Color BLUE;
++        extern Color WHITE;
++        extern Color BLACK;
++    }
++}
++} // namespace WPEFramework::Graphics
++
++#endif // __GRAPHICS_H
+diff --git a/EGLTest/egl/rectangle.cpp b/EGLTest/egl/rectangle.cpp
+new file mode 100644
+index 0000000..a1d166e
+--- /dev/null
++++ b/EGLTest/egl/rectangle.cpp
+@@ -0,0 +1,158 @@
++#include <string.h>
++#include <assert.h>
++#include <GLES2/gl2.h>
++
++#include "rectangle.h"
++#include "graphics.h"
++
++namespace WPEFramework {
++namespace Graphics {
++    namespace Examples {
++
++        static const char fragmentShader[] = "precision mediump float;\n"
++                                             "varying vec4 v_color;\n"
++                                             "void main() {\n"
++                                             "   gl_FragColor = v_color;\n"
++                                             "}\n";
++
++        static const char vertexShader[] = "uniform mat4 modelviewProjection;\n"
++                                           "attribute vec4 offset;\n"
++                                           "attribute vec4 pos;\n"
++                                           "attribute vec4 color;\n"
++                                           "varying vec4 v_color;\n"
++                                           "void main() {\n"
++                                           "   gl_Position = (modelviewProjection * pos) + vec4(0.0,0.0,0,0);\n"
++                                           "   v_color = color;\n"
++                                           "}\n";
++
++#define FLOAT_TO_FIXED(X) ((X)*65535.0)
++
++        static void make_z_rot_matrix(GLfloat angle, GLfloat* m)
++        {
++            float c = cos(angle * M_PI / 180.0);
++            float s = sin(angle * M_PI / 180.0);
++            int i;
++            for (i = 0; i < 16; i++)
++                m[i] = 0.0;
++            m[0] = m[5] = m[10] = m[15] = 1.0;
++
++            m[0] = c;
++            m[1] = s;
++            m[4] = -s;
++            m[5] = c;
++        }
++
++        static void make_scale_matrix(GLfloat xs, GLfloat ys, GLfloat zs, GLfloat* m)
++        {
++            int i;
++            for (i = 0; i < 16; i++)
++                m[i] = 0.0;
++            m[0] = xs;
++            m[5] = ys;
++            m[10] = zs;
++            m[15] = 1.0;
++        }
++
++        static void mul_matrix(GLfloat* prod, const GLfloat* a, const GLfloat* b)
++        {
++#define A(row, col) a[(col << 2) + row]
++#define B(row, col) b[(col << 2) + row]
++#define P(row, col) p[(col << 2) + row]
++            GLfloat p[16];
++            GLint i;
++            for (i = 0; i < 4; i++) {
++                const GLfloat ai0 = A(i, 0), ai1 = A(i, 1), ai2 = A(i, 2), ai3 = A(i, 3);
++                P(i, 0) = ai0 * B(0, 0) + ai1 * B(1, 0) + ai2 * B(2, 0) + ai3 * B(3, 0);
++                P(i, 1) = ai0 * B(0, 1) + ai1 * B(1, 1) + ai2 * B(2, 1) + ai3 * B(3, 1);
++                P(i, 2) = ai0 * B(0, 2) + ai1 * B(1, 2) + ai2 * B(2, 2) + ai3 * B(3, 2);
++                P(i, 3) = ai0 * B(0, 3) + ai1 * B(1, 3) + ai2 * B(2, 3) + ai3 * B(3, 3);
++            }
++            ::memcpy(prod, p, sizeof(p));
++#undef A
++#undef B
++#undef PROD
++        }
++
++        Rectangle::Rectangle()
++            : WPEFramework::Graphics::Texture(Texture::TEXTURE_2D)
++            , _color(0)
++            , _position(0)
++            , _rotation(0)
++            , _matrix(-1)
++        {
++        }
++
++        /* virtual */ Rectangle::~Rectangle()
++        {
++        }
++
++        void Rectangle::Rotation(const signed int rotation)
++        {
++            _rotation = rotation;
++        }
++
++        /* virtual */ void Rectangle::Shaders()
++        {
++            CreateShader(GL_VERTEX_SHADER, vertexShader);
++            assert(GetStatus().Error == 0);
++
++            CreateShader(GL_FRAGMENT_SHADER, fragmentShader);
++            assert(GetStatus().Error == 0);
++        }
++
++        /* virtual */ void Rectangle::Links()
++        {
++            _position = CreateAttribute("pos");
++            assert(GetStatus().Error == 0);
++
++            _color = CreateAttribute("color");
++            assert(GetStatus().Error == 0);
++
++            _matrix = CreateUniform("modelviewProjection");
++        }
++
++        /* virtual */ void Rectangle::Render()
++        {
++            static const GLfloat verts[6][2] = {
++                { -1, -1 },
++                { 1, -1 },
++                { -1, 1 },
++                { -1, 1 },
++                { 1, -1 },
++                { 1, 1 }
++            };
++            static const GLfloat colors[3][3] = {
++                { 1, 0, 0 },
++                { 0, 1, 0 },
++                { 0, 0, 1 }
++            };
++
++            GLfloat mat[16], rot[16], scale[16]; //, offset[4];
++
++            /* Set modelview/projection matrix */
++            make_z_rot_matrix(_rotation, rot);
++            make_scale_matrix(0.5, 0.5, 0.5, scale);
++            mul_matrix(mat, rot, scale);
++
++            static const GLfloat offset[4] = { 0, 0, 0, 0 };
++
++            glUniformMatrix4fv(_matrix, 1, GL_FALSE, mat);
++
++            {
++                glVertexAttribPointer(_position, 2, GL_FLOAT, GL_FALSE, 0, verts);
++                glVertexAttribPointer(_offset, 2, GL_FLOAT, GL_FALSE, 0, offset);
++                glVertexAttribPointer(_color, 3, GL_FLOAT, GL_FALSE, 0, colors);
++                glEnableVertexAttribArray(_position);
++                glEnableVertexAttribArray(_color);
++                glEnableVertexAttribArray(_offset);
++
++                glDrawArrays(GL_TRIANGLE_STRIP, 0, 6);
++
++                glDisableVertexAttribArray(_offset);
++                glDisableVertexAttribArray(_color);
++                glDisableVertexAttribArray(_position);
++            }
++        }
++    }
++}
++} // namespace WPEFramework::Graphics::Examples
+diff --git a/EGLTest/egl/rectangle.h b/EGLTest/egl/rectangle.h
+new file mode 100644
+index 0000000..e8e688d
+--- /dev/null
++++ b/EGLTest/egl/rectangle.h
+@@ -0,0 +1,37 @@
++#ifndef __RECTANGLE_H
++#define __RECTANGLE_H
++
++#include "graphics.h"
++
++namespace WPEFramework {
++namespace Graphics {
++    namespace Examples {
++        class Rectangle : public WPEFramework::Graphics::Texture {
++        private:
++            Rectangle(const Rectangle&);
++            Rectangle& operator=(const Rectangle&);
++
++        public:
++            Rectangle();
++            virtual ~Rectangle();
++
++        public:
++            void Rotation(const signed int rotation);
++
++        private:
++            virtual void Shaders();
++            virtual void Links();
++            virtual void Render();
++
++        private:
++            unsigned int _color;
++            unsigned int _position;
++            unsigned int _offset;
++            signed int _rotation;
++            unsigned int _matrix;
++        };
++    }
++}
++} // namespace Soluyions::Graphics::Examples
++
++#endif // __RECTANGLE_H
+diff --git a/EGLTest/egl/triangle.cpp b/EGLTest/egl/triangle.cpp
+new file mode 100644
+index 0000000..fc4254b
+--- /dev/null
++++ b/EGLTest/egl/triangle.cpp
+@@ -0,0 +1,149 @@
++#include <string.h>
++#include <assert.h>
++#include <GLES2/gl2.h>
++
++#include "triangle.h"
++#include "graphics.h"
++
++namespace WPEFramework {
++namespace Graphics {
++    namespace Examples {
++        static const char fragmentShader[] = "precision mediump float;\n"
++                                             "varying vec4 v_color;\n"
++                                             "void main() {\n"
++                                             "   gl_FragColor = v_color;\n"
++                                             "}\n";
++
++        static const char vertexShader[] = "uniform mat4 modelviewProjection;\n"
++                                           "attribute vec4 pos;\n"
++                                           "attribute vec4 color;\n"
++                                           "varying vec4 v_color;\n"
++                                           "void main() {\n"
++                                           "   gl_Position = (modelviewProjection * pos) - vec4(0.0,0.0,0,0);\n"
++                                           "   v_color = color;\n"
++                                           "}\n";
++
++#define FLOAT_TO_FIXED(X) ((X)*65535.0)
++
++        static void make_z_rot_matrix(GLfloat angle, GLfloat* m)
++        {
++            float c = cos(angle * M_PI / 180.0);
++            float s = sin(angle * M_PI / 180.0);
++            int i;
++            for (i = 0; i < 16; i++)
++                m[i] = 0.0;
++            m[0] = m[5] = m[10] = m[15] = 1.0;
++
++            m[0] = c;
++            m[1] = s;
++            m[4] = -s;
++            m[5] = c;
++        }
++
++        static void make_scale_matrix(GLfloat xs, GLfloat ys, GLfloat zs, GLfloat* m)
++        {
++            int i;
++            for (i = 0; i < 16; i++)
++                m[i] = 0.0;
++            m[0] = xs;
++            m[5] = ys;
++            m[10] = zs;
++            m[15] = 1.0;
++        }
++
++        static void mul_matrix(GLfloat* prod, const GLfloat* a, const GLfloat* b)
++        {
++#define A(row, col) a[(col << 2) + row]
++#define B(row, col) b[(col << 2) + row]
++#define P(row, col) p[(col << 2) + row]
++            GLfloat p[16];
++            GLint i;
++            for (i = 0; i < 4; i++) {
++                const GLfloat ai0 = A(i, 0), ai1 = A(i, 1), ai2 = A(i, 2), ai3 = A(i, 3);
++                P(i, 0) = ai0 * B(0, 0) + ai1 * B(1, 0) + ai2 * B(2, 0) + ai3 * B(3, 0);
++                P(i, 1) = ai0 * B(0, 1) + ai1 * B(1, 1) + ai2 * B(2, 1) + ai3 * B(3, 1);
++                P(i, 2) = ai0 * B(0, 2) + ai1 * B(1, 2) + ai2 * B(2, 2) + ai3 * B(3, 2);
++                P(i, 3) = ai0 * B(0, 3) + ai1 * B(1, 3) + ai2 * B(2, 3) + ai3 * B(3, 3);
++            }
++            ::memcpy(prod, p, sizeof(p));
++#undef A
++#undef B
++#undef PROD
++        }
++
++        Triangle::Triangle()
++            : WPEFramework::Graphics::Texture(Texture::TEXTURE_2D)
++            , _color(0)
++            , _position(0)
++            , _rotation(0)
++            , _matrix(-1)
++        {
++        }
++
++        /* virtual */ Triangle::~Triangle()
++        {
++        }
++
++        void Triangle::Rotation(const signed int rotation)
++        {
++            _rotation = rotation;
++        }
++
++        /* virtual */ void Triangle::Shaders()
++        {
++            CreateShader(GL_VERTEX_SHADER, vertexShader);
++            assert(GetStatus().Error == 0);
++
++            CreateShader(GL_FRAGMENT_SHADER, fragmentShader);
++            assert(GetStatus().Error == 0);
++        }
++
++        /* virtual */ void Triangle::Links()
++        {
++            _position = CreateAttribute("pos");
++            assert(GetStatus().Error == 0);
++
++            _color = CreateAttribute("color");
++            assert(GetStatus().Error == 0);
++
++            _matrix = CreateUniform("modelviewProjection");
++        }
++
++        /* virtual */ void Triangle::Render()
++        {
++
++            static const GLfloat verts[3][2] = {
++                { -1, -1 },
++                { 1, -1 },
++                { 0, 1 }
++            };
++            static const GLfloat colors[3][3] = {
++                { 1, 0, 0 },
++                { 0, 1, 0 },
++                { 0, 0, 1 }
++            };
++
++            GLfloat mat[16], rot[16], scale[16];
++
++            /* Set modelview/projection matrix */
++            make_z_rot_matrix(_rotation, rot);
++            make_scale_matrix(0.5, 0.5, 0.5, scale);
++            mul_matrix(mat, rot, scale);
++
++            glUniformMatrix4fv(_matrix, 1, GL_FALSE, mat);
++
++            {
++                glVertexAttribPointer(_position, 2, GL_FLOAT, GL_FALSE, 0, verts);
++                glVertexAttribPointer(_color, 3, GL_FLOAT, GL_FALSE, 0, colors);
++                glEnableVertexAttribArray(_position);
++                glEnableVertexAttribArray(_color);
++
++                glDrawArrays(GL_TRIANGLES, 0, 3);
++
++                glDisableVertexAttribArray(_position);
++                glDisableVertexAttribArray(_color);
++            }
++        }
++    }
++}
++} // namepspace WPEFramework::Graphics::Examples
+diff --git a/EGLTest/egl/triangle.h b/EGLTest/egl/triangle.h
+new file mode 100644
+index 0000000..add6e9d
+--- /dev/null
++++ b/EGLTest/egl/triangle.h
+@@ -0,0 +1,36 @@
++#ifndef __TRIANGLE_H
++#define __TRIANGLE_H
++
++#include "graphics.h"
++
++namespace WPEFramework {
++namespace Graphics {
++    namespace Examples {
++        class Triangle : public WPEFramework::Graphics::Texture {
++        private:
++            Triangle(const Triangle&);
++            Triangle& operator=(const Triangle&);
++
++        public:
++            Triangle();
++            virtual ~Triangle();
++
++        public:
++            void Rotation(const signed int rotation);
++
++        private:
++            virtual void Shaders();
++            virtual void Links();
++            virtual void Render();
++
++        private:
++            unsigned int _color;
++            unsigned int _position;
++            signed int _rotation;
++            unsigned int _matrix;
++        };
++    }
++}
++} // namespace WPEFramework::Graphics::Examples
++
++#endif

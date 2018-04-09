@@ -1,0 +1,449 @@
+commit 735e582c2681b170d3a0b3ee2d3c9ee4cb4cd21e
+Author: Pierre Wielders <pierre@wielders.net>
+Date:   Tue Feb 20 16:33:51 2018 +0100
+
+    [WIFICONTROL] Send a notification on a SCAN RESULT.
+                  Allow WPA Supplicant to start wpa_supplicant.
+
+diff --git a/WifiControl/CMakeLists.txt b/WifiControl/CMakeLists.txt
+index 2eadfc2..5856a69 100644
+--- a/WifiControl/CMakeLists.txt
++++ b/WifiControl/CMakeLists.txt
+@@ -129,6 +129,7 @@ map()
+     map()
+        kv(connector "/var/run/wpa_supplicant")
+        kv(interface "wlan0")
++       kv(application "")
+     end()
+ end()
+ ans(PLUGIN_CONFIG)
+diff --git a/WifiControl/Controller.h b/WifiControl/Controller.h
+index eb3b2ce..00af93a 100644
+--- a/WifiControl/Controller.h
++++ b/WifiControl/Controller.h
+@@ -525,76 +525,36 @@ protected:
+         , _scanRequest(*this)
+         , _detailRequest(*this)
+         , _networkRequest(*this)
+-        , _process(true)
+-        , _options(_T("/usr/sbin/wpa_supplicant"))
+-        , _pid()
+     {
+-        /*
+-         * interface name *mandatory
+-         */
+-        _options[_T("-i")] = interfaceName;
++        string remoteName(Core::Directory::Normalize(supplicantBase) + interfaceName);
+ 
+-        /*
+-         * ctrl_interface parameter *mandatory
+-         */
+-        _options[_T("-C")] = Core::Directory::Normalize(supplicantBase);
++        if (Core::File(remoteName).Exists() == true) {
+ 
+-        /*
+-         * driver name (can be multiple drivers: nl80211,wext) *optional
+-         */
+-        //  _options[_T("-D")] = _T("nl80211,wext");
++            string data(
++                Core::Directory::Normalize(supplicantBase) +
++                _T("wpa_ctrl_") +
++                interfaceName + '_' +
++                Core::NumberType<uint32>(::getpid()).Text());
+ 
+-        /*
+-         * wait for a control interface monitor before starting *optional
+-         */
+-         _options[_T("-W")] = _T("");
++            LocalNode(Core::NodeId(data.c_str()));
+ 
+-        /*
+-         * This is what we need...
+-         *
+-         * /usr/sbin/wpa_supplicant -i wlan0 -C /var/run/wpa_supplicant -D nl80211,wext -W
+-         *
+-         */
++            RemoteNode(Core::NodeId(remoteName.c_str()));
+ 
+-        TRACE_L1("Launching %s.", _options.Command().c_str());
++            _error = BaseClass::Open(MaxConnectionTime);
+ 
+-        _error = _process.Launch(_options, &_pid);
++            if (_error == Core::ERROR_NONE) {
+ 
+-        TRACE_L1("Launched pid %d.", _pid);
++                CustomRequest exchange(string(_TXT("ATTACH")));
+ 
+-        if ((_error == Core::ERROR_NONE)  && (_pid > 0)) {
+-            string remoteName(Core::Directory::Normalize(supplicantBase) + interfaceName);
++                Submit(&exchange);
+ 
+-            if (Core::File(remoteName).Exists() == true) {
+-
+-                string data(
+-                        Core::Directory::Normalize(supplicantBase) +
+-                        _T("wpa_ctrl_") +
+-                        interfaceName + '_' +
+-                        Core::NumberType<uint32>(::getpid()).Text());
+-
+-                LocalNode(Core::NodeId(data.c_str()));
+-
+-                RemoteNode(Core::NodeId(remoteName.c_str()));
+-
+-                _error = BaseClass::Open(MaxConnectionTime);
+-
+-                if (_error == Core::ERROR_NONE) {
+-
+-                    CustomRequest exchange(string(_TXT("ATTACH")));
+-
+-                    Submit(&exchange);
+-
+-                    if ((exchange.Wait(MaxConnectionTime) == false) || (exchange.Response() != _T("OK"))) {
+-                        // We are hooked up and ready to go !!!
+-                        _error = Core::ERROR_COULD_NOT_SET_ADDRESS;
+-                    }
+-
+-                    Revoke(&exchange);
++                if ((exchange.Wait(MaxConnectionTime) == false) || (exchange.Response() != _T("OK"))) {
++                    // We are hooked up and ready to go !!!
++                    _error = Core::ERROR_COULD_NOT_SET_ADDRESS;
+                 }
++
++                Revoke(&exchange);
+             }
+-        } else {
+-            TRACE_L1("Failed to launch %s.", _options.Command().c_str());
+         }
+     }
+  
+@@ -624,10 +584,6 @@ public:
+             // Now abort, for anything still in there.
+             Abort();
+         }
+-
+-       // kill wpa_supplicant
+-       _process.Kill(false);
+-
+     }
+ 
+ public:
+@@ -730,6 +686,23 @@ public:
+ 
+         return (result);
+     }
++    inline uint32 Terminate() {
++        uint32 result = Core::ERROR_NONE;
++
++        CustomRequest exchange (string(_TXT("TERMINATE")));
++
++        Submit(&exchange);
++
++        if ((exchange.Wait(MaxConnectionTime) == false) || (exchange.Response() != _T("OK"))) {
++
++            result = Core::ERROR_ASYNC_ABORTED;
++        }
++
++        Revoke (&exchange);
++
++        return (result);
++    }
++ 
+     inline Config::Iterator Configs() {
+         Core::ProxyType<Controller> channel (Core::ProxyType<Controller>(*this));
+         Config::Iterator result(channel);
+@@ -1353,9 +1326,6 @@ private:
+     ScanRequest _scanRequest;
+     DetailRequest _detailRequest;
+     NetworkRequest _networkRequest;
+-    Core::Process _process;
+-    Core::Process::Options _options;
+-    uint32 _pid;
+ };
+ 
+ } }  // namespace WPEFramework::WPASupplicant
+diff --git a/WifiControl/WifiControl.cpp b/WifiControl/WifiControl.cpp
+index c3bce2d..2521656 100644
+--- a/WifiControl/WifiControl.cpp
++++ b/WifiControl/WifiControl.cpp
+@@ -58,6 +58,7 @@ namespace Plugin {
+         , _service(nullptr)
+         , _configurationStore()
+         , _sink(*this)
++        , _wpaSupplicant()
+         , _controller()
+     {
+     }
+@@ -68,35 +69,68 @@ namespace Plugin {
+         ASSERT(service != nullptr);
+         ASSERT(_controller.IsValid() == false);
+ 
++        string result;
+         Config config;
+         config.FromString(service->ConfigLine());
+         _skipURL = static_cast<uint8>(service->WebPrefix().length());
+         _service = service;
+ 
+-        _controller = WPASupplicant::Controller::Create (config.Connector.Value(), config.Interface.Value());
+-        
+-        if (_controller.IsValid() == true) {
+-            if (_controller->IsOperational() == false) {
+-                _controller.Release();
++        TRACE_L1("Starting the application for wifi called: [%s]", config.Application.Value().c_str());
++
++	if ((config.Application.Value().empty() == false) && (::strncmp(config.Application.Value().c_str(), _TXT("null")) != 0)) {
++            if (_wpaSupplicant.Lauch (config.Connector.Value(), config.Interface.Value(), 3) != Core::ERROR_NONE) {
++                result = _T("Could not start WPA_SUPPLICANT");
+             }
+-            else {
+-                _configurationStore = service->PersistentPath() + "wpa_supplicant.conf";
+-                _controller->Callback(&_sink);
+-                _controller->Scan();
++        }
++        if (result.empty() == true) {
++            _controller = WPASupplicant::Controller::Create (config.Connector.Value(), config.Interface.Value());
++        
++            if (_controller.IsValid() == true) {
++                if (_controller->IsOperational() == false) {
++                    _controller.Release();
++                    result = _T("Could not establish a link with WPA_SUPPLICANT");
++                }
++                else {
++                    _configurationStore = service->PersistentPath() + "wpa_supplicant.conf";
++                    _controller->Callback(&_sink);
++                    _controller->Scan();
++
++                    Core::File configFile(_configurationStore);
++
++                    if (configFile.Open(true) == true) {
++                        ConfigList configs;
++                        configs.FromFile(configFile);
++
++                        // iterator over the list and write back
++                        auto index (configs.Configs.Elements());
++
++                        while (index.Next()) {
++
++                            WPASupplicant::Config profile (_controller->Create(SSIDDecode(index.Current().SSID.Value())));
++
++                            ASSERT(index.Current().SSID.Value().empty() == false);
++
++                            Update (profile, index.Current());
++                        }
++                    }
++                }
+             }
+         }
+ 
+         TRACE_L1("Config path = %s", _configurationStore.c_str());
+ 
+         // On success return empty, to indicate there is no error text.
+-        return (_controller.IsValid() ? _T("") : _T("Could not establish a link with WPA_SUPPLICANT"));
++        return (result);
+     }
+ 
+     /* virtual */ void WifiControl::Deinitialize(PluginHost::IShell* service)
+     {
+         _controller->Callback(nullptr);
++        _controller->Terminate();
+         _controller.Release();
+ 
++        _wpaSupplicant.Terminate();
++        
+         ASSERT(_service == service);
+         _service = nullptr;
+     }
+@@ -250,14 +284,28 @@ namespace Plugin {
+                         _controller->Connect(SSIDDecode(index.Current().Text()));
+                     }
+                 } else if (index.Current().Text() == _T("Store")) {
+-                    result->ErrorCode = Web::STATUS_OK;
+-                    result->Message = _T("Store started.");
+-                    // StoreNetworkEntries();
++                    Core::File configFile(_configurationStore);
++
++                    if (configFile.Create() != true) {
++                        result->ErrorCode = Web::STATUS_BAD_REQUEST;
++                        result->Message = _T("Could not store the information.");
++
++                    }
++                    else {
++                        result->ErrorCode = Web::STATUS_OK;
++                        result->Message = _T("Store started.");
++
++                        WifiControl::ConfigList configs;
++                        WPASupplicant::Config::Iterator list (_controller->Configs());
++                        configs.Set(list);
++                        configs.ToFile(configFile);
++                    }
++
+                 } else if ( (index.Current().Text() == _T("Debug")) && (index.Next() == true)) {
+                     string textNumber(index.Current().Text());
+                     uint32 number (Core::NumberType<uint32>(Core::TextFragment(textNumber.c_str(), textNumber.length()))); 
+                     result->ErrorCode = Web::STATUS_OK;
+-                    result->Message = _T("Store started.");
++                    result->Message = _T("Debug level set.");
+                     _controller->Debug(number);
+                 }
+             } 
+@@ -327,8 +375,20 @@ namespace Plugin {
+ 
+     void WifiControl::WifiEvent (const WPASupplicant::Controller::events& event) {
+         Core::EnumerateType<WPASupplicant::Controller::events> what (event);
+-        printf("======> WPASupplicant notification: %s\n", what.Data());
+         TRACE(Trace::Information, (_T("WPASupplicant notification: %s"), what.Data()));
++       
++        if (event == WPASupplicant::Controller::CTRL_EVENT_SCAN_RESULTS) {
++            WifiControl::NetworkList networks;
++            WPASupplicant::Network::Iterator list (_controller->Networks());
++
++            networks.Set(list);
++
++            string message;
++
++            networks.ToString(message);
++
++            _service->Notify(message);
++        }
+     }
+ 
+ } // namespace Plugin
+diff --git a/WifiControl/WifiControl.h b/WifiControl/WifiControl.h
+index 4469c99..5f5f06f 100644
+--- a/WifiControl/WifiControl.h
++++ b/WifiControl/WifiControl.h
+@@ -31,6 +31,107 @@ namespace Plugin {
+         private:
+             WifiControl& _parent;
+         };
++        class WifiDriver {
++        private:
++            WifiDriver (const WifiDriver&) = delete;
++            WifiDriver& operator= (const WifiDriver&) = delete;
++
++            class ALive : public Core::StreamType<Core::SocketDatagram> {
++            private:
++                ALive(const ALive&) = delete;
++                ALive& operator= (const ALive&) = delete;
++
++            public:
++                ALive () 
++                    : Core::StreamType<Core::SocketDatagram>(false, Core::NodeId(), Core::NodeId(), 256, 256) {
++                }
++                ~ALive() {
++                }
++
++            public:
++                inline uint32 WaitForResponse (const Core::NodeId& local, const Core::NodeId& remote) {
++
++                    uint32 result = Core::ERROR_TIMEDOUT;
++                    LocalNode(local);
++                    RemoteNode(remote);
++
++                    if (Core::StreamType<Core::SocketDatagram>::Open(100) == Core::ERROR_NONE) {
++                        _send = true;
++                    }
++                }
++
++                virtual uint16 SendData(uint8* dataFrame, const uint16 maxSendSize) override {
++                    if (_send == true) {
++                        _send = false;
++                        ::memcpy (dataFrame, _TXT("PING"));
++                    }
++                }
++
++                virtual uint16 ReceiveData(uint8* dataFrame, const uint16 receivedSize) {
++                }
++
++            private:
++                bool _send;
++            };
++
++        public:
++            WifiDriver () 
++                : _interfaceName()
++                , _connector() 
++                , _process(true) {
++            }
++            ~WifiDriver () {
++            }
++
++        public:
++            uint32 Lauch (const string& connector, const string& interfaceName, const uint16 waitTime) {
++                _interfaceName = interfaceName;
++                _connector = connector;
++
++                Core::Process::Options options(_T("/usr/sbin/wpa_supplicant"));
++                /* interface name *mandatory */
++                options.Set(_T("i") + interfaceName);
++
++                /* ctrl_interface parameter *mandatory */
++                options.Set(_T("C") + _connector);
++
++                /* driver name (can be multiple drivers: nl80211,wext) *optional */
++                options.Set(_T("Dnl80211"));
++
++                /* global ctrl_interface group */
++                options.Set(_T("G0"));
++
++                TRACE_L1("Launching %s.", options.Command().c_str());
++                uint32 result = _process.Launch(options, &_pid);
++
++		if (result == Core::ERROR_NONE) {
++
++                    uint32 slices = (waitTime * 10);
++
++                    // Wait till we see the socket being available.
++		    while ((slices != 0) && (_process.IsActive() == true) && (Core::File(_connector).Exists() == false)) {
++			slices--;
++                        ::SleepMs(100);
++                    }
++
++                    if ( (slices == 0) || (_process.IsActive() == false) ) {
++                        _process.Kill(false);
++                        result = Core::ERROR_TIMEDOUT;
++                    }
++                }
++
++                return (result);
++            }
++            inline void Terminate() {
++                _process.Kill(false);
++            }
++
++        private:
++            string _interfaceName;
++            string _connector;
++            Core::Process _process;
++            uint32 _pid;
++        };
+ 
+     public:
+         class Config : public Core::JSON::Container {
+@@ -42,9 +143,11 @@ namespace Plugin {
+             Config()
+                 : Connector(_T("/var/run/wpa_supplicant"))
+                 , Interface(_T("wlan0"))
++		, Application(_T("/usr/sbin/wpa_supplicant"))
+             {
+                 Add(_T("connector"), &Connector);
+                 Add(_T("interface"), &Interface);
++                Add(_T("application"), &Application);
+             }
+             virtual ~Config()
+             {
+@@ -53,6 +156,7 @@ namespace Plugin {
+         public:
+             Core::JSON::String Connector;
+             Core::JSON::String Interface;
++            Core::JSON::String Application;
+         };
+ 
+         class Status : public Core::JSON::Container {
+@@ -385,6 +489,7 @@ namespace Plugin {
+         PluginHost::IShell* _service;
+         string _configurationStore;
+         Sink _sink;
++        WifiDriver _wpaSupplicant;
+         Core::ProxyType<WPASupplicant::Controller> _controller;
+     };
+ 

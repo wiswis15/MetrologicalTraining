@@ -1,0 +1,4388 @@
+commit d340ad28260c9a2dc6d1ec69146bd8fcfe5f54a8
+Author: Sander van der Maar <sandervandermaar@gmail.com>
+Date:   Mon Feb 26 17:06:36 2018 +0100
+
+    [OpenCDMi] Removing DRMs, they are now in seperate projects
+
+diff --git a/OpenCDMi/CMakeLists.txt b/OpenCDMi/CMakeLists.txt
+index 6ba6d29..7680543 100644
+--- a/OpenCDMi/CMakeLists.txt
++++ b/OpenCDMi/CMakeLists.txt
+@@ -15,8 +15,6 @@ set(PLUGIN_SOURCES
+ 
+ include(default_targets) # This is a regular plugin no need to edit the defaults
+ 
+-add_subdirectory(DRM)
+-
+ set(preconditions Provisioning)
+ 
+ write_config(${PLUGIN_NAME})
+diff --git a/OpenCDMi/DRM/CMakeLists.txt b/OpenCDMi/DRM/CMakeLists.txt
+deleted file mode 100644
+index 4136a40..0000000
+--- a/OpenCDMi/DRM/CMakeLists.txt
++++ /dev/null
+@@ -1,22 +0,0 @@
+-cmake_minimum_required(VERSION 2.8)
+-
+-option(PLUGIN_OPENCDMI_PLAYREADY "Include Microsoft PlayReady drm" OFF)
+-option(PLUGIN_OPENCDMI_WIDEVINE "Include Google WideVide drm" OFF)
+-option(PLUGIN_OPENCDMI_CLEARKEY "Include ClearKey drm" OFF)
+-option(PLUGIN_OPENCDMI_PLAYREADY_NEXUS "Include Nexus PlayReady drm" OFF)
+-
+-if(PLUGIN_OPENCDMI_PLAYREADY)
+-    add_subdirectory (playready)
+-endif(PLUGIN_OPENCDMI_PLAYREADY)
+-
+-if(PLUGIN_OPENCDMI_CLEARKEY)
+-    add_subdirectory (clearkey)
+-endif(PLUGIN_OPENCDMI_CLEARKEY)
+-
+-if(PLUGIN_OPENCDMI_WIDEVINE)
+-    add_subdirectory (widevine)
+-endif(PLUGIN_OPENCDMI_WIDEVINE)
+-
+-if(PLUGIN_OPENCDMI_PLAYREADY_NEXUS)
+-    add_subdirectory (playready_nexus)
+-endif(PLUGIN_OPENCDMI_PLAYREADY_NEXUS)
+diff --git a/OpenCDMi/DRM/clearkey/CMakeLists.txt b/OpenCDMi/DRM/clearkey/CMakeLists.txt
+deleted file mode 100644
+index c79bdd5..0000000
+--- a/OpenCDMi/DRM/clearkey/CMakeLists.txt
++++ /dev/null
+@@ -1,27 +0,0 @@
+-cmake_minimum_required(VERSION 2.8)
+-
+-set(DRM_PLUGIN_NAME ClearKey)
+-
+-find_package(ClearKey REQUIRED)
+-
+-file(GLOB DRM_PLUGIN_INCLUDES *.h)
+-
+-set(DRM_PLUGIN_LIBS 
+-    ${CLEARKEY_LIBRARIES})
+-
+-set(DRM_PLUGIN_SOURCES 
+-    MediaSession.cpp 
+-    MediaSystem.cpp
+-    json_web_key.cpp
+-    jsmn/jsmn.c
+-    )
+-
+-# add the library
+-add_library(${DRM_PLUGIN_NAME} SHARED ${DRM_PLUGIN_SOURCES})
+-target_compile_definitions(${DRM_PLUGIN_NAME} PRIVATE ${CLEARKEY_FLAGS})
+-target_include_directories(${DRM_PLUGIN_NAME} PRIVATE ${CEARKEY_INCLUDE_DIRS} "./jsmn")
+-target_link_libraries(${DRM_PLUGIN_NAME} ${DRM_PLUGIN_LIBS})
+-set_target_properties(${DRM_PLUGIN_NAME} PROPERTIES SUFFIX ".drm")
+-set_target_properties(${DRM_PLUGIN_NAME} PROPERTIES PREFIX "")
+-
+-install(TARGETS ${DRM_PLUGIN_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX}/share/WPEFramework/${PLUGIN_NAME})
+diff --git a/OpenCDMi/DRM/clearkey/MediaSession.cpp b/OpenCDMi/DRM/clearkey/MediaSession.cpp
+deleted file mode 100644
+index 05c4051..0000000
+--- a/OpenCDMi/DRM/clearkey/MediaSession.cpp
++++ /dev/null
+@@ -1,248 +0,0 @@
+-/*
+- * Copyright 2014 Fraunhofer FOKUS
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-#include "MediaSession.h"
+-#include "json_web_key.h"
+-#include "keypairs.h"
+-
+-#include <assert.h>
+-#include <iostream>
+-#include <openssl/aes.h>
+-#include <openssl/evp.h>
+-#include <pthread.h>
+-#include <sstream>
+-#include <string>
+-#include <string.h>
+-
+-#define DESTINATION_URL_PLACEHOLDER "http://no-valid-license-server"
+-#define NYI_KEYSYSTEM "keysystem-placeholder"
+-#define K_DECRYPTION_KEY_SIZE 16
+-
+-using namespace std;
+-
+-namespace CDMi {
+-
+-static media::KeyIdAndKeyPairs g_keys;
+-uint32_t MediaKeySession::s_sessionCnt = 10;
+-
+-
+-static void hex_print(const void *pv, size_t len) {
+-  const unsigned char *p = (const unsigned char*)pv;
+-  if (!pv)
+-    printf("NULL");
+-  else
+-  {
+-    size_t i = 0;
+-    for (; i<len; ++i)
+-      printf("%02X ", *p++);
+-  }
+-  printf("\n");
+-}
+-
+-static std::string keyIdAndKeyPairsToJSON(media::KeyIdAndKeyPairs *g_keys) {
+-  /* FIXME: This JSON consturctor is for proof of concept only.
+-  * We need to add a proper JSON library.
+-  */
+-  ostringstream result;
+-  result << "{ ";
+-  for (std::vector<media::KeyIdAndKeyPair>::iterator it = g_keys->begin(); it != g_keys->end(); ++it)
+-  {
+-    result <<  "\""  << it->first  << "\" : \"" << MEDIA_KEY_STATUS_USABLE << "\"\n";
+-  }
+-  result  << "}";
+-  return result.str();
+-}
+-
+-const char* MediaKeySession::CreateSessionId() {
+-  const char *tmp;
+-  stringstream strs;
+-  strs << s_sessionCnt;
+-  string tmp_str = strs.str();
+-  tmp = tmp_str.c_str();
+-
+-  char *buffer = new char[tmp_str.length()]();
+-  strcpy(buffer, tmp);
+-
+-  s_sessionCnt += 1;
+-
+-  return const_cast<char*>(buffer);
+-}
+-
+-MediaKeySession::MediaKeySession(void) {
+-  m_sessionId = MediaKeySession::CreateSessionId();
+-  cout << "creating mediakeysession with id: " << m_sessionId << endl;
+-}
+-
+-MediaKeySession::~MediaKeySession(void) {}
+-
+-void MediaKeySession::Run(const IMediaKeySessionCallback *f_piMediaKeySessionCallback) {
+-  int ret;
+-  pthread_t thread;
+-
+-  cout << "#mediakeysession.Run" << endl;
+-
+-  if (f_piMediaKeySessionCallback) {
+-    m_piCallback = const_cast<IMediaKeySessionCallback*>(f_piMediaKeySessionCallback);
+-
+-    ret = pthread_create(&thread, nullptr, MediaKeySession::_CallRunThread, this);
+-    if (ret == 0) {
+-      pthread_detach(thread);
+-    } else {
+-      cout << "#mediakeysession.Run: err: could not create thread" << endl;
+-      return;
+-    }
+-  } else {
+-    cout << "#mediakeysession.Run: err: MediaKeySessionCallback NULL?" << endl;
+-  }
+-}
+-
+-void* MediaKeySession::_CallRunThread(void *arg) {
+-  return ((MediaKeySession*)arg)->RunThread(1);
+-}
+-
+-void* MediaKeySession::_CallRunThread2(void *arg) {
+-  return ((MediaKeySession*)arg)->RunThread(2);
+-}
+-
+-void* MediaKeySession::RunThread(int f_i) {
+-  cout << "#mediakeysession._RunThread" << endl;
+-  const char *message = "stub-message";
+-  if (f_i == 1) {
+-    m_piCallback->OnKeyMessage((const uint8_t*)message, strlen(message), const_cast<char*>(DESTINATION_URL_PLACEHOLDER));
+-  } else {
+-    m_piCallback->OnKeyReady();
+-  }
+-}
+-
+-CDMi_RESULT MediaKeySession::Load(void) {
+-  return CDMi_S_FALSE;
+-}
+-
+-void MediaKeySession::Update(
+-    const uint8_t *f_pbKeyMessageResponse,
+-    uint32_t f_cbKeyMessageResponse) {
+-  int ret;
+-  pthread_t thread;
+-  std::string keys_updated;
+-
+-  cout << "#mediakeysession.Run" << endl;
+-  std::string key_string(reinterpret_cast<const char*>(f_pbKeyMessageResponse), f_cbKeyMessageResponse);
+-  // Session type is set to "0". We keep the function signature to
+-  // match Chromium's ExtractKeysFromJWKSet(...) function
+-  media::ExtractKeysFromJWKSet(key_string, &g_keys, 0);
+-
+-  ret = pthread_create(&thread, NULL, MediaKeySession::_CallRunThread2, this);
+-  if (!ret) {
+-    pthread_detach(thread);
+-  } else {
+-    cout << "#mediakeysession.Run: err: could not create thread" << endl;
+-    return;
+-  }
+-  keys_updated = keyIdAndKeyPairsToJSON(&g_keys);
+-  m_piCallback->OnKeyStatusUpdate(keys_updated.data());
+-}
+-
+-CDMi_RESULT MediaKeySession::Remove(void) {
+-  return CDMi_S_FALSE;
+-}
+-
+-CDMi_RESULT MediaKeySession::Close(void) {}
+-
+-const char* MediaKeySession::GetSessionId(void) const {
+-  cout <<"Inside GetSessionId"<< endl;
+-  return m_sessionId;
+-}
+-
+-const char* MediaKeySession::GetKeySystem(void) const {
+-  // FIXME:(fhg):
+-  return NYI_KEYSYSTEM;
+-}
+-
+-CDMi_RESULT MediaKeySession::Init(
+-    int32_t licenseType,
+-    const char *f_pwszInitDataType,
+-    const uint8_t *f_pbInitData,
+-    uint32_t f_cbInitData,
+-    const uint8_t *f_pbCDMData,
+-    uint32_t f_cbCDMData) {
+-  return CDMi_SUCCESS;
+-}
+-
+-CDMi_RESULT MediaKeySession::Decrypt(
+-    const uint8_t *f_pbSessionKey,
+-    uint32_t f_cbSessionKey,
+-    const uint32_t *f_pdwSubSampleMapping,
+-    uint32_t f_cdwSubSampleMapping,
+-    const uint8_t *f_pbIV,
+-    uint32_t f_cbIV,
+-    const uint8_t *f_pbData,
+-    uint32_t f_cbData,
+-    uint32_t *f_pcbOpaqueClearContent,
+-    uint8_t **f_ppbOpaqueClearContent) {
+-  AES_KEY aes_key;
+-  uint8_t *out; /* Faked secure buffer */
+-  const char *key;
+-
+-  cout << "Inside MediaKeySession::Decrypt "<< endl;
+-  uint8_t ivec[AES_BLOCK_SIZE] = { 0 };
+-  uint8_t ecount_buf[AES_BLOCK_SIZE] = { 0 };
+-  unsigned int block_offset = 0;
+-
+-
+-  assert(f_cbIV <  AES_BLOCK_SIZE);
+-
+-  if (!f_pcbOpaqueClearContent) {
+-    cout << "ERROR: f_pcbOpaqueClearContent is NULL" << endl;
+-    return -1;
+-  }
+-
+-  out = (uint8_t*) malloc(f_cbData * sizeof(uint8_t));
+-
+-  if (g_keys.size() != 1) {
+-    cout << "FIXME: We support only one key at the moment. Number keys: " << g_keys.size()<< endl;
+-  }
+-
+-  if ( (g_keys[0].second).size() != K_DECRYPTION_KEY_SIZE) {
+-    cout << "ERROR: Wrong key size" << endl;
+-    goto fail;
+-  }
+-
+-  key = (g_keys[0].second).data();
+-
+-  AES_set_encrypt_key(reinterpret_cast<const unsigned char*>(key), strlen(key) * 8, &aes_key);
+-
+-  memcpy(&(ivec[0]), f_pbIV, f_cbIV);
+-
+-  AES_ctr128_encrypt(reinterpret_cast<const unsigned char*>(f_pbData), out, f_cbData, &aes_key, ivec, ecount_buf, &block_offset);
+-
+-  /* Return clear content */
+-  *f_pcbOpaqueClearContent = f_cbData;
+-  *f_ppbOpaqueClearContent = out;
+-
+-  return CDMi_SUCCESS;
+-fail:
+-   free(out);
+-   return -1;
+-}
+-
+-CDMi_RESULT MediaKeySession::ReleaseClearContent(
+-    const uint8_t *f_pbSessionKey,
+-    uint32_t f_cbSessionKey,
+-    const uint32_t  f_cbClearContentOpaque,
+-    uint8_t  *f_pbClearContentOpaque ){
+-  free(f_pbClearContentOpaque);
+-}
+-}  // namespace CDMi
+diff --git a/OpenCDMi/DRM/clearkey/MediaSession.h b/OpenCDMi/DRM/clearkey/MediaSession.h
+deleted file mode 100644
+index fc1fd31..0000000
+--- a/OpenCDMi/DRM/clearkey/MediaSession.h
++++ /dev/null
+@@ -1,88 +0,0 @@
+-/*
+- * Copyright 2014 Fraunhofer FOKUS
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-#pragma once
+-
+-#include "cdmi.h"
+-
+-namespace CDMi
+-{
+-
+-class MediaKeySession : public IMediaKeySession
+-{
+-public:
+-    MediaKeySession(void);
+-    virtual ~MediaKeySession(void);
+-
+-    virtual void Run(
+-        const IMediaKeySessionCallback *f_piMediaKeySessionCallback);
+-
+-    void* RunThread(int f_i);
+-
+-    virtual CDMi_RESULT Load();
+-
+-    virtual void Update(
+-        const uint8_t *f_pbKeyMessageResponse,
+-        uint32_t f_cbKeyMessageResponse);
+-
+-    virtual CDMi_RESULT Remove();
+-
+-    virtual CDMi_RESULT Close(void);
+-
+-    virtual const char *GetSessionId(void) const;
+-
+-    virtual const char *GetKeySystem(void) const;
+-
+-    CDMi_RESULT Init(
+-        int32_t licenseType,
+-        const char *f_pwszInitDataType,
+-        const uint8_t *f_pbInitData,
+-        uint32_t f_cbInitData,
+-        const uint8_t *f_pbCDMData,
+-        uint32_t f_cbCDMData);
+-
+-    CDMi_RESULT Decrypt(
+-        const uint8_t *f_pbSessionKey,
+-        uint32_t f_cbSessionKey,
+-        const uint32_t *f_pdwSubSampleMapping,
+-        uint32_t f_cdwSubSampleMapping,
+-        const uint8_t *f_pbIV,
+-        uint32_t f_cbIV,
+-        const uint8_t *f_pbData,
+-        uint32_t f_cbData,
+-        uint32_t *f_pcbOpaqueClearContent,
+-        uint8_t **f_ppbOpaqueClearContent);
+-
+-    virtual CDMi_RESULT ReleaseClearContent(
+-        const uint8_t *f_pbSessionKey,
+-        uint32_t f_cbSessionKey,
+-        const uint32_t  f_cbClearContentOpaque,
+-        uint8_t  *f_pbClearContentOpaque );
+-
+-private:
+-    static void* _CallRunThread(
+-        void *arg);
+-
+-    static void* _CallRunThread2(
+-        void *arg);
+-    static const char* CreateSessionId();
+-
+-private:
+-    const char *m_sessionId;
+-    static uint32_t s_sessionCnt;
+-    IMediaKeySessionCallback *m_piCallback;
+-};
+-
+-}  // namespace CDMi
+diff --git a/OpenCDMi/DRM/clearkey/MediaSystem.cpp b/OpenCDMi/DRM/clearkey/MediaSystem.cpp
+deleted file mode 100644
+index 3cd2543..0000000
+--- a/OpenCDMi/DRM/clearkey/MediaSystem.cpp
++++ /dev/null
+@@ -1,89 +0,0 @@
+-/*
+- * Copyright 2014 Fraunhofer FOKUS
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-#include "cdmi.h"
+-#include "MediaSession.h"
+-
+-namespace CDMi {
+-
+-class ClearKey : public IMediaKeys {
+-private:
+-    ClearKey (const ClearKey&) = delete;
+-    ClearKey& operator= (const ClearKey&) = delete;
+-
+-public:
+-    ClearKey() {
+-    }
+-    virtual ~ClearKey() {
+-    }
+-
+-    virtual CDMi_RESULT CreateMediaKeySession(
+-        int32_t licenseType,
+-        const char *f_pwszInitDataType,
+-        const uint8_t *f_pbInitData,
+-        uint32_t f_cbInitData,
+-        const uint8_t *f_pbCDMData,
+-        uint32_t f_cbCDMData,
+-        IMediaKeySession **f_ppiMediaKeySession) {
+-
+-        CDMi_RESULT dr = CDMi_S_FALSE;
+-        MediaKeySession *poMediaKeySession = nullptr;
+-
+-        *f_ppiMediaKeySession = nullptr;
+-
+-        poMediaKeySession = new MediaKeySession();
+-
+-        dr = poMediaKeySession->Init(licenseType,
+-             f_pwszInitDataType,
+-             f_pbInitData,
+-             f_cbInitData,
+-             f_pbCDMData,
+-             f_cbCDMData);
+-
+-
+-        if (dr != CDMi_SUCCESS) {
+-            delete poMediaKeySession;
+-        }
+-        else {
+-            *f_ppiMediaKeySession = poMediaKeySession;
+-        }
+-
+-        return dr;
+-    }
+-
+-    virtual CDMi_RESULT SetServerCertificate(
+-        const uint8_t *f_pbServerCertificate,
+-        uint32_t f_cbServerCertificate) {
+-        return CDMi_S_FALSE;
+-    }
+-
+-    virtual CDMi_RESULT DestroyMediaKeySession(
+-        IMediaKeySession *f_piMediaKeySession) {
+-
+-        delete f_piMediaKeySession;
+-
+-        return CDMi_SUCCESS;
+-    }
+-};
+-
+-static SystemFactoryType<ClearKey> g_instance({"video/mock"});
+-
+-}  // namespace CDMi
+-
+-CDMi::ISystemFactory* GetSystemFactory() {
+-
+-    return (&CDMi::g_instance); 
+-}
+diff --git a/OpenCDMi/DRM/clearkey/jsmn/LICENSE b/OpenCDMi/DRM/clearkey/jsmn/LICENSE
+deleted file mode 100644
+index c84fb2e..0000000
+--- a/OpenCDMi/DRM/clearkey/jsmn/LICENSE
++++ /dev/null
+@@ -1,20 +0,0 @@
+-Copyright (c) 2010 Serge A. Zaitsev
+-
+-Permission is hereby granted, free of charge, to any person obtaining a copy
+-of this software and associated documentation files (the "Software"), to deal
+-in the Software without restriction, including without limitation the rights
+-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+-copies of the Software, and to permit persons to whom the Software is
+-furnished to do so, subject to the following conditions:
+-
+-The above copyright notice and this permission notice shall be included in
+-all copies or substantial portions of the Software.
+-
+-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+-THE SOFTWARE.
+-
+diff --git a/OpenCDMi/DRM/clearkey/jsmn/Makefile b/OpenCDMi/DRM/clearkey/jsmn/Makefile
+deleted file mode 100644
+index 5e3e2a9..0000000
+--- a/OpenCDMi/DRM/clearkey/jsmn/Makefile
++++ /dev/null
+@@ -1,35 +0,0 @@
+-# You can put your build options here
+--include config.mk
+-
+-all: libjsmn.a 
+-
+-libjsmn.a: jsmn.o
+-	$(AR) rc $@ $^
+-
+-%.o: %.c jsmn.h
+-	$(CC) -c $(CFLAGS) $< -o $@
+-
+-test: jsmn_test
+-	./jsmn_test
+-
+-jsmn_test: jsmn_test.o
+-	$(CC) $(LDFLAGS) -L. -ljsmn $< -o $@
+-
+-jsmn_test.o: jsmn_test.c libjsmn.a
+-
+-simple_example: example/simple.o libjsmn.a
+-	$(CC) $(LDFLAGS) $^ -o $@
+-
+-jsondump: example/jsondump.o libjsmn.a
+-	$(CC) $(LDFLAGS) $^ -o $@
+-
+-clean:
+-	rm -f jsmn.o jsmn_test.o example/simple.o
+-	rm -f jsmn_test
+-	rm -f jsmn_test.exe
+-	rm -f libjsmn.a
+-	rm -f simple_example
+-	rm -f jsondump
+-
+-.PHONY: all clean test
+-
+diff --git a/OpenCDMi/DRM/clearkey/jsmn/README.md b/OpenCDMi/DRM/clearkey/jsmn/README.md
+deleted file mode 100644
+index 353af94..0000000
+--- a/OpenCDMi/DRM/clearkey/jsmn/README.md
++++ /dev/null
+@@ -1,167 +0,0 @@
+-
+-JSMN
+-====
+-
+-jsmn (pronounced like 'jasmine') is a minimalistic JSON parser in C.  It can be
+-easily integrated into resource-limited or embedded projects.
+-
+-You can find more information about JSON format at [json.org][1]
+-
+-Library sources are available at [bitbucket.org/zserge/jsmn][2]
+-
+-The web page with some information about jsmn can be found at
+-[http://zserge.com/jsmn.html][3]
+-
+-Philosophy
+-----------
+-
+-Most JSON parsers offer you a bunch of functions to load JSON data, parse it
+-and extract any value by its name. jsmn proves that checking the correctness of
+-every JSON packet or allocating temporary objects to store parsed JSON fields
+-often is an overkill. 
+-
+-JSON format itself is extremely simple, so why should we complicate it?
+-
+-jsmn is designed to be	**robust** (it should work fine even with erroneous
+-data), **fast** (it should parse data on the fly), **portable** (no superfluous
+-dependencies or non-standard C extensions). An of course, **simplicity** is a
+-key feature - simple code style, simple algorithm, simple integration into
+-other projects.
+-
+-Features
+---------
+-
+-* compatible with C89
+-* no dependencies (even libc!)
+-* highly portable (tested on x86/amd64, ARM, AVR)
+-* about 200 lines of code
+-* extremely small code footprint
+-* API contains only 2 functions
+-* no dynamic memory allocation
+-* incremental single-pass parsing
+-* library code is covered with unit-tests
+-
+-Design
+-------
+-
+-The rudimentary jsmn object is a **token**. Let's consider a JSON string:
+-
+-	'{ "name" : "Jack", "age" : 27 }'
+-
+-It holds the following tokens:
+-
+-* Object: `{ "name" : "Jack", "age" : 27}` (the whole object)
+-* Strings: `"name"`, `"Jack"`, `"age"` (keys and some values)
+-* Number: `27`
+-
+-In jsmn, tokens do not hold any data, but point to token boundaries in JSON
+-string instead. In the example above jsmn will create tokens like: Object
+-[0..31], String [3..7], String [12..16], String [20..23], Number [27..29].
+-
+-Every jsmn token has a type, which indicates the type of corresponding JSON
+-token. jsmn supports the following token types:
+-
+-* Object - a container of key-value pairs, e.g.:
+-	`{ "foo":"bar", "x":0.3 }`
+-* Array - a sequence of values, e.g.:
+-	`[ 1, 2, 3 ]`
+-* String - a quoted sequence of chars, e.g.: `"foo"`
+-* Primitive - a number, a boolean (`true`, `false`) or `null`
+-
+-Besides start/end positions, jsmn tokens for complex types (like arrays
+-or objects) also contain a number of child items, so you can easily follow
+-object hierarchy.
+-
+-This approach provides enough information for parsing any JSON data and makes
+-it possible to use zero-copy techniques.
+-
+-Install
+--------
+-
+-To clone the repository you should have mercurial installed. Just run:
+-
+-	$ hg clone http://bitbucket.org/zserge/jsmn jsmn
+-
+-Repository layout is simple: jsmn.c and jsmn.h are library files, tests are in
+-the jsmn\_test.c, you will also find README, LICENSE and Makefile files inside.
+-
+-To build the library, run `make`. It is also recommended to run `make test`.
+-Let me know, if some tests fail.
+-
+-If build was successful, you should get a `libjsmn.a` library.
+-The header file you should include is called `"jsmn.h"`.
+-
+-API
+----
+-
+-Token types are described by `jsmntype_t`:
+-
+-	typedef enum {
+-		JSMN_PRIMITIVE = 0,
+-		JSMN_OBJECT = 1,
+-		JSMN_ARRAY = 2,
+-		JSMN_STRING = 3
+-	} jsmntype_t;
+-
+-**Note:** Unlike JSON data types, primitive tokens are not divided into
+-numbers, booleans and null, because one can easily tell the type using the
+-first character:
+-
+-* <code>'t', 'f'</code> - boolean 
+-* <code>'n'</code> - null
+-* <code>'-', '0'..'9'</code> - number
+-
+-Token is an object of `jsmntok_t` type:
+-
+-	typedef struct {
+-		jsmntype_t type; // Token type
+-		int start;       // Token start position
+-		int end;         // Token end position
+-		int size;        // Number of child (nested) tokens
+-	} jsmntok_t;
+-
+-**Note:** string tokens point to the first character after
+-the opening quote and the previous symbol before final quote. This was made 
+-to simplify string extraction from JSON data.
+-
+-All job is done by `jsmn_parser` object. You can initialize a new parser using:
+-
+-	jsmn_parser parser;
+-	jsmntok_t tokens[10];
+-
+-	jsmn_init(&parser);
+-
+-	// js - pointer to JSON string
+-	// tokens - an array of tokens available
+-	// 10 - number of tokens available
+-	jsmn_parse(&parser, js, tokens, 10);
+-
+-This will create a parser, and then it tries to parse up to 10 JSON tokens from
+-the `js` string.
+-
+-A non-negative reutrn value of `jsmn_parse` is the number of tokens actually
+-used by the parser.
+-Passing NULL instead of the tokens array would not store parsing results, but
+-instead the function will return the value of tokens needed to parse the given
+-string. This can be useful if you don't know yet how many tokens to allocate.
+-
+-If something goes wrong, you will get an error. Error will be one of these:
+-
+-* `JSMN_ERROR_INVAL` - bad token, JSON string is corrupted
+-* `JSMN_ERROR_NOMEM` - not enough tokens, JSON string is too large
+-* `JSMN_ERROR_PART` - JSON string is too short, expecting more JSON data
+-
+-If you get `JSON_ERROR_NOMEM`, you can re-allocate more tokens and call
+-`jsmn_parse` once more.  If you read json data from the stream, you can
+-periodically call `jsmn_parse` and check if return value is `JSON_ERROR_PART`.
+-You will get this error until you reach the end of JSON data.
+-
+-Other info
+-----------
+-
+-This software is distributed under [MIT license](http://www.opensource.org/licenses/mit-license.php),
+- so feel free to integrate it in your commercial products.
+-
+-[1]: http://www.json.org/
+-[2]: https://bitbucket.org/zserge/jsmn/wiki/Home
+-[3]: http://zserge.com/jsmn.html
+diff --git a/OpenCDMi/DRM/clearkey/jsmn/example/jsondump.c b/OpenCDMi/DRM/clearkey/jsmn/example/jsondump.c
+deleted file mode 100644
+index 3490bbf..0000000
+--- a/OpenCDMi/DRM/clearkey/jsmn/example/jsondump.c
++++ /dev/null
+@@ -1,112 +0,0 @@
+-#include <stdio.h>
+-#include <stdlib.h>
+-#include <string.h>
+-#include <errno.h>
+-#include "../jsmn.h"
+-
+-/*
+- * An example of reading JSON from stdin and printing its content to stdout.
+- * The output looks like YAML, but I'm not sure if it's really compatible.
+- */
+-
+-static int dump(const char *js, jsmntok_t *t, size_t count, int indent) {
+-	int i, j, k;
+-	if (count == 0) {
+-		return 0;
+-	}
+-	if (t->type == JSMN_PRIMITIVE) {
+-		printf("%.*s", t->end - t->start, js+t->start);
+-		return 1;
+-	} else if (t->type == JSMN_STRING) {
+-		printf("'%.*s'", t->end - t->start, js+t->start);
+-		return 1;
+-	} else if (t->type == JSMN_OBJECT) {
+-		printf("\n");
+-		j = 0;
+-		for (i = 0; i < t->size; i++) {
+-			for (k = 0; k < indent; k++) printf("  ");
+-			j += dump(js, t+1+j, count-j, indent+1);
+-			printf(": ");
+-			j += dump(js, t+1+j, count-j, indent+1);
+-			printf("\n");
+-		}
+-		return j+1;
+-	} else if (t->type == JSMN_ARRAY) {
+-		j = 0;
+-		printf("\n");
+-		for (i = 0; i < t->size; i++) {
+-			for (k = 0; k < indent-1; k++) printf("  ");
+-			printf("   - ");
+-			j += dump(js, t+1+j, count-j, indent+1);
+-			printf("\n");
+-		}
+-		return j+1;
+-	}
+-	return 0;
+-}
+-
+-int main() {
+-	int r;
+-	int eof_expected = 0;
+-	char *js = NULL;
+-	size_t jslen = 0;
+-	char buf[BUFSIZ];
+-
+-	jsmn_parser p;
+-	jsmntok_t *tok;
+-	size_t tokcount = 2;
+-
+-	/* Prepare parser */
+-	jsmn_init(&p);
+-
+-	/* Allocate some tokens as a start */
+-	tok = malloc(sizeof(*tok) * tokcount);
+-	if (tok == NULL) {
+-		fprintf(stderr, "malloc(): errno=%d\n", errno);
+-		return 3;
+-	}
+-
+-	for (;;) {
+-		/* Read another chunk */
+-		r = fread(buf, 1, sizeof(buf), stdin);
+-		if (r < 0) {
+-			fprintf(stderr, "fread(): %d, errno=%d\n", r, errno);
+-			return 1;
+-		}
+-		if (r == 0) {
+-			if (eof_expected != 0) {
+-				return 0;
+-			} else {
+-				fprintf(stderr, "fread(): unexpected EOF\n");
+-				return 2;
+-			}
+-		}
+-
+-		js = realloc(js, jslen + r + 1);
+-		if (js == NULL) {
+-			fprintf(stderr, "realloc(): errno=%d\n", errno);
+-			return 3;
+-		}
+-		strncpy(js + jslen, buf, r);
+-		jslen = jslen + r;
+-
+-again:
+-		r = jsmn_parse(&p, js, jslen, tok, tokcount);
+-		if (r < 0) {
+-			if (r == JSMN_ERROR_NOMEM) {
+-				tokcount = tokcount * 2;
+-				tok = realloc(tok, sizeof(*tok) * tokcount);
+-				if (tok == NULL) {
+-					fprintf(stderr, "realloc(): errno=%d\n", errno);
+-					return 3;
+-				}
+-				goto again;
+-			}
+-		} else {
+-			dump(js, tok, p.toknext, 0);
+-			eof_expected = 1;
+-		}
+-	}
+-
+-	return 0;
+-}
+diff --git a/OpenCDMi/DRM/clearkey/jsmn/example/simple.c b/OpenCDMi/DRM/clearkey/jsmn/example/simple.c
+deleted file mode 100644
+index a6f8e6a..0000000
+--- a/OpenCDMi/DRM/clearkey/jsmn/example/simple.c
++++ /dev/null
+@@ -1,75 +0,0 @@
+-#include <stdio.h>
+-#include <string.h>
+-#include "../jsmn.h"
+-
+-/*
+- * A small example of jsmn parsing when JSON structure is known and number of
+- * tokens is predictable.
+- */
+-
+-const char *JSON_STRING =
+-	"{\"user\": \"johndoe\", \"admin\": false, \"uid\": 1000,\n  "
+-	"\"groups\": [\"users\", \"wheel\", \"audio\", \"video\"]}";
+-
+-static int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
+-	if (tok->type == JSMN_STRING && (int) strlen(s) == tok->end - tok->start &&
+-			strncmp(json + tok->start, s, tok->end - tok->start) == 0) {
+-		return 0;
+-	}
+-	return -1;
+-}
+-
+-int main() {
+-	int i;
+-	int r;
+-	jsmn_parser p;
+-	jsmntok_t t[128]; /* We expect no more than 128 tokens */
+-
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, JSON_STRING, strlen(JSON_STRING), t, sizeof(t)/sizeof(t[0]));
+-	if (r < 0) {
+-		printf("Failed to parse JSON: %d\n", r);
+-		return 1;
+-	}
+-
+-	/* Assume the top-level element is an object */
+-	if (r < 1 || t[0].type != JSMN_OBJECT) {
+-		printf("Object expected\n");
+-		return 1;
+-	}
+-
+-	/* Loop over all keys of the root object */
+-	for (i = 1; i < r; i++) {
+-		if (jsoneq(JSON_STRING, &t[i], "user") == 0) {
+-			/* We may use strndup() to fetch string value */
+-			printf("- User: %.*s\n", t[i+1].end-t[i+1].start,
+-					JSON_STRING + t[i+1].start);
+-			i++;
+-		} else if (jsoneq(JSON_STRING, &t[i], "admin") == 0) {
+-			/* We may additionally check if the value is either "true" or "false" */
+-			printf("- Admin: %.*s\n", t[i+1].end-t[i+1].start,
+-					JSON_STRING + t[i+1].start);
+-			i++;
+-		} else if (jsoneq(JSON_STRING, &t[i], "uid") == 0) {
+-			/* We may want to do strtol() here to get numeric value */
+-			printf("- UID: %.*s\n", t[i+1].end-t[i+1].start,
+-					JSON_STRING + t[i+1].start);
+-			i++;
+-		} else if (jsoneq(JSON_STRING, &t[i], "groups") == 0) {
+-			int j;
+-			printf("- Groups:\n");
+-			if (t[i+1].type != JSMN_ARRAY) {
+-				continue; /* We expect groups to be an array of strings */
+-			}
+-			for (j = 0; j < t[i+1].size; j++) {
+-				jsmntok_t *g = &t[i+j+2];
+-				printf("  * %.*s\n", g->end - g->start, JSON_STRING + g->start);
+-			}
+-			i += t[i+1].size + 1;
+-		} else {
+-			printf("Unexpected key: %.*s\n", t[i].end-t[i].start,
+-					JSON_STRING + t[i].start);
+-		}
+-	}
+-	return 0;
+-}
+diff --git a/OpenCDMi/DRM/clearkey/jsmn/jsmn.c b/OpenCDMi/DRM/clearkey/jsmn/jsmn.c
+deleted file mode 100644
+index a0f4f69..0000000
+--- a/OpenCDMi/DRM/clearkey/jsmn/jsmn.c
++++ /dev/null
+@@ -1,311 +0,0 @@
+-#include <stdlib.h>
+-
+-#include "jsmn.h"
+-
+-/**
+- * Allocates a fresh unused token from the token pull.
+- */
+-static jsmntok_t *jsmn_alloc_token(jsmn_parser *parser,
+-		jsmntok_t *tokens, size_t num_tokens) {
+-	jsmntok_t *tok;
+-	if (parser->toknext >= num_tokens) {
+-		return NULL;
+-	}
+-	tok = &tokens[parser->toknext++];
+-	tok->start = tok->end = -1;
+-	tok->size = 0;
+-#ifdef JSMN_PARENT_LINKS
+-	tok->parent = -1;
+-#endif
+-	return tok;
+-}
+-
+-/**
+- * Fills token type and boundaries.
+- */
+-static void jsmn_fill_token(jsmntok_t *token, jsmntype_t type,
+-                            int start, int end) {
+-	token->type = type;
+-	token->start = start;
+-	token->end = end;
+-	token->size = 0;
+-}
+-
+-/**
+- * Fills next available token with JSON primitive.
+- */
+-static jsmnerr_t jsmn_parse_primitive(jsmn_parser *parser, const char *js,
+-		size_t len, jsmntok_t *tokens, size_t num_tokens) {
+-	jsmntok_t *token;
+-	int start;
+-
+-	start = parser->pos;
+-
+-	for (; parser->pos < len && js[parser->pos] != '\0'; parser->pos++) {
+-		switch (js[parser->pos]) {
+-#ifndef JSMN_STRICT
+-			/* In strict mode primitive must be followed by "," or "}" or "]" */
+-			case ':':
+-#endif
+-			case '\t' : case '\r' : case '\n' : case ' ' :
+-			case ','  : case ']'  : case '}' :
+-				goto found;
+-		}
+-		if (js[parser->pos] < 32 || js[parser->pos] >= 127) {
+-			parser->pos = start;
+-			return JSMN_ERROR_INVAL;
+-		}
+-	}
+-#ifdef JSMN_STRICT
+-	/* In strict mode primitive must be followed by a comma/object/array */
+-	parser->pos = start;
+-	return JSMN_ERROR_PART;
+-#endif
+-
+-found:
+-	if (tokens == NULL) {
+-		parser->pos--;
+-		return 0;
+-	}
+-	token = jsmn_alloc_token(parser, tokens, num_tokens);
+-	if (token == NULL) {
+-		parser->pos = start;
+-		return JSMN_ERROR_NOMEM;
+-	}
+-	jsmn_fill_token(token, JSMN_PRIMITIVE, start, parser->pos);
+-#ifdef JSMN_PARENT_LINKS
+-	token->parent = parser->toksuper;
+-#endif
+-	parser->pos--;
+-	return 0;
+-}
+-
+-/**
+- * Filsl next token with JSON string.
+- */
+-static jsmnerr_t jsmn_parse_string(jsmn_parser *parser, const char *js,
+-		size_t len, jsmntok_t *tokens, size_t num_tokens) {
+-	jsmntok_t *token;
+-
+-	int start = parser->pos;
+-
+-	parser->pos++;
+-
+-	/* Skip starting quote */
+-	for (; parser->pos < len && js[parser->pos] != '\0'; parser->pos++) {
+-		char c = js[parser->pos];
+-
+-		/* Quote: end of string */
+-		if (c == '\"') {
+-			if (tokens == NULL) {
+-				return 0;
+-			}
+-			token = jsmn_alloc_token(parser, tokens, num_tokens);
+-			if (token == NULL) {
+-				parser->pos = start;
+-				return JSMN_ERROR_NOMEM;
+-			}
+-			jsmn_fill_token(token, JSMN_STRING, start+1, parser->pos);
+-#ifdef JSMN_PARENT_LINKS
+-			token->parent = parser->toksuper;
+-#endif
+-			return 0;
+-		}
+-
+-		/* Backslash: Quoted symbol expected */
+-		if (c == '\\' && parser->pos + 1 < len) {
+-			int i;
+-			parser->pos++;
+-			switch (js[parser->pos]) {
+-				/* Allowed escaped symbols */
+-				case '\"': case '/' : case '\\' : case 'b' :
+-				case 'f' : case 'r' : case 'n'  : case 't' :
+-					break;
+-				/* Allows escaped symbol \uXXXX */
+-				case 'u':
+-					parser->pos++;
+-					for(i = 0; i < 4 && parser->pos < len && js[parser->pos] != '\0'; i++) {
+-						/* If it isn't a hex character we have an error */
+-						if(!((js[parser->pos] >= 48 && js[parser->pos] <= 57) || /* 0-9 */
+-									(js[parser->pos] >= 65 && js[parser->pos] <= 70) || /* A-F */
+-									(js[parser->pos] >= 97 && js[parser->pos] <= 102))) { /* a-f */
+-							parser->pos = start;
+-							return JSMN_ERROR_INVAL;
+-						}
+-						parser->pos++;
+-					}
+-					parser->pos--;
+-					break;
+-				/* Unexpected symbol */
+-				default:
+-					parser->pos = start;
+-					return JSMN_ERROR_INVAL;
+-			}
+-		}
+-	}
+-	parser->pos = start;
+-	return JSMN_ERROR_PART;
+-}
+-
+-/**
+- * Parse JSON string and fill tokens.
+- */
+-jsmnerr_t jsmn_parse(jsmn_parser *parser, const char *js, size_t len,
+-		jsmntok_t *tokens, unsigned int num_tokens) {
+-	jsmnerr_t r;
+-	int i;
+-	jsmntok_t *token;
+-	int count = 0;
+-
+-	for (; parser->pos < len && js[parser->pos] != '\0'; parser->pos++) {
+-		char c;
+-		jsmntype_t type;
+-
+-		c = js[parser->pos];
+-		switch (c) {
+-			case '{': case '[':
+-				count++;
+-				if (tokens == NULL) {
+-					break;
+-				}
+-				token = jsmn_alloc_token(parser, tokens, num_tokens);
+-				if (token == NULL)
+-					return JSMN_ERROR_NOMEM;
+-				if (parser->toksuper != -1) {
+-					tokens[parser->toksuper].size++;
+-#ifdef JSMN_PARENT_LINKS
+-					token->parent = parser->toksuper;
+-#endif
+-				}
+-				token->type = (c == '{' ? JSMN_OBJECT : JSMN_ARRAY);
+-				token->start = parser->pos;
+-				parser->toksuper = parser->toknext - 1;
+-				break;
+-			case '}': case ']':
+-				if (tokens == NULL)
+-					break;
+-				type = (c == '}' ? JSMN_OBJECT : JSMN_ARRAY);
+-#ifdef JSMN_PARENT_LINKS
+-				if (parser->toknext < 1) {
+-					return JSMN_ERROR_INVAL;
+-				}
+-				token = &tokens[parser->toknext - 1];
+-				for (;;) {
+-					if (token->start != -1 && token->end == -1) {
+-						if (token->type != type) {
+-							return JSMN_ERROR_INVAL;
+-						}
+-						token->end = parser->pos + 1;
+-						parser->toksuper = token->parent;
+-						break;
+-					}
+-					if (token->parent == -1) {
+-						break;
+-					}
+-					token = &tokens[token->parent];
+-				}
+-#else
+-				for (i = parser->toknext - 1; i >= 0; i--) {
+-					token = &tokens[i];
+-					if (token->start != -1 && token->end == -1) {
+-						if (token->type != type) {
+-							return JSMN_ERROR_INVAL;
+-						}
+-						parser->toksuper = -1;
+-						token->end = parser->pos + 1;
+-						break;
+-					}
+-				}
+-				/* Error if unmatched closing bracket */
+-				if (i == -1) return JSMN_ERROR_INVAL;
+-				for (; i >= 0; i--) {
+-					token = &tokens[i];
+-					if (token->start != -1 && token->end == -1) {
+-						parser->toksuper = i;
+-						break;
+-					}
+-				}
+-#endif
+-				break;
+-			case '\"':
+-				r = jsmn_parse_string(parser, js, len, tokens, num_tokens);
+-				if (r < 0) return r;
+-				count++;
+-				if (parser->toksuper != -1 && tokens != NULL)
+-					tokens[parser->toksuper].size++;
+-				break;
+-			case '\t' : case '\r' : case '\n' : case ' ':
+-				break;
+-			case ':':
+-				parser->toksuper = parser->toknext - 1;
+-				break;
+-			case ',':
+-				if (tokens != NULL &&
+-						tokens[parser->toksuper].type != JSMN_ARRAY &&
+-						tokens[parser->toksuper].type != JSMN_OBJECT) {
+-#ifdef JSMN_PARENT_LINKS
+-					parser->toksuper = tokens[parser->toksuper].parent;
+-#else
+-					for (i = parser->toknext - 1; i >= 0; i--) {
+-						if (tokens[i].type == JSMN_ARRAY || tokens[i].type == JSMN_OBJECT) {
+-							if (tokens[i].start != -1 && tokens[i].end == -1) {
+-								parser->toksuper = i;
+-								break;
+-							}
+-						}
+-					}
+-#endif
+-				}
+-				break;
+-#ifdef JSMN_STRICT
+-			/* In strict mode primitives are: numbers and booleans */
+-			case '-': case '0': case '1' : case '2': case '3' : case '4':
+-			case '5': case '6': case '7' : case '8': case '9':
+-			case 't': case 'f': case 'n' :
+-				/* And they must not be keys of the object */
+-				if (tokens != NULL) {
+-					jsmntok_t *t = &tokens[parser->toksuper];
+-					if (t->type == JSMN_OBJECT ||
+-							(t->type == JSMN_STRING && t->size != 0)) {
+-						return JSMN_ERROR_INVAL;
+-					}
+-				}
+-#else
+-			/* In non-strict mode every unquoted value is a primitive */
+-			default:
+-#endif
+-				r = jsmn_parse_primitive(parser, js, len, tokens, num_tokens);
+-				if (r < 0) return r;
+-				count++;
+-				if (parser->toksuper != -1 && tokens != NULL)
+-					tokens[parser->toksuper].size++;
+-				break;
+-
+-#ifdef JSMN_STRICT
+-			/* Unexpected char in strict mode */
+-			default:
+-				return JSMN_ERROR_INVAL;
+-#endif
+-		}
+-	}
+-
+-	for (i = parser->toknext - 1; i >= 0; i--) {
+-		/* Unmatched opened object or array */
+-		if (tokens[i].start != -1 && tokens[i].end == -1) {
+-			return JSMN_ERROR_PART;
+-		}
+-	}
+-
+-	return count;
+-}
+-
+-/**
+- * Creates a new parser based over a given  buffer with an array of tokens
+- * available.
+- */
+-void jsmn_init(jsmn_parser *parser) {
+-	parser->pos = 0;
+-	parser->toknext = 0;
+-	parser->toksuper = -1;
+-}
+-
+diff --git a/OpenCDMi/DRM/clearkey/jsmn/jsmn.h b/OpenCDMi/DRM/clearkey/jsmn/jsmn.h
+deleted file mode 100644
+index 95fb2ca..0000000
+--- a/OpenCDMi/DRM/clearkey/jsmn/jsmn.h
++++ /dev/null
+@@ -1,75 +0,0 @@
+-#ifndef __JSMN_H_
+-#define __JSMN_H_
+-
+-#include <stddef.h>
+-
+-#ifdef __cplusplus
+-extern "C" {
+-#endif
+-
+-/**
+- * JSON type identifier. Basic types are:
+- * 	o Object
+- * 	o Array
+- * 	o String
+- * 	o Other primitive: number, boolean (true/false) or null
+- */
+-typedef enum {
+-	JSMN_PRIMITIVE = 0,
+-	JSMN_OBJECT = 1,
+-	JSMN_ARRAY = 2,
+-	JSMN_STRING = 3
+-} jsmntype_t;
+-
+-typedef enum {
+-	/* Not enough tokens were provided */
+-	JSMN_ERROR_NOMEM = -1,
+-	/* Invalid character inside JSON string */
+-	JSMN_ERROR_INVAL = -2,
+-	/* The string is not a full JSON packet, more bytes expected */
+-	JSMN_ERROR_PART = -3
+-} jsmnerr_t;
+-
+-/**
+- * JSON token description.
+- * @param		type	type (object, array, string etc.)
+- * @param		start	start position in JSON data string
+- * @param		end		end position in JSON data string
+- */
+-typedef struct {
+-	jsmntype_t type;
+-	int start;
+-	int end;
+-	int size;
+-#ifdef JSMN_PARENT_LINKS
+-	int parent;
+-#endif
+-} jsmntok_t;
+-
+-/**
+- * JSON parser. Contains an array of token blocks available. Also stores
+- * the string being parsed now and current position in that string
+- */
+-typedef struct {
+-	unsigned int pos; /* offset in the JSON string */
+-	unsigned int toknext; /* next token to allocate */
+-	int toksuper; /* superior token node, e.g parent object or array */
+-} jsmn_parser;
+-
+-/**
+- * Create JSON parser over an array of tokens
+- */
+-void jsmn_init(jsmn_parser *parser);
+-
+-/**
+- * Run JSON parser. It parses a JSON data string into and array of tokens, each describing
+- * a single JSON object.
+- */
+-jsmnerr_t jsmn_parse(jsmn_parser *parser, const char *js, size_t len,
+-		jsmntok_t *tokens, unsigned int num_tokens);
+-
+-#ifdef __cplusplus
+-}
+-#endif
+-
+-#endif /* __JSMN_H_ */
+diff --git a/OpenCDMi/DRM/clearkey/jsmn/jsmn_test.c b/OpenCDMi/DRM/clearkey/jsmn/jsmn_test.c
+deleted file mode 100644
+index 3968859..0000000
+--- a/OpenCDMi/DRM/clearkey/jsmn/jsmn_test.c
++++ /dev/null
+@@ -1,608 +0,0 @@
+-#include <stdio.h>
+-#include <stdlib.h>
+-#include <string.h>
+-
+-static int test_passed = 0;
+-static int test_failed = 0;
+-
+-/* Terminate current test with error */
+-#define fail()	return __LINE__
+-
+-/* Successfull end of the test case */
+-#define done() return 0
+-
+-/* Check single condition */
+-#define check(cond) do { if (!(cond)) fail(); } while (0)
+-
+-/* Test runner */
+-static void test(int (*func)(void), const char *name) {
+-	int r = func();
+-	if (r == 0) {
+-		test_passed++;
+-	} else {
+-		test_failed++;
+-		printf("FAILED: %s (at line %d)\n", name, r);
+-	}
+-}
+-
+-#define TOKEN_EQ(t, tok_start, tok_end, tok_type) \
+-	((t).start == tok_start \
+-	 && (t).end == tok_end  \
+-	 && (t).type == (tok_type))
+-
+-#define TOKEN_STRING(js, t, s) \
+-	(strncmp(js+(t).start, s, (t).end - (t).start) == 0 \
+-	 && strlen(s) == (t).end - (t).start)
+-
+-#define TOKEN_PRINT(t) \
+-	printf("start: %d, end: %d, type: %d, size: %d\n", \
+-			(t).start, (t).end, (t).type, (t).size)
+-
+-#define JSMN_STRICT
+-#include "jsmn.c"
+-
+-int test_empty() {
+-	const char *js;
+-	int r;
+-	jsmn_parser p;
+-	jsmntok_t t[10];
+-
+-	js = "{}";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), t, 10);
+-	check(r >= 0);
+-	check(t[0].type == JSMN_OBJECT);
+-	check(t[0].start == 0 && t[0].end == 2);
+-
+-	js = "[]";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), t, 10);
+-	check(r >= 0);
+-	check(t[0].type == JSMN_ARRAY);
+-	check(t[0].start == 0 && t[0].end == 2);
+-
+-	js = "{\"a\":[]}";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), t, 10);
+-	check(r >= 0);
+-	check(t[0].type == JSMN_OBJECT && t[0].start == 0 && t[0].end == 8);
+-	check(t[1].type == JSMN_STRING && t[1].start == 2 && t[1].end == 3);
+-	check(t[2].type == JSMN_ARRAY && t[2].start == 5 && t[2].end == 7);
+-
+-	js = "[{},{}]";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), t, 10);
+-	check(r >= 0);
+-	check(t[0].type == JSMN_ARRAY && t[0].start == 0 && t[0].end == 7);
+-	check(t[1].type == JSMN_OBJECT && t[1].start == 1 && t[1].end == 3);
+-	check(t[2].type == JSMN_OBJECT && t[2].start == 4 && t[2].end == 6);
+-	return 0;
+-}
+-
+-int test_simple() {
+-	const char *js;
+-	int r;
+-	jsmn_parser p;
+-	jsmntok_t tokens[10];
+-
+-	js = "{\"a\": 0}";
+-
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r >= 0);
+-	check(TOKEN_EQ(tokens[0], 0, 8, JSMN_OBJECT));
+-	check(TOKEN_EQ(tokens[1], 2, 3, JSMN_STRING));
+-	check(TOKEN_EQ(tokens[2], 6, 7, JSMN_PRIMITIVE));
+-
+-	check(TOKEN_STRING(js, tokens[0], js));
+-	check(TOKEN_STRING(js, tokens[1], "a"));
+-	check(TOKEN_STRING(js, tokens[2], "0"));
+-
+-	jsmn_init(&p);
+-	js = "[\"a\":{},\"b\":{}]";
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r >= 0);
+-
+-	jsmn_init(&p);
+-	js = "{\n \"Day\": 26,\n \"Month\": 9,\n \"Year\": 12\n }";
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r >= 0);
+-
+-	return 0;
+-}
+-
+-int test_primitive() {
+-#ifndef JSMN_STRICT
+-	int r;
+-	jsmn_parser p;
+-	jsmntok_t tok[10];
+-	const char *js;
+-	js = "\"boolVar\" : true";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tok, 10);
+-	check(r >= 0 && tok[0].type == JSMN_STRING
+-			&& tok[1].type == JSMN_PRIMITIVE);
+-	check(TOKEN_STRING(js, tok[0], "boolVar"));
+-	check(TOKEN_STRING(js, tok[1], "true"));
+-
+-	js = "\"boolVar\" : false";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tok, 10);
+-	check(r >= 0 && tok[0].type == JSMN_STRING
+-			&& tok[1].type == JSMN_PRIMITIVE);
+-	check(TOKEN_STRING(js, tok[0], "boolVar"));
+-	check(TOKEN_STRING(js, tok[1], "false"));
+-
+-	js = "\"intVar\" : 12345";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tok, 10);
+-	check(r >= 0 && tok[0].type == JSMN_STRING
+-			&& tok[1].type == JSMN_PRIMITIVE);
+-	check(TOKEN_STRING(js, tok[0], "intVar"));
+-	check(TOKEN_STRING(js, tok[1], "12345"));
+-
+-	js = "\"floatVar\" : 12.345";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tok, 10);
+-	check(r >= 0 && tok[0].type == JSMN_STRING
+-			&& tok[1].type == JSMN_PRIMITIVE);
+-	check(TOKEN_STRING(js, tok[0], "floatVar"));
+-	check(TOKEN_STRING(js, tok[1], "12.345"));
+-
+-	js = "\"nullVar\" : null";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tok, 10);
+-	check(r >= 0 && tok[0].type == JSMN_STRING
+-			&& tok[1].type == JSMN_PRIMITIVE);
+-	check(TOKEN_STRING(js, tok[0], "nullVar"));
+-	check(TOKEN_STRING(js, tok[1], "null"));
+-#endif
+-	return 0;
+-}
+-
+-int test_string() {
+-	int r;
+-	jsmn_parser p;
+-	jsmntok_t tok[10];
+-	const char *js;
+-
+-	js = "\"strVar\" : \"hello world\"";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tok, 10);
+-	check(r >= 0 && tok[0].type == JSMN_STRING
+-			&& tok[1].type == JSMN_STRING);
+-	check(TOKEN_STRING(js, tok[0], "strVar"));
+-	check(TOKEN_STRING(js, tok[1], "hello world"));
+-
+-	js = "\"strVar\" : \"escapes: \\/\\r\\n\\t\\b\\f\\\"\\\\\"";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tok, 10);
+-	check(r >= 0 && tok[0].type == JSMN_STRING
+-			&& tok[1].type == JSMN_STRING);
+-	check(TOKEN_STRING(js, tok[0], "strVar"));
+-	check(TOKEN_STRING(js, tok[1], "escapes: \\/\\r\\n\\t\\b\\f\\\"\\\\"));
+-
+-	js = "\"strVar\" : \"\"";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tok, 10);
+-	check(r >= 0 && tok[0].type == JSMN_STRING
+-			&& tok[1].type == JSMN_STRING);
+-	check(TOKEN_STRING(js, tok[0], "strVar"));
+-	check(TOKEN_STRING(js, tok[1], ""));
+-
+-	return 0;
+-}
+-
+-int test_partial_string() {
+-	int r;
+-	jsmn_parser p;
+-	jsmntok_t tok[10];
+-	const char *js;
+-
+-	jsmn_init(&p);
+-	js = "\"x\": \"va";
+-	r = jsmn_parse(&p, js, strlen(js), tok, 10);
+-	check(r == JSMN_ERROR_PART && tok[0].type == JSMN_STRING);
+-	check(TOKEN_STRING(js, tok[0], "x"));
+-	check(p.toknext == 1);
+-
+-	jsmn_init(&p);
+-	char js_slash[9] = "\"x\": \"va\\";
+-	r = jsmn_parse(&p, js_slash, sizeof(js_slash), tok, 10);
+-	check(r == JSMN_ERROR_PART);
+-
+-	jsmn_init(&p);
+-	char js_unicode[10] = "\"x\": \"va\\u";
+-	r = jsmn_parse(&p, js_unicode, sizeof(js_unicode), tok, 10);
+-	check(r == JSMN_ERROR_PART);
+-
+-	js = "\"x\": \"valu";
+-	r = jsmn_parse(&p, js, strlen(js), tok, 10);
+-	check(r == JSMN_ERROR_PART && tok[0].type == JSMN_STRING);
+-	check(TOKEN_STRING(js, tok[0], "x"));
+-	check(p.toknext == 1);
+-
+-	js = "\"x\": \"value\"";
+-	r = jsmn_parse(&p, js, strlen(js), tok, 10);
+-	check(r >= 0 && tok[0].type == JSMN_STRING
+-			&& tok[1].type == JSMN_STRING);
+-	check(TOKEN_STRING(js, tok[0], "x"));
+-	check(TOKEN_STRING(js, tok[1], "value"));
+-
+-	js = "\"x\": \"value\", \"y\": \"value y\"";
+-	r = jsmn_parse(&p, js, strlen(js), tok, 10);
+-	check(r >= 0 && tok[0].type == JSMN_STRING
+-			&& tok[1].type == JSMN_STRING && tok[2].type == JSMN_STRING
+-			&& tok[3].type == JSMN_STRING);
+-	check(TOKEN_STRING(js, tok[0], "x"));
+-	check(TOKEN_STRING(js, tok[1], "value"));
+-	check(TOKEN_STRING(js, tok[2], "y"));
+-	check(TOKEN_STRING(js, tok[3], "value y"));
+-
+-	return 0;
+-}
+-
+-int test_unquoted_keys() {
+-#ifndef JSMN_STRICT
+-	int r;
+-	jsmn_parser p;
+-	jsmntok_t tok[10];
+-	const char *js;
+-
+-	jsmn_init(&p);
+-	js = "key1: \"value\"\nkey2 : 123";
+-
+-	r = jsmn_parse(&p, js, strlen(js), tok, 10);
+-	check(r >= 0 && tok[0].type == JSMN_PRIMITIVE
+-			&& tok[1].type == JSMN_STRING && tok[2].type == JSMN_PRIMITIVE
+-			&& tok[3].type == JSMN_PRIMITIVE);
+-	check(TOKEN_STRING(js, tok[0], "key1"));
+-	check(TOKEN_STRING(js, tok[1], "value"));
+-	check(TOKEN_STRING(js, tok[2], "key2"));
+-	check(TOKEN_STRING(js, tok[3], "123"));
+-#endif
+-	return 0;
+-}
+-
+-int test_partial_array() {
+-	int r;
+-	jsmn_parser p;
+-	jsmntok_t tok[10];
+-	const char *js;
+-
+-	jsmn_init(&p);
+-	js = "  [ 1, true, ";
+-	r = jsmn_parse(&p, js, strlen(js), tok, 10);
+-	check(r == JSMN_ERROR_PART && tok[0].type == JSMN_ARRAY
+-			&& tok[1].type == JSMN_PRIMITIVE && tok[2].type == JSMN_PRIMITIVE);
+-
+-	js = "  [ 1, true, [123, \"hello";
+-	r = jsmn_parse(&p, js, strlen(js), tok, 10);
+-	check(r == JSMN_ERROR_PART && tok[0].type == JSMN_ARRAY
+-			&& tok[1].type == JSMN_PRIMITIVE && tok[2].type == JSMN_PRIMITIVE
+-			&& tok[3].type == JSMN_ARRAY && tok[4].type == JSMN_PRIMITIVE);
+-
+-	js = "  [ 1, true, [123, \"hello\"]";
+-	r = jsmn_parse(&p, js, strlen(js), tok, 10);
+-	check(r == JSMN_ERROR_PART && tok[0].type == JSMN_ARRAY
+-			&& tok[1].type == JSMN_PRIMITIVE && tok[2].type == JSMN_PRIMITIVE
+-			&& tok[3].type == JSMN_ARRAY && tok[4].type == JSMN_PRIMITIVE
+-			&& tok[5].type == JSMN_STRING);
+-	/* check child nodes of the 2nd array */
+-	check(tok[3].size == 2);
+-
+-	js = "  [ 1, true, [123, \"hello\"]]";
+-	r = jsmn_parse(&p, js, strlen(js), tok, 10);
+-	check(r >= 0 && tok[0].type == JSMN_ARRAY
+-			&& tok[1].type == JSMN_PRIMITIVE && tok[2].type == JSMN_PRIMITIVE
+-			&& tok[3].type == JSMN_ARRAY && tok[4].type == JSMN_PRIMITIVE
+-			&& tok[5].type == JSMN_STRING);
+-	check(tok[3].size == 2);
+-	check(tok[0].size == 3);
+-	return 0;
+-}
+-
+-int test_array_nomem() {
+-	int i;
+-	int r;
+-	jsmn_parser p;
+-	jsmntok_t toksmall[10], toklarge[10];
+-	const char *js;
+-
+-	js = "  [ 1, true, [123, \"hello\"]]";
+-
+-	for (i = 0; i < 6; i++) {
+-		jsmn_init(&p);
+-		memset(toksmall, 0, sizeof(toksmall));
+-		memset(toklarge, 0, sizeof(toklarge));
+-		r = jsmn_parse(&p, js, strlen(js), toksmall, i);
+-		check(r == JSMN_ERROR_NOMEM);
+-
+-		memcpy(toklarge, toksmall, sizeof(toksmall));
+-
+-		r = jsmn_parse(&p, js, strlen(js), toklarge, 10);
+-		check(r >= 0);
+-
+-		check(toklarge[0].type == JSMN_ARRAY && toklarge[0].size == 3);
+-		check(toklarge[3].type == JSMN_ARRAY && toklarge[3].size == 2);
+-	}
+-	return 0;
+-}
+-
+-int test_objects_arrays() {
+-	int r;
+-	jsmn_parser p;
+-	jsmntok_t tokens[10];
+-	const char *js;
+-
+-	js = "[10}";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r == JSMN_ERROR_INVAL);
+-
+-	js = "[10]";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r >= 0);
+-
+-	js = "{\"a\": 1]";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r == JSMN_ERROR_INVAL);
+-
+-	js = "{\"a\": 1}";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r >= 0);
+-
+-	return 0;
+-}
+-
+-int test_issue_22() {
+-	int r;
+-	jsmn_parser p;
+-	jsmntok_t tokens[128];
+-	const char *js;
+-
+-	js = "{ \"height\":10, \"layers\":[ { \"data\":[6,6], \"height\":10, "
+-		"\"name\":\"Calque de Tile 1\", \"opacity\":1, \"type\":\"tilelayer\", "
+-		"\"visible\":true, \"width\":10, \"x\":0, \"y\":0 }], "
+-		"\"orientation\":\"orthogonal\", \"properties\": { }, \"tileheight\":32, "
+-		"\"tilesets\":[ { \"firstgid\":1, \"image\":\"..\\/images\\/tiles.png\", "
+-		"\"imageheight\":64, \"imagewidth\":160, \"margin\":0, \"name\":\"Tiles\", "
+-		"\"properties\":{}, \"spacing\":0, \"tileheight\":32, \"tilewidth\":32 }], "
+-		"\"tilewidth\":32, \"version\":1, \"width\":10 }";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 128);
+-	check(r >= 0);
+-#if 0
+-	for (i = 1; tokens[i].end < tokens[0].end; i++) {
+-		if (tokens[i].type == JSMN_STRING || tokens[i].type == JSMN_PRIMITIVE) {
+-			printf("%.*s\n", tokens[i].end - tokens[i].start, js + tokens[i].start);
+-		} else if (tokens[i].type == JSMN_ARRAY) {
+-			printf("[%d elems]\n", tokens[i].size);
+-		} else if (tokens[i].type == JSMN_OBJECT) {
+-			printf("{%d elems}\n", tokens[i].size);
+-		} else {
+-			TOKEN_PRINT(tokens[i]);
+-		}
+-	}
+-#endif
+-	return 0;
+-}
+-
+-int test_unicode_characters() {
+-	jsmn_parser p;
+-	jsmntok_t tokens[10];
+-	const char *js;
+-
+-	int r;
+-	js = "{\"a\":\"\\uAbcD\"}";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r >= 0);
+-
+-	js = "{\"a\":\"str\\u0000\"}";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r >= 0);
+-
+-	js = "{\"a\":\"\\uFFFFstr\"}";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r >= 0);
+-
+-	js = "{\"a\":\"str\\uFFGFstr\"}";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r == JSMN_ERROR_INVAL);
+-
+-	js = "{\"a\":\"str\\u@FfF\"}";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r == JSMN_ERROR_INVAL);
+-
+-	js = "{\"a\":[\"\\u028\"]}";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r == JSMN_ERROR_INVAL);
+-
+-	js = "{\"a\":[\"\\u0280\"]}";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r >= 0);
+-
+-	return 0;
+-}
+-
+-int test_input_length() {
+-	const char *js;
+-	int r;
+-	jsmn_parser p;
+-	jsmntok_t tokens[10];
+-
+-	js = "{\"a\": 0}garbage";
+-
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, 8, tokens, 10);
+-	check(r == 3);
+-	check(TOKEN_STRING(js, tokens[0], "{\"a\": 0}"));
+-	check(TOKEN_STRING(js, tokens[1], "a"));
+-	check(TOKEN_STRING(js, tokens[2], "0"));
+-
+-	return 0;
+-}
+-
+-int test_count() {
+-	jsmn_parser p;
+-	const char *js;
+-
+-	js = "{}";
+-	jsmn_init(&p);
+-	check(jsmn_parse(&p, js, strlen(js), NULL, 0) == 1);
+-
+-	js = "[]";
+-	jsmn_init(&p);
+-	check(jsmn_parse(&p, js, strlen(js), NULL, 0) == 1);
+-
+-	js = "[[]]";
+-	jsmn_init(&p);
+-	check(jsmn_parse(&p, js, strlen(js), NULL, 0) == 2);
+-
+-	js = "[[], []]";
+-	jsmn_init(&p);
+-	check(jsmn_parse(&p, js, strlen(js), NULL, 0) == 3);
+-
+-	js = "[[], []]";
+-	jsmn_init(&p);
+-	check(jsmn_parse(&p, js, strlen(js), NULL, 0) == 3);
+-
+-	js = "[[], [[]], [[], []]]";
+-	jsmn_init(&p);
+-	check(jsmn_parse(&p, js, strlen(js), NULL, 0) == 7);
+-
+-	js = "[\"a\", [[], []]]";
+-	jsmn_init(&p);
+-	check(jsmn_parse(&p, js, strlen(js), NULL, 0) == 5);
+-
+-	js = "[[], \"[], [[]]\", [[]]]";
+-	jsmn_init(&p);
+-	check(jsmn_parse(&p, js, strlen(js), NULL, 0) == 5);
+-
+-	js = "[1, 2, 3]";
+-	jsmn_init(&p);
+-	check(jsmn_parse(&p, js, strlen(js), NULL, 0) == 4);
+-
+-	js = "[1, 2, [3, \"a\"], null]";
+-	jsmn_init(&p);
+-	check(jsmn_parse(&p, js, strlen(js), NULL, 0) == 7);
+-
+-	return 0;
+-}
+-
+-int test_keyvalue() {
+-	const char *js;
+-	int r;
+-	jsmn_parser p;
+-	jsmntok_t tokens[10];
+-
+-	js = "{\"a\": 0, \"b\": \"c\"}";
+-
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r == 5);
+-	check(tokens[0].size == 2); /* two keys */
+-	check(tokens[1].size == 1 && tokens[3].size == 1); /* one value per key */
+-	check(tokens[2].size == 0 && tokens[4].size == 0); /* values have zero size */
+-
+-	js = "{\"a\"\n0}";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r == JSMN_ERROR_INVAL);
+-
+-	js = "{\"a\", 0}";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r == JSMN_ERROR_INVAL);
+-
+-	js = "{\"a\": {2}}";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r == JSMN_ERROR_INVAL);
+-
+-	js = "{\"a\": {2: 3}}";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r == JSMN_ERROR_INVAL);
+-
+-
+-	js = "{\"a\": {\"a\": 2 3}}";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r == JSMN_ERROR_INVAL);
+-	return 0;
+-}
+-
+-/** A huge redefinition of everything to include jsmn in non-script mode */
+-#define jsmn_init jsmn_init_nonstrict
+-#define jsmn_parse jsmn_parse_nonstrict
+-#define jsmn_parser jsmn_parser_nonstrict
+-#define jsmn_alloc_token jsmn_alloc_token_nonstrict
+-#define jsmn_fill_token jsmn_fill_token_nonstrict
+-#define jsmn_parse_primitive jsmn_parse_primitive_nonstrict
+-#define jsmn_parse_string jsmn_parse_string_nonstrict
+-#define jsmntype_t jsmntype_nonstrict_t
+-#define jsmnerr_t jsmnerr_nonstrict_t
+-#define jsmntok_t jsmntok_nonstrict_t
+-#define JSMN_PRIMITIVE JSMN_PRIMITIVE_NONSTRICT
+-#define JSMN_OBJECT JSMN_OBJECT_NONSTRICT
+-#define JSMN_ARRAY JSMN_ARRAY_NONSTRICT
+-#define JSMN_STRING JSMN_STRING_NONSTRICT
+-#define JSMN_ERROR_NOMEM JSMN_ERROR_NOMEM_NONSTRICT
+-#define JSMN_ERROR_INVAL JSMN_ERROR_INVAL_NONSTRICT
+-#define JSMN_ERROR_PART JSMN_ERROR_PART_NONSTRICT
+-#undef __JSMN_H_
+-#undef JSMN_STRICT
+-#include "jsmn.c"
+-
+-int test_nonstrict() {
+-	const char *js;
+-	int r;
+-	jsmn_parser p;
+-	jsmntok_t tokens[10];
+-
+-	js = "a: 0garbage";
+-
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, 4, tokens, 10);
+-	check(r == 2);
+-	check(TOKEN_STRING(js, tokens[0], "a"));
+-	check(TOKEN_STRING(js, tokens[1], "0"));
+-
+-	js = "Day : 26\nMonth : Sep\n\nYear: 12";
+-	jsmn_init(&p);
+-	r = jsmn_parse(&p, js, strlen(js), tokens, 10);
+-	check(r == 6);
+-	return 0;
+-}
+-
+-int main() {
+-	test(test_empty, "general test for a empty JSON objects/arrays");
+-	test(test_simple, "general test for a simple JSON string");
+-	test(test_primitive, "test primitive JSON data types");
+-	test(test_string, "test string JSON data types");
+-	test(test_partial_string, "test partial JSON string parsing");
+-	test(test_partial_array, "test partial array reading");
+-	test(test_array_nomem, "test array reading with a smaller number of tokens");
+-	test(test_unquoted_keys, "test unquoted keys (like in JavaScript)");
+-	test(test_objects_arrays, "test objects and arrays");
+-	test(test_unicode_characters, "test unicode characters");
+-	test(test_input_length, "test strings that are not null-terminated");
+-	test(test_issue_22, "test issue #22");
+-	test(test_count, "test tokens count estimation");
+-	test(test_nonstrict, "test for non-strict mode");
+-	test(test_keyvalue, "test for keys/values");
+-	printf("\nPASSED: %d\nFAILED: %d\n", test_passed, test_failed);
+-	return 0;
+-}
+-
+diff --git a/OpenCDMi/DRM/clearkey/json_web_key.cpp b/OpenCDMi/DRM/clearkey/json_web_key.cpp
+deleted file mode 100644
+index bad1033..0000000
+--- a/OpenCDMi/DRM/clearkey/json_web_key.cpp
++++ /dev/null
+@@ -1,213 +0,0 @@
+-// Copyright 2013 The Chromium Authors. All rights reserved.
+-// Use of this source code is governed by a BSD-style license that can be
+-// found in the LICENSE file.
+-
+-/* Copyright 2015 Linaro Ltd
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-#include "jsmn.h"
+-#include "json_web_key.h"
+-#include "keypairs.h"
+-
+-#include <algorithm>
+-#include <iostream>
+-#include <stdio.h>
+-#include <stdlib.h>
+-#include <string.h>
+-
+-#define MAX_JSON_TOKENS 2048
+-#define MAX_KEY_SIZE  2048
+-#define MAX_KEY_ID_SIZE  2048
+-
+-namespace media{
+-/* 
+-   Base64 decoder based on: base64.cpp and base64.h
+-
+-   Copyright (C) 2004-2008 René Nyffenegger
+-
+-   This source code is provided 'as-is', without any express or implied
+-   warranty. In no event will the author be held liable for any damages
+-   arising from the use of this software.
+-
+-   Permission is granted to anyone to use this software for any purpose,
+-   including commercial applications, and to alter it and redistribute it
+-   freely, subject to the following restrictions:
+-
+-   1. The origin of this source code must not be misrepresented; you must not
+-      claim that you wrote the original source code. If you use this source code
+-      in a product, an acknowledgment in the product documentation would be
+-      appreciated but is not required.
+-
+-   2. Altered source versions must be plainly marked as such, and must not be
+-      misrepresented as being the original source code.
+-
+-   3. This notice may not be removed or altered from any source distribution.
+-
+-   René Nyffenegger rene.nyffenegger@adp-gmbh.ch
+-
+-*/
+-static const std::string base64_chars =
+-             "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+-             "abcdefghijklmnopqrstuvwxyz"
+-             "0123456789+/";
+-
+-static inline bool is_base64(unsigned char c) {
+-  return (isalnum(c) || (c == '+') || (c == '/'));
+-}
+-
+-std::string base64_decode(std::string const& encoded_string) {
+-  int in_len = encoded_string.size();
+-  int i = 0;
+-  int j = 0;
+-  int in_ = 0;
+-  unsigned char char_array_4[4], char_array_3[3];
+-  std::string ret;
+-
+-  while (in_len-- && ( encoded_string[in_] != '=') && is_base64(encoded_string[in_])) {
+-    char_array_4[i++] = encoded_string[in_]; in_++;
+-    if (i ==4) {
+-      for (i = 0; i <4; i++)
+-        char_array_4[i] = base64_chars.find(char_array_4[i]);
+-
+-      char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+-      char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+-      char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+-
+-      for (i = 0; (i < 3); i++)
+-        ret += char_array_3[i];
+-      i = 0;
+-    }
+-  }
+-
+-  if (i) {
+-    for (j = i; j <4; j++)
+-      char_array_4[j] = 0;
+-
+-    for (j = 0; j <4; j++)
+-      char_array_4[j] = base64_chars.find(char_array_4[j]);
+-
+-    char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+-    char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+-    char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+-
+-    for (j = 0; (j < i - 1); j++) ret += char_array_3[j];
+-  }
+-
+-  return ret;
+-}
+-
+-
+-/* Checks equality of two JSON string with a char. Returns 0 if strings
+- * equal. */
+-static int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
+-  if (tok->type == JSMN_STRING && (int) strlen(s) == tok->end - tok->start &&
+-      strncmp(json + tok->start, s, tok->end - tok->start) == 0) {
+-    return 0;
+-  }
+-  return -1;
+-}
+-
+-static void fixUpURLSafeBase64(std::string &str)
+-{
+-    std::replace( str.begin(), str.end(), '_', '/');
+-    std::replace( str.begin(), str.end(), '-', '+');
+-}
+-
+-static bool convertStringsToKeyPair(KeyIdAndKeyPair* pair, std::string key,
+-        std::string keyId)
+-{
+-  size_t padding;
+-  std::string decoded_key, decoded_key_id;
+-  /* Chromium removes the padding strings from the B64 strings. We need
+-   * to append them for compatibility with the B64 parsers */
+-  padding = keyId.length()%4;
+-
+-  if(padding > 0)
+-    keyId.append(padding, kBase64Padding);
+-
+-  padding = key.length()%4;
+-  if(padding > 0)
+-    key.append(padding, kBase64Padding);
+-
+-  fixUpURLSafeBase64(key);
+-  fixUpURLSafeBase64(keyId);
+-
+-  decoded_key = base64_decode(key);
+-  decoded_key_id = base64_decode(keyId);
+-  *pair = std::make_pair(decoded_key_id, decoded_key);
+-  return true;
+-}
+-
+-bool ExtractKeysFromJWKSet(const std::string& jwk_set,
+-                           KeyIdAndKeyPairs* keys,
+-                           int session_type) {
+-  /*We expect max 128 tokens
+-   * FIXME: We need a different and safe JSON parser.
+-   */
+-  jsmntok_t t[MAX_JSON_TOKENS];
+-  jsmn_parser parser;
+-  int result;
+-  const char* jchr  = &(jwk_set.c_str()[0]);
+-
+-  std::string algorithm;
+-  std::string key;
+-  std::string keyId;
+-  jsmn_init(&parser);
+-  result = jsmn_parse(&parser, jchr, jwk_set.size(), t, sizeof(t)/sizeof(t[0]));
+-
+-  if(result<0) {
+-    std::cout << "Failed to parse JSON" << jwk_set << std::endl;
+-    return false;
+-   }
+-
+-  if(jsoneq(jchr, &t[1], kKeysTag)!=0) {
+-    std::cout <<  "Unable to parse JSON. Expected kKeyTag : " << kKeysTag << std::endl;
+-    return false;
+-  }
+-
+-  KeyIdAndKeyPairs local_keys;
+-  /* Ignore the first 2 tokens */
+-  for(int i = 2; i < result; i++) {
+-    if(jsoneq(jchr, &t[i], kAlgTag) == 0 && (i+1) < MAX_JSON_TOKENS) {
+-      algorithm = std::string(jchr + t[i+1].start, t[i+1].end - t[i+1].start);
+-      continue;
+-      }
+-
+-    if(jsoneq(jchr, &t[i], kKeyTag) == 0 && (i+1) < MAX_JSON_TOKENS) {
+-       if(key.size() != 0) {
+-           std::cout << "CDMI supports only one key in JSON message. Got multiple keys." << std::endl;
+-           return false;
+-       }
+-       key = std::string(jchr + t[i+1].start, t[i+1].end - t[i+1].start);
+-       continue;
+-       }
+-
+-    if(jsoneq(jchr, &t[i], kKeyIdTag) == 0 && (i+1) < MAX_JSON_TOKENS) {
+-       if(keyId.size() != 0) {
+-           std::cout << "CDMI supports only one keyID in JSON message. Got multiple keys." << std::endl;
+-           return false;
+-       }
+-       keyId = std::string(jchr + t[i+1].start, t[i+1].end - t[i+1].start);
+-       continue;
+-       }
+-     }
+-  KeyIdAndKeyPair keyPair;
+-  convertStringsToKeyPair(&keyPair, key, keyId);
+-  local_keys.push_back(keyPair);
+-
+-  keys->swap(local_keys);
+-  return true;
+-}
+-
+-}
+diff --git a/OpenCDMi/DRM/clearkey/json_web_key.h b/OpenCDMi/DRM/clearkey/json_web_key.h
+deleted file mode 100644
+index 82b9ea0..0000000
+--- a/OpenCDMi/DRM/clearkey/json_web_key.h
++++ /dev/null
+@@ -1,51 +0,0 @@
+-// Copyright 2013 The Chromium Authors. All rights reserved.
+-// Use of this source code is governed by a BSD-style license that can be
+-// found in the LICENSE file.
+-
+-/* Copyright 2015 Linaro Ltd
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-#ifndef OPENCDM_CDMI_STUB_JSON_WEB_KEY_H
+-#define OPENCDM_CDMI_STUB_JSON_WEB_KEY_H
+-#include  "keypairs.h"
+-
+-namespace media{
+-
+-const char kKeysTag[] = "keys";
+-const char kKeyTypeTag[] = "kty";
+-const char kKeyTypeOct[] = "oct";  // Octet sequence.
+-const char kAlgTag[] = "alg";
+-const char kAlgA128KW[] = "A128KW";  // AES key wrap using a 128-bit key.
+-const char kKeyTag[] = "k";
+-const char kKeyIdTag[] = "kid";
+-const char kKeyIdsTag[] = "kids";
+-const char kBase64Padding = '=';
+-const char kTypeTag[] = "type";
+-const char kTemporarySession[] = "temporary";
+-const char kPersistentLicenseSession[] = "persistent-license";
+-const char kPersistentReleaseMessageSession[] = "persistent-release-message";
+-
+-// Based on the corresponding chromium source
+-
+-// Extracts the JSON Web Keys from a JSON Web Key Set. If |input| looks like
+-// a valid JWK Set, then true is returned and |keys| and |session_type| are
+-// updated to contain the values found. Otherwise return false.
+-bool ExtractKeysFromJWKSet(const std::string& jwk_set,
+-                                        KeyIdAndKeyPairs* keys,
+-                                        int session_type);
+-
+-
+-}//namespace media
+-#endif
+diff --git a/OpenCDMi/DRM/clearkey/keypairs.h b/OpenCDMi/DRM/clearkey/keypairs.h
+deleted file mode 100644
+index ff0c797..0000000
+--- a/OpenCDMi/DRM/clearkey/keypairs.h
++++ /dev/null
+@@ -1,26 +0,0 @@
+-/*
+- * Copyright 2015 Linaro Ltd
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-#ifndef OPENCDM_CDMI_STUB_KEYPAIRS_H
+-#define OPENCDM_CDMI_STUB_KEYPAIRS_H
+-
+-#include <string>
+-#include <vector>
+-
+-namespace media {
+-typedef std::pair<std::string, std::string> KeyIdAndKeyPair;
+-typedef std::vector<KeyIdAndKeyPair> KeyIdAndKeyPairs;
+-}
+-#endif
+diff --git a/OpenCDMi/DRM/playready/CMakeLists.txt b/OpenCDMi/DRM/playready/CMakeLists.txt
+deleted file mode 100644
+index d873fd2..0000000
+--- a/OpenCDMi/DRM/playready/CMakeLists.txt
++++ /dev/null
+@@ -1,24 +0,0 @@
+-cmake_minimum_required(VERSION 2.8)
+-
+-set(DRM_PLUGIN_NAME PlayReady)
+-
+-find_package(PlayReady REQUIRED)
+-
+-file(GLOB DRM_PLUGIN_INCLUDES *.h)
+-
+-set(DRM_PLUGIN_LIBS 
+-    ${PLAYREADY_LIBRARIES})
+-
+-set(DRM_PLUGIN_SOURCES 
+-    MediaSession.cpp 
+-    MediaSystem.cpp)
+-
+-# add the library
+-add_library(${DRM_PLUGIN_NAME} SHARED ${DRM_PLUGIN_SOURCES})
+-target_compile_definitions(${DRM_PLUGIN_NAME} PRIVATE ${PLAYREADY_FLAGS})
+-target_include_directories(${DRM_PLUGIN_NAME} PRIVATE ${PLAYREADY_INCLUDE_DIRS})
+-target_link_libraries(${DRM_PLUGIN_NAME} ${DRM_PLUGIN_LIBS})
+-set_target_properties(${DRM_PLUGIN_NAME} PROPERTIES SUFFIX ".drm")
+-set_target_properties(${DRM_PLUGIN_NAME} PROPERTIES PREFIX "")
+-
+-install(TARGETS ${DRM_PLUGIN_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX}/share/WPEFramework/${PLUGIN_NAME})
+diff --git a/OpenCDMi/DRM/playready/MediaSession.cpp b/OpenCDMi/DRM/playready/MediaSession.cpp
+deleted file mode 100644
+index 49d9ce2..0000000
+--- a/OpenCDMi/DRM/playready/MediaSession.cpp
++++ /dev/null
+@@ -1,455 +0,0 @@
+-/*
+- * Copyright 2016-2017 TATA ELXSI
+- * Copyright 2016-2017 Metrological
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-#include "MediaSession.h"
+-#include <assert.h>
+-#include <iostream>
+-#include <sstream>
+-#include <string>
+-#include <string.h>
+-#include <vector>
+-#include <sys/utsname.h>
+-#include <drmerror.h>
+-
+-#define NYI_KEYSYSTEM "keysystem-placeholder"
+-
+-using namespace std;
+-
+-namespace CDMi {
+-
+-// The default location of CDM DRM store.
+-// /tmp/drmstore.dat
+-const DRM_WCHAR g_rgwchCDMDrmStoreName[] = {WCHAR_CAST('/'), WCHAR_CAST('t'), WCHAR_CAST('m'), WCHAR_CAST('p'), WCHAR_CAST('/'),
+-                                            WCHAR_CAST('d'), WCHAR_CAST('r'), WCHAR_CAST('m'), WCHAR_CAST('s'), WCHAR_CAST('t'),
+-                                            WCHAR_CAST('o'), WCHAR_CAST('r'), WCHAR_CAST('e'), WCHAR_CAST('.'), WCHAR_CAST('d'),
+-                                            WCHAR_CAST('a'), WCHAR_CAST('t'), WCHAR_CAST('\0')};
+-
+-const DRM_CONST_STRING g_dstrCDMDrmStoreName = CREATE_DRM_STRING(g_rgwchCDMDrmStoreName);
+-const DRM_CONST_STRING *g_rgpdstrRights[1] = {&g_dstrWMDRM_RIGHT_PLAYBACK};
+-
+-
+-// Parse out the first PlayReady initialization header found in the concatenated
+-// block of headers in _initData_.
+-// If a PlayReady header is found, this function returns true and the header
+-// contents are stored in _output_.
+-// Otherwise, returns false and _output_ is not touched.
+-bool parsePlayreadyInitializationData(const std::string& initData, std::string* output)
+-{
+-    BufferReader input(reinterpret_cast<const uint8_t*>(initData.data()), initData.length());
+-
+-    static const uint8_t playreadySystemId[] = {
+-      0x9A, 0x04, 0xF0, 0x79, 0x98, 0x40, 0x42, 0x86,
+-      0xAB, 0x92, 0xE6, 0x5B, 0xE0, 0x88, 0x5F, 0x95,
+-    };
+-
+-    // one PSSH box consists of:
+-    // 4 byte size of the atom, inclusive.  (0 means the rest of the buffer.)
+-    // 4 byte atom type, "pssh".
+-    // (optional, if size == 1) 8 byte size of the atom, inclusive.
+-    // 1 byte version, value 0 or 1.  (skip if larger.)
+-    // 3 byte flags, value 0.  (ignored.)
+-    // 16 byte system id.
+-    // (optional, if version == 1) 4 byte key ID count. (K)
+-    // (optional, if version == 1) K * 16 byte key ID.
+-    // 4 byte size of PSSH data, exclusive. (N)
+-    // N byte PSSH data.
+-    while (!input.IsEOF()) {
+-      size_t startPosition = input.pos();
+-
+-      // The atom size, used for skipping.
+-      uint64_t atomSize;
+-
+-      if (!input.Read4Into8(&atomSize)) {
+-        return false;
+-      }
+-
+-      std::vector<uint8_t> atomType;
+-      if (!input.ReadVec(&atomType, 4)) {
+-          return false;
+-      }
+-
+-      if (atomSize == 1) {
+-          if (!input.Read8(&atomSize)) {
+-              return false;
+-          }
+-      } else if (atomSize == 0) {
+-        atomSize = input.size() - startPosition;
+-      }
+-
+-      if (memcmp(&atomType[0], "pssh", 4)) {
+-          if (!input.SkipBytes(atomSize - (input.pos() - startPosition))) {
+-            return false;
+-          }
+-          continue;
+-      }
+-
+-      uint8_t version;
+-      if (!input.Read1(&version)) {
+-          return false;
+-      }
+-
+-
+-      if (version > 1) {
+-        // unrecognized version - skip.
+-        if (!input.SkipBytes(atomSize - (input.pos() - startPosition))) {
+-          return false;
+-        }
+-        continue;
+-      }
+-
+-      // flags
+-      if (!input.SkipBytes(3)) {
+-        return false;
+-      }
+-
+-      // system id
+-      std::vector<uint8_t> systemId;
+-      if (!input.ReadVec(&systemId, sizeof(playreadySystemId))) {
+-        return false;
+-      }
+-
+-      if (memcmp(&systemId[0], playreadySystemId, sizeof(playreadySystemId))) {
+-        // skip non-Playready PSSH boxes.
+-        if (!input.SkipBytes(atomSize - (input.pos() - startPosition))) {
+-          return false;
+-        }
+-        continue;
+-      }
+-
+-      if (version == 1) {
+-        // v1 has additional fields for key IDs.  We can skip them.
+-        uint32_t numKeyIds;
+-        if (!input.Read4(&numKeyIds)) {
+-          return false;
+-        }
+-
+-        if (!input.SkipBytes(numKeyIds * 16)) {
+-          return false;
+-        }
+-      }
+-
+-      // size of PSSH data
+-      uint32_t dataLength;
+-      if (!input.Read4(&dataLength)) {
+-        return false;
+-      }
+-
+-      output->clear();
+-      if (!input.ReadString(output, dataLength)) {
+-        return false;
+-      }
+-
+-      return true;
+-  }
+-
+-  // we did not find a matching record
+-  return false;
+-}
+-
+-MediaKeySession::MediaKeySession(const uint8_t *f_pbInitData, uint32_t f_cbInitData)
+-    : m_poAppContext(nullptr)
+-    , m_pbOpaqueBuffer(nullptr) 
+-    , m_cbOpaqueBuffer(0)
+-    , m_pbRevocationBuffer(nullptr)
+-    , m_eKeyState(KEY_INIT)
+-    , m_fCommit(FALSE)
+-    , m_pbChallenge(nullptr)
+-    , m_cbChallenge(0)
+-    , m_pchSilentURL(nullptr) 
+-    , m_piCallback(nullptr) {
+-  DRM_RESULT dr = DRM_SUCCESS;
+-  DRM_ID oSessionID;
+-  DRM_DWORD cchEncodedSessionID = SIZEOF(m_rgchSessionID);
+-  // FIXME: Change the interface of this method? Not sure why the win32 bondage is still so popular.
+-  std::string initData(reinterpret_cast<const char*>(f_pbInitData), f_cbInitData);
+-  std::string playreadyInitData;
+-
+-  printf("Constructing PlayReady Session [%p]\n", this);
+-
+-  ChkMem(m_pbOpaqueBuffer = (DRM_BYTE *)Oem_MemAlloc(MINIMUM_APPCONTEXT_OPAQUE_BUFFER_SIZE));
+-  m_cbOpaqueBuffer = MINIMUM_APPCONTEXT_OPAQUE_BUFFER_SIZE;
+-
+-  ChkMem(m_poAppContext = (DRM_APP_CONTEXT *)Oem_MemAlloc(SIZEOF(DRM_APP_CONTEXT)));
+-
+-  // Initialize DRM app context.
+-  ChkDR(Drm_Initialize(m_poAppContext,
+-                       NULL,
+-                       m_pbOpaqueBuffer,
+-                       m_cbOpaqueBuffer,
+-                       &g_dstrCDMDrmStoreName));
+-
+-  if (DRM_REVOCATION_IsRevocationSupported()) {
+-    ChkMem(m_pbRevocationBuffer = (DRM_BYTE *)Oem_MemAlloc(REVOCATION_BUFFER_SIZE));
+-
+-    ChkDR(Drm_Revocation_SetBuffer(m_poAppContext,
+-                                   m_pbRevocationBuffer,
+-                                   REVOCATION_BUFFER_SIZE));
+-  }
+-
+-  // Generate a random media session ID.
+-  ChkDR(Oem_Random_GetBytes(NULL, (DRM_BYTE *)&oSessionID, SIZEOF(oSessionID)));
+-
+-  ZEROMEM(m_rgchSessionID, SIZEOF(m_rgchSessionID));
+-  // Store the generated media session ID in base64 encoded form.
+-  ChkDR(DRM_B64_EncodeA((DRM_BYTE *)&oSessionID,
+-                        SIZEOF(oSessionID),
+-                        m_rgchSessionID,
+-                        &cchEncodedSessionID,
+-                        0));
+-
+-  // The current state MUST be KEY_INIT otherwise error out.
+-  ChkBOOL(m_eKeyState == KEY_INIT, DRM_E_INVALIDARG);
+-
+-  if (!parsePlayreadyInitializationData(initData, &playreadyInitData)) {
+-      playreadyInitData = initData;
+-  }
+-  ChkDR(Drm_Content_SetProperty(m_poAppContext,
+-                                DRM_CSP_AUTODETECT_HEADER,
+-                                reinterpret_cast<const DRM_BYTE*>(playreadyInitData.data()),
+-                                playreadyInitData.size()));
+-
+-  // The current state MUST be KEY_INIT otherwise error out.
+-  ChkBOOL(m_eKeyState == KEY_INIT, DRM_E_INVALIDARG);
+-  return; 
+-
+-ErrorExit:
+-  if (DRM_FAILED(dr)) {
+-    const DRM_CHAR* description;
+-    DRM_ERR_GetErrorNameFromCode(dr, &description);
+-    printf("playready error: %s\n", description);
+-  }
+-}
+-
+-MediaKeySession::~MediaKeySession(void) {
+-
+-  Drm_Uninitialize(m_poAppContext);
+- 
+-  SAFE_OEM_FREE(m_pbChallenge);
+-  SAFE_OEM_FREE(m_pchSilentURL);
+-
+-  if (DRM_REVOCATION_IsRevocationSupported())
+-    SAFE_OEM_FREE(m_pbRevocationBuffer);
+-
+-  SAFE_OEM_FREE(m_pbOpaqueBuffer);
+-  SAFE_OEM_FREE(m_poAppContext);
+-
+-  m_eKeyState = KEY_CLOSED;
+-  printf("Destructing PlayReady Session [%p]\n", this);
+-}
+-
+-const char *MediaKeySession::GetSessionId(void) const {
+-  return m_rgchSessionID;
+-}
+-
+-const char *MediaKeySession::GetKeySystem(void) const {
+-  return NYI_KEYSYSTEM; // FIXME : replace with keysystem and test.
+-}
+-
+-DRM_RESULT DRM_CALL MediaKeySession::_PolicyCallback(
+-    const DRM_VOID *f_pvOutputLevelsData, 
+-    DRM_POLICY_CALLBACK_TYPE f_dwCallbackType, 
+-    const DRM_VOID *f_pv) {
+-  return DRM_SUCCESS;
+-}
+-
+-void MediaKeySession::Run(const IMediaKeySessionCallback *f_piMediaKeySessionCallback) {
+-   
+-  if (f_piMediaKeySessionCallback) 
+-    m_piCallback = const_cast<IMediaKeySessionCallback *>(f_piMediaKeySessionCallback);
+-
+-  // FIXME : Custom data is not set;needs recheck.
+-  playreadyGenerateKeyRequest();
+-}
+-
+-bool MediaKeySession::playreadyGenerateKeyRequest() {
+-    
+-  DRM_RESULT dr = DRM_SUCCESS; 
+-  DRM_DWORD cchSilentURL = 0;
+-  DRM_ANSI_STRING dastrCustomData = EMPTY_DRM_STRING;
+-  // FIXME :  Check add case Play rights already acquired
+-  // Try to figure out the size of the license acquisition
+-  // challenge to be returned.
+-  dr = Drm_LicenseAcq_GenerateChallenge(m_poAppContext,
+-                                        g_rgpdstrRights,
+-                                        sizeof(g_rgpdstrRights) / sizeof(DRM_CONST_STRING *),
+-                                         NULL,
+-                                         NULL, // FIXME : Custom data
+-                                         0, // FIXME : Custon data size 
+-                                         NULL,
+-                                         &cchSilentURL,
+-                                         NULL,
+-                                         NULL,
+-                                         NULL,
+-                                         &m_cbChallenge);
+-
+-  if (dr == DRM_E_BUFFERTOOSMALL) {
+-    if (cchSilentURL > 0) {
+-      ChkMem(m_pchSilentURL = (DRM_CHAR *)Oem_MemAlloc(cchSilentURL + 1));
+-      ZEROMEM(m_pchSilentURL, cchSilentURL + 1);
+-    }
+-
+-    // Allocate buffer that is sufficient to store the license acquisition
+-    // challenge.
+-    if (m_cbChallenge > 0)
+-      ChkMem(m_pbChallenge = (DRM_BYTE *)Oem_MemAlloc(m_cbChallenge));
+-
+-    dr = DRM_SUCCESS;
+-  } else {
+-    ChkDR(dr);
+-  }
+-
+-  // Supply a buffer to receive the license acquisition challenge.
+-  ChkDR(Drm_LicenseAcq_GenerateChallenge(m_poAppContext,
+-                                         g_rgpdstrRights,
+-                                         sizeof(g_rgpdstrRights) / sizeof(DRM_CONST_STRING *),
+-                                         NULL,
+-                                         NULL, // FIXME : Custom data
+-                                         0, // FIXME : Custon data size 
+-                                         m_pchSilentURL,
+-                                         &cchSilentURL,
+-                                         NULL,
+-                                         NULL,
+-                                         m_pbChallenge,
+-                                         &m_cbChallenge));
+-
+-  m_eKeyState = KEY_PENDING;
+-  m_piCallback->OnKeyMessage((const uint8_t *) m_pbChallenge, m_cbChallenge, (char *)m_pchSilentURL); 
+-  return true;
+-
+-ErrorExit:
+-  if (DRM_FAILED(dr)) {
+-    const DRM_CHAR* description;
+-    DRM_ERR_GetErrorNameFromCode(dr, &description);
+-    printf("playready error: %s\n", description);
+-  }
+-  return false;
+-}
+-
+-CDMi_RESULT MediaKeySession::Load(void) {
+-  return CDMi_S_FALSE;
+-}
+-
+-void MediaKeySession::Update(const uint8_t *m_pbKeyMessageResponse, uint32_t  m_cbKeyMessageResponse) {
+-
+-  DRM_RESULT dr = DRM_SUCCESS;
+-  DRM_LICENSE_RESPONSE oLicenseResponse = {eUnknownProtocol, 0};
+-
+-  // The current state MUST be KEY_PENDING otherwise error out.
+-  ChkBOOL(m_eKeyState == KEY_PENDING, DRM_E_INVALIDARG);
+-
+-  ChkArg(m_pbKeyMessageResponse && m_cbKeyMessageResponse > 0);
+-
+-  ChkDR(Drm_LicenseAcq_ProcessResponse(m_poAppContext,
+-                                       DRM_PROCESS_LIC_RESPONSE_SIGNATURE_NOT_REQUIRED,
+-                                       NULL,
+-                                       NULL,
+-                                       const_cast<DRM_BYTE *>(m_pbKeyMessageResponse),
+-                                       m_cbKeyMessageResponse,
+-                                       &oLicenseResponse));
+-
+-  ChkDR(Drm_Reader_Bind(m_poAppContext,
+-                        g_rgpdstrRights,
+-                        NO_OF(g_rgpdstrRights),
+-                        _PolicyCallback,
+-                        NULL,
+-                        &m_oDecryptContext));
+-
+-  m_eKeyState = KEY_READY;
+-
+-  if (m_eKeyState == KEY_READY) {
+-    m_piCallback->OnKeyStatusUpdate("KeyUsable");
+-  }
+-  return;
+-
+-ErrorExit:
+-  if (DRM_FAILED(dr)) {
+-    const DRM_CHAR* description;
+-    DRM_ERR_GetErrorNameFromCode(dr, &description);
+-    printf("playready error: %s\n", description);
+-
+-    m_eKeyState = KEY_ERROR;
+-  }
+-  return;
+-}
+-
+-CDMi_RESULT MediaKeySession::Remove(void) {
+-  return CDMi_S_FALSE;
+-}
+-
+-CDMi_RESULT MediaKeySession::Close(void) {}
+-
+-CDMi_RESULT MediaKeySession::Decrypt(
+-    const uint8_t *f_pbSessionKey,
+-    uint32_t f_cbSessionKey,
+-    const uint32_t *f_pdwSubSampleMapping,
+-    uint32_t f_cdwSubSampleMapping,
+-    const uint8_t *f_pbIV,
+-    uint32_t f_cbIV,
+-    const uint8_t *payloadData,
+-    uint32_t payloadDataSize,
+-    uint32_t *f_pcbOpaqueClearContent,
+-    uint8_t **f_ppbOpaqueClearContent) {
+-  CDMi_RESULT status = CDMi_S_FALSE;
+-  DRM_AES_COUNTER_MODE_CONTEXT oAESContext = {0};
+-  DRM_RESULT dr = DRM_SUCCESS;
+-
+-  uint8_t *ivData = (uint8_t *) f_pbIV;
+-  uint8_t temp;
+-
+-  ChkDR(Drm_Reader_InitDecrypt(&m_oDecryptContext, NULL, 0));
+-  // FIXME: IV bytes need to be swapped ???
+-  for (uint32_t i = 0; i < f_cbIV / 2; i++) {
+-    temp = ivData[i];
+-    ivData[i] = ivData[f_cbIV - i - 1];
+-    ivData[f_cbIV - i - 1] = temp;
+-  }
+-
+-  MEMCPY(&oAESContext.qwInitializationVector, ivData, f_cbIV);
+-  ChkDR(Drm_Reader_Decrypt(&m_oDecryptContext, &oAESContext, (DRM_BYTE *) payloadData,  payloadDataSize));
+-     
+-  // Call commit during the decryption of the first sample.
+-  if (!m_fCommit) {
+-    ChkDR(Drm_Reader_Commit(m_poAppContext, _PolicyCallback, NULL));
+-    m_fCommit = TRUE;
+-  } 
+-  // Return clear content.
+-  *f_pcbOpaqueClearContent = payloadDataSize;
+-  *f_ppbOpaqueClearContent = (uint8_t *)payloadData;
+-  status = CDMi_SUCCESS;
+-
+-  return status;
+-
+-ErrorExit:
+-  if (DRM_FAILED(dr)) {
+-    const DRM_CHAR* description;
+-    DRM_ERR_GetErrorNameFromCode(dr, &description);
+-    printf("playready error: %s\n", description);
+-  }
+-  return status;
+-}
+-
+-CDMi_RESULT MediaKeySession::ReleaseClearContent(
+-    const uint8_t *f_pbSessionKey,
+-    uint32_t f_cbSessionKey,
+-    const uint32_t  f_cbClearContentOpaque,
+-    uint8_t  *f_pbClearContentOpaque ) {
+-
+-  return CDMi_SUCCESS;
+-
+-}
+-
+-}  // namespace CDMi
+diff --git a/OpenCDMi/DRM/playready/MediaSession.h b/OpenCDMi/DRM/playready/MediaSession.h
+deleted file mode 100644
+index b239421..0000000
+--- a/OpenCDMi/DRM/playready/MediaSession.h
++++ /dev/null
+@@ -1,118 +0,0 @@
+-/*
+- * Copyright 2016-2017 TATA ELXSI
+- * Copyright 2016-2017 Metrological
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-#pragma once
+-
+-#include "cdmi.h"
+-
+-#include <drmbuild_oem.h>
+-#include <drmcommon.h>
+-#include <drmmanager.h>
+-#include <drmmathsafe.h>
+-#include <drmtypes.h>
+-#include <drmerr.h>
+-
+-#undef __in
+-#undef __out
+-
+-namespace CDMi {
+-
+-class MediaKeySession : public IMediaKeySession {
+-private:
+-    enum KeyState {
+-        // Has been initialized.
+-        KEY_INIT = 0,
+-        // Has a key message pending to be processed.
+-        KEY_PENDING = 1,
+-        // Has a usable key.
+-        KEY_READY = 2,
+-        // Has an error.
+-        KEY_ERROR = 3,
+-        // Has been closed.
+-        KEY_CLOSED = 4
+-    };
+-    enum MessageType {
+-        LicenseRequest = 0,
+-        LicenseRenewal = 1,
+-        LicenseRelease = 2,
+-        IndividualizationRequest = 3
+-    };
+-public:
+-    //static const std::vector<std::string> m_mimeTypes;
+-
+-    MediaKeySession(const uint8_t *f_pbInitData, uint32_t f_cbInitData);
+-    ~MediaKeySession();
+-    bool playreadyGenerateKeyRequest();
+-    bool ready() const { return m_eKeyState == KEY_READY; }
+-
+-// MediaKeySession overrides
+-    virtual void Run(
+-        const IMediaKeySessionCallback *f_piMediaKeySessionCallback);
+-
+-    virtual CDMi_RESULT Load();
+-
+-    virtual void Update(
+-        const uint8_t *f_pbKeyMessageResponse,
+-        uint32_t f_cbKeyMessageResponse);
+-
+-    virtual CDMi_RESULT Remove();
+-
+-    virtual CDMi_RESULT Close(void);
+-
+-    virtual const char *GetSessionId(void) const;
+-    virtual const char *GetKeySystem(void) const;
+-    virtual CDMi_RESULT Decrypt(
+-        const uint8_t *f_pbSessionKey,
+-        uint32_t f_cbSessionKey,
+-        const uint32_t *f_pdwSubSampleMapping,
+-        uint32_t f_cdwSubSampleMapping,
+-        const uint8_t *f_pbIV,
+-        uint32_t f_cbIV,
+-        const uint8_t *f_pbData,
+-        uint32_t f_cbData,
+-        uint32_t *f_pcbOpaqueClearContent,
+-        uint8_t **f_ppbOpaqueClearContent);
+-
+-    virtual CDMi_RESULT ReleaseClearContent(
+-        const uint8_t *f_pbSessionKey,
+-        uint32_t f_cbSessionKey,
+-        const uint32_t  f_cbClearContentOpaque,
+-        uint8_t  *f_pbClearContentOpaque );
+-
+-
+-private:
+-    static DRM_RESULT DRM_CALL _PolicyCallback(const DRM_VOID *, DRM_POLICY_CALLBACK_TYPE f_dwCallbackType, const DRM_VOID *);
+-
+-    DRM_APP_CONTEXT *m_poAppContext;
+-    DRM_DECRYPT_CONTEXT m_oDecryptContext;
+-
+-    DRM_BYTE *m_pbOpaqueBuffer;
+-    DRM_DWORD m_cbOpaqueBuffer;
+-
+-    DRM_BYTE *m_pbRevocationBuffer;
+-    KeyState m_eKeyState;
+-    DRM_CHAR m_rgchSessionID[CCH_BASE64_EQUIV(SIZEOF(DRM_ID)) + 1];
+-    DRM_BOOL m_fCommit;
+-      
+-    DRM_BYTE *m_pbChallenge;
+-    DRM_DWORD m_cbChallenge;
+-    DRM_CHAR *m_pchSilentURL;  
+-    IMediaKeySessionCallback *m_piCallback;
+-   
+-};
+-
+-} // namespace CDMi
+diff --git a/OpenCDMi/DRM/playready/MediaSystem.cpp b/OpenCDMi/DRM/playready/MediaSystem.cpp
+deleted file mode 100644
+index 27f8cde..0000000
+--- a/OpenCDMi/DRM/playready/MediaSystem.cpp
++++ /dev/null
+@@ -1,71 +0,0 @@
+-/*
+- * Copyright 2016-2017 TATA ELXSI
+- * Copyright 2016-2017 Metrological
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-#include "cdmi.h"
+-#include "MediaSession.h"
+-
+-namespace CDMi {
+-
+-class PlayReady : public IMediaKeys {
+-private:
+-    PlayReady (const PlayReady&) = delete;
+-    PlayReady& operator= (const PlayReady&) = delete;
+-
+-public:
+-    PlayReady() {
+-    }
+-
+-    ~PlayReady(void) {
+-    }
+-
+-    CDMi_RESULT CreateMediaKeySession(
+-        int32_t licenseType,
+-        const char *f_pwszInitDataType,
+-        const uint8_t *f_pbInitData,
+-        uint32_t f_cbInitData, 
+-        const uint8_t *f_pbCDMData,
+-        uint32_t f_cbCDMData, 
+-        IMediaKeySession **f_ppiMediaKeySession) {
+-
+-        *f_ppiMediaKeySession = new CDMi::MediaKeySession(f_pbInitData, f_cbInitData);
+- 
+-        return CDMi_SUCCESS; 
+-    }
+-
+-    CDMi_RESULT SetServerCertificate(
+-        const uint8_t *f_pbServerCertificate,
+-        uint32_t f_cbServerCertificate) {
+-
+-        return CDMi_S_FALSE;
+-    }
+-
+-    CDMi_RESULT DestroyMediaKeySession(IMediaKeySession *f_piMediaKeySession) {
+-
+-        delete f_piMediaKeySession;
+-
+-        return CDMi_SUCCESS; 
+-    }
+-};
+-
+-static SystemFactoryType<PlayReady> g_instance({"video/x-h264", "audio/mpeg"});
+-
+-}  // namespace CDMi
+-
+-CDMi::ISystemFactory* GetSystemFactory() {
+-
+-    return (&CDMi::g_instance); 
+-}
+diff --git a/OpenCDMi/DRM/playready_nexus/CMakeLists.txt b/OpenCDMi/DRM/playready_nexus/CMakeLists.txt
+deleted file mode 100644
+index 5b0945c..0000000
+--- a/OpenCDMi/DRM/playready_nexus/CMakeLists.txt
++++ /dev/null
+@@ -1,38 +0,0 @@
+-cmake_minimum_required(VERSION 2.8)
+-
+-set(DRM_PLUGIN_NAME PlayReady)
+-
+-find_package(PlayReady REQUIRED)
+-find_package(BcmNxServer REQUIRED)
+-find_package(WPEFramework REQUIRED)
+-
+-if(CLION_ENVIRONMENT)
+-    set(WPEFRAMEWORK_LIBRARY_WPEFrameworkCore WPEFrameworkCore)
+-    set(WPEFRAMEWORK_INCLUDE_DIRS ${WPEFRAMEWORK_ROOT}/Source)
+-endif()
+-
+-
+-file(GLOB DRM_PLUGIN_INCLUDES *.h)
+-
+-set(DRM_PLUGIN_INCLUDES
+-    ${DRM_PLUGIN_INCLUDES}
+-    ${WPEFRAMEWORK_INCLUDE_DIRS})
+-
+-set(DRM_PLUGIN_LIBS
+-    ${PLAYREADY_LIBRARIES}
+-    ${WPEFRAMEWORK_LIBRARY_WPEFrameworkCore}
+-    ${MODULE_NAME})
+-
+-set(DRM_PLUGIN_SOURCES 
+-    MediaSession.cpp 
+-    MediaSystem.cpp)
+-
+-# add the library
+-add_library(${DRM_PLUGIN_NAME} SHARED ${DRM_PLUGIN_SOURCES})
+-target_compile_definitions(${DRM_PLUGIN_NAME} PRIVATE ${PLAYREADY_FLAGS})
+-target_include_directories(${DRM_PLUGIN_NAME} PRIVATE ${PLAYREADY_INCLUDE_DIRS} ${LIBNXCLIENT_INCLUDE_DIRS} ${DRM_PLUGIN_INCLUDES})
+-target_link_libraries(${DRM_PLUGIN_NAME} ${DRM_PLUGIN_LIBS})
+-set_target_properties(${DRM_PLUGIN_NAME} PROPERTIES SUFFIX ".drm")
+-set_target_properties(${DRM_PLUGIN_NAME} PROPERTIES PREFIX "")
+-
+-install(TARGETS ${DRM_PLUGIN_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX}/share/WPEFramework/${PLUGIN_NAME})
+diff --git a/OpenCDMi/DRM/playready_nexus/MediaSession.cpp b/OpenCDMi/DRM/playready_nexus/MediaSession.cpp
+deleted file mode 100644
+index cc1d779..0000000
+--- a/OpenCDMi/DRM/playready_nexus/MediaSession.cpp
++++ /dev/null
+@@ -1,456 +0,0 @@
+-/*
+- * Copyright 2016-2017 TATA ELXSI
+- * Copyright 2016-2017 Metrological
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-#include "MediaSession.h"
+-#include <assert.h>
+-#include <iostream>
+-#include <sstream>
+-#include <string>
+-#include <string.h>
+-#include <vector>
+-#include <sys/utsname.h>
+-
+-#define NYI_KEYSYSTEM "keysystem-placeholder"
+-
+-using namespace std;
+-
+-namespace CDMi {
+-
+-// Parse out the first PlayReady initialization header found in the concatenated
+-// block of headers in _initData_.
+-// If a PlayReady header is found, this function returns true and the header
+-// contents are stored in _output_.
+-// Otherwise, returns false and _output_ is not touched.
+-bool parsePlayreadyInitializationData(const std::string& initData, std::string* output)
+-{
+-    BufferReader input(reinterpret_cast<const uint8_t*>(initData.data()), initData.length());
+-
+-    static const uint8_t playreadySystemId[] = {
+-      0x9A, 0x04, 0xF0, 0x79, 0x98, 0x40, 0x42, 0x86,
+-      0xAB, 0x92, 0xE6, 0x5B, 0xE0, 0x88, 0x5F, 0x95,
+-    };
+-
+-    // one PSSH box consists of:
+-    // 4 byte size of the atom, inclusive.  (0 means the rest of the buffer.)
+-    // 4 byte atom type, "pssh".
+-    // (optional, if size == 1) 8 byte size of the atom, inclusive.
+-    // 1 byte version, value 0 or 1.  (skip if larger.)
+-    // 3 byte flags, value 0.  (ignored.)
+-    // 16 byte system id.
+-    // (optional, if version == 1) 4 byte key ID count. (K)
+-    // (optional, if version == 1) K * 16 byte key ID.
+-    // 4 byte size of PSSH data, exclusive. (N)
+-    // N byte PSSH data.
+-    while (!input.IsEOF()) {
+-      size_t startPosition = input.pos();
+-
+-      // The atom size, used for skipping.
+-      uint64_t atomSize;
+-
+-      if (!input.Read4Into8(&atomSize)) {
+-        return false;
+-      }
+-
+-      std::vector<uint8_t> atomType;
+-      if (!input.ReadVec(&atomType, 4)) {
+-          return false;
+-      }
+-
+-      if (atomSize == 1) {
+-          if (!input.Read8(&atomSize)) {
+-              return false;
+-          }
+-      } else if (atomSize == 0) {
+-        atomSize = input.size() - startPosition;
+-      }
+-
+-      if (memcmp(&atomType[0], "pssh", 4)) {
+-          if (!input.SkipBytes(atomSize - (input.pos() - startPosition))) {
+-            return false;
+-          }
+-          continue;
+-      }
+-
+-      uint8_t version;
+-      if (!input.Read1(&version)) {
+-          return false;
+-      }
+-
+-
+-      if (version > 1) {
+-        // unrecognized version - skip.
+-        if (!input.SkipBytes(atomSize - (input.pos() - startPosition))) {
+-          return false;
+-        }
+-        continue;
+-      }
+-
+-      // flags
+-      if (!input.SkipBytes(3)) {
+-        return false;
+-      }
+-
+-      // system id
+-      std::vector<uint8_t> systemId;
+-      if (!input.ReadVec(&systemId, sizeof(playreadySystemId))) {
+-        return false;
+-      }
+-
+-      if (memcmp(&systemId[0], playreadySystemId, sizeof(playreadySystemId))) {
+-        // skip non-Playready PSSH boxes.
+-        if (!input.SkipBytes(atomSize - (input.pos() - startPosition))) {
+-          return false;
+-        }
+-        continue;
+-      }
+-
+-      if (version == 1) {
+-        // v1 has additional fields for key IDs.  We can skip them.
+-        uint32_t numKeyIds;
+-        if (!input.Read4(&numKeyIds)) {
+-          return false;
+-        }
+-
+-        if (!input.SkipBytes(numKeyIds * 16)) {
+-          return false;
+-        }
+-      }
+-
+-      // size of PSSH data
+-      uint32_t dataLength;
+-      if (!input.Read4(&dataLength)) {
+-        return false;
+-      }
+-
+-      output->clear();
+-      if (!input.ReadString(output, dataLength)) {
+-        return false;
+-      }
+-
+-      return true;
+-  }
+-
+-  // we did not find a matching record
+-  return false;
+-}
+-
+-MediaKeySession::MediaKeySession(const uint8_t *f_pbInitData, uint32_t f_cbInitData)
+-        : m_prdyHandle(nullptr)
+-        , m_oDecryptContext()
+-        , m_oDecryptContextKey()
+-        , m_DecryptBufferSize(100000)
+-        , m_DecryptBuffer(nullptr)
+-        , m_eKeyState(KEY_INIT)
+-        , m_fCommit(false)
+-        , m_piCallback(nullptr)
+-        , _decoderLock() {
+-
+-    std::string initData(reinterpret_cast<const char *>(f_pbInitData), f_cbInitData);
+-    std::string playreadyInitData;
+-    DRM_Prdy_Error_e dr = DRM_Prdy_fail;
+-    DRM_Prdy_Init_t settings;
+-    m_oDecryptContext.pKeyContext = &m_oDecryptContextKey;
+-
+-    DRM_Prdy_GetDefaultParamSettings(&settings);
+-    settings.hdsFileName = reinterpret_cast<char *>(::strdup("/tmp/wpe.hds"));
+-
+-    uint8_t sessionID[SESSION_ID_SIZE];
+-    if (!generateSessionId(sessionID)) {
+-        printf("Session ID generation failed\n");
+-        m_eKeyState = KEY_ERROR;
+-    } else {
+-
+-        uint32_t B64SessionIDSize = DRM_Prdy_Cch_Base64_Equiv( SESSION_ID_SIZE );
+-        uint16_t B64SessionID[B64SessionIDSize];
+-        if(B64SessionID != NULL) {
+-
+-            dr = DRM_Prdy_B64_EncodeW(sessionID,
+-                                      SESSION_ID_SIZE,
+-                                      B64SessionID,
+-                                      &B64SessionIDSize);
+-            if (dr != DRM_Prdy_ok) {
+-                printf("CXDrm::SetEnhancedData DRM_Prdy_B64_EncodeW failed = 0x%x\n", dr);
+-            }
+-            m_rgchSessionID = new char[SESSION_ID_SIZE];
+-            ::memcpy(m_rgchSessionID, reinterpret_cast<char *>(B64SessionID), SESSION_ID_SIZE * sizeof(char));
+-            printf("Session ID generated %s\n", m_rgchSessionID);
+-        }
+-
+-        m_prdyHandle = DRM_Prdy_Initialize(&settings);
+-        if (m_prdyHandle == nullptr) {
+-            m_eKeyState = KEY_ERROR;
+-            printf("Playready initialization failed\n");
+-        } else {
+-            int rc = NEXUS_Memory_Allocate(m_DecryptBufferSize, nullptr, reinterpret_cast<void **>(&m_DecryptBuffer));
+-            if (rc != 0) {
+-                m_eKeyState = KEY_ERROR;
+-                printf("Playready initialization failed: NEXUS_Memory_Allocate\n");
+-            } else {
+-                printf("Playready initialized \n");
+-
+-                if (!parsePlayreadyInitializationData(initData, &playreadyInitData)) {
+-                    playreadyInitData = initData;
+-                }
+-
+-                dr = DRM_Prdy_Content_SetProperty(m_prdyHandle,
+-                                                  DRM_Prdy_contentSetProperty_eAutoDetectHeader,
+-                                                  reinterpret_cast<const uint8_t *>(playreadyInitData.data()),
+-                                                  playreadyInitData.size());
+-
+-            }
+-
+-        }
+-    }
+-}
+-
+-MediaKeySession::~MediaKeySession(void) {
+-
+-    if (m_prdyHandle != nullptr)
+-        DRM_Prdy_Uninitialize(m_prdyHandle);
+-
+-    if (m_DecryptBuffer != nullptr)
+-        NEXUS_Memory_Free(m_DecryptBuffer);
+-
+-    delete m_rgchSessionID;
+-    m_eKeyState = KEY_CLOSED;
+-}
+-
+-const char *MediaKeySession::GetSessionId(void) const {
+-
+-    return m_rgchSessionID;
+-}
+-
+-const char *MediaKeySession::GetKeySystem(void) const {
+-    return NYI_KEYSYSTEM; // FIXME : replace with keysystem and test.
+-}
+-
+-void MediaKeySession::Run(const IMediaKeySessionCallback *f_piMediaKeySessionCallback) {
+-    if (f_piMediaKeySessionCallback)
+-        m_piCallback = const_cast<IMediaKeySessionCallback *>(f_piMediaKeySessionCallback);
+-
+-    // FIXME : Custom data is not set;needs recheck.
+-    playreadyGenerateKeyRequest();
+-}
+-
+-
+-bool MediaKeySession::playreadyGenerateKeyRequest() {
+-    
+-
+-    DRM_Prdy_Error_e dr = DRM_Prdy_fail;
+-    unsigned int cbChallenge = 0;
+-    unsigned int cchSilentURL = 0;
+-    char *pbChallenge = nullptr;
+-    char *pchSilentURL = nullptr;
+-
+-    // The current state MUST be KEY_INIT otherwise error out.
+-    if (m_eKeyState == KEY_INIT) {
+-
+-        DRM_Prdy_Reader_Bind(m_prdyHandle, &m_oDecryptContext);
+-
+-        // Try to figure out the size of the license acquisition
+-        // challenge to be returned.
+-        if ((dr = DRM_Prdy_Get_Buffer_Size(
+-                m_prdyHandle,
+-                DRM_Prdy_getBuffer_licenseAcq_challenge,
+-                nullptr, //customData.isEmpty() ? nullptr : reinterpret_cast<const uint8_t *>(customData.utf8().data()),
+-                0, //customData.length(),
+-                &cchSilentURL,
+-                &cbChallenge)) == DRM_Prdy_ok) {
+-
+-            if (cchSilentURL > 0) {
+-                pchSilentURL = reinterpret_cast<char *>(::malloc(cchSilentURL + 1));
+-                memset(pchSilentURL, 0, sizeof(cchSilentURL + 1));
+-            }
+-
+-            // Allocate buffer that is sufficient to store the license acquisition
+-            // challenge.
+-            if (cbChallenge > 0) {
+-                pbChallenge = reinterpret_cast<char *>(::malloc(cbChallenge + 1));
+-                memset(pbChallenge, 0, sizeof(cbChallenge + 1));
+-            }
+-
+-            // Supply a buffer to receive the license acquisition challenge.
+-            if ((dr = DRM_Prdy_LicenseAcq_GenerateChallenge(
+-                    m_prdyHandle,
+-                    nullptr, //customData.isEmpty() ? nullptr : reinterpret_cast<const char *>(customData.utf8().data()),
+-                    0, //customData.length(),
+-                    pchSilentURL,
+-                    &cchSilentURL,
+-                    pbChallenge,
+-                    &cbChallenge)) == DRM_Prdy_ok) {
+-
+-			  m_eKeyState = KEY_PENDING;
+-			  m_piCallback->OnKeyMessage((const uint8_t *) pbChallenge, cbChallenge, (char *)pchSilentURL); 
+-			  return true;
+-
+-		}
+-        }
+-    }
+-
+-    m_eKeyState = KEY_ERROR;
+-    free(pbChallenge);
+-    free(pchSilentURL);
+-    printf("playreadyGenerateKeyRequest FAIL! \n");
+-
+-    return false;
+-}
+-
+-CDMi_RESULT MediaKeySession::Load(void) {
+-  return CDMi_S_FALSE;
+-}
+-
+-void MediaKeySession::Update(const uint8_t *m_pbKeyMessageResponse, uint32_t  m_cbKeyMessageResponse) {
+-
+-    DRM_Prdy_Error_e dr = DRM_Prdy_fail;
+-    DRM_Prdy_License_Response_t oLicenseResponse = { DRM_Prdy_License_Protocol_Type_eUnknownProtocol, 0 };
+-    DRM_Prdy_DecryptSettings_t pDecryptSettings;
+-
+-    if ( (m_pbKeyMessageResponse != nullptr) && (m_cbKeyMessageResponse > 0) && (m_eKeyState == KEY_PENDING) &&
+-         ( (dr = DRM_Prdy_LicenseAcq_ProcessResponse(
+-                 m_prdyHandle,
+-                 reinterpret_cast<const char *>(m_pbKeyMessageResponse),
+-                 m_cbKeyMessageResponse,
+-                 &oLicenseResponse)) == DRM_Prdy_ok) &&
+-         ( (dr = DRM_Prdy_Reader_Bind(
+-                 m_prdyHandle,
+-                 &m_oDecryptContext)) == DRM_Prdy_ok) ) {
+-
+-        printf("playreadyProcessKey did everything, DR result: %d \n", dr);
+-        m_eKeyState = KEY_READY;
+-    }
+-
+-    if (dr == DRM_Prdy_ok) {
+-
+-  	printf("Key processed, now ready for content decryption\n");
+-        if (m_eKeyState == KEY_READY) {
+-    		m_piCallback->OnKeyStatusUpdate("KeyUsable");
+-		return;
+-  	}
+-
+-
+-    }
+-
+-    printf("Playready failed processing license response\n");
+-    m_eKeyState = KEY_ERROR;
+-    return;
+-}
+-
+-CDMi_RESULT MediaKeySession::Remove(void) {
+-  return CDMi_S_FALSE;
+-}
+-
+-CDMi_RESULT MediaKeySession::Close(void) {}
+-
+-CDMi_RESULT MediaKeySession::Decrypt(
+-    const uint8_t *f_pbSessionKey,
+-    uint32_t f_cbSessionKey,
+-    const uint32_t *f_pdwSubSampleMapping,
+-    uint32_t f_cdwSubSampleMapping,
+-    const uint8_t *f_pbIV,
+-    uint32_t f_cbIV,
+-    const uint8_t *payloadData,
+-    uint32_t payloadDataSize,
+-    uint32_t *f_pcbOpaqueClearContent,
+-    uint8_t **f_ppbOpaqueClearContent) {
+-
+-    DRM_Prdy_Error_e dr = DRM_Prdy_fail;
+-    DRM_Prdy_AES_CTR_Info_t oAESContext;
+-
+-    if (sizeof(oAESContext.qwInitializationVector) >= f_cbIV) {
+-        uint8_t* newBuffer = nullptr;
+-        const uint8_t* source = reinterpret_cast<const uint8_t*>(f_pbIV);
+-        uint8_t* destination = reinterpret_cast<uint8_t*>(&oAESContext.qwInitializationVector);
+-
+-        for (uint32_t index = 0; index < (f_cbIV / 2); index++) {
+-            destination[index] = source[f_cbIV - index - 1];
+-            destination[f_cbIV - index - 1] = source[index];
+-        }
+-
+-        oAESContext.qwBlockOffset = 0;
+-        oAESContext.bByteOffset = 0;
+-
+-        if (payloadDataSize >  m_DecryptBufferSize) {
+-            int rc = NEXUS_Memory_Allocate(payloadDataSize, nullptr, reinterpret_cast<void**>(&newBuffer));
+-            if( rc == 0 ) {
+-                ::memcpy(newBuffer, payloadData, payloadDataSize);
+-            }
+-        }
+-
+-        _decoderLock.Lock();
+-
+-        if (newBuffer != nullptr) {
+-
+-            m_DecryptBufferSize = payloadDataSize;
+-            NEXUS_Memory_Free(m_DecryptBuffer);
+-            m_DecryptBuffer = newBuffer;
+-            printf("m_DecryptBufferSize to small, use larger buffer. newSize: %d \n", payloadDataSize);
+-        } else {
+-            memcpy(m_DecryptBuffer, payloadData, payloadDataSize);
+-        }
+-
+-        if ( (dr = DRM_Prdy_Reader_Decrypt(&m_oDecryptContext, &oAESContext, m_DecryptBuffer, payloadDataSize)) == DRM_Prdy_ok) {
+-
+-            if ( (!m_fCommit) && ((dr = DRM_Prdy_Reader_Commit(m_prdyHandle)) == DRM_Prdy_ok) )
+-                m_fCommit = true;
+-
+-            // Return clear content.
+-            *f_pcbOpaqueClearContent = payloadDataSize;
+-            *f_ppbOpaqueClearContent = (uint8_t *) m_DecryptBuffer;
+-
+-            _decoderLock.Unlock();
+-
+-            return CDMi_SUCCESS;
+-        }
+-
+-        _decoderLock.Unlock();
+-    } else {
+-        printf("oAESContext.qwInitializationVector smaller than ivSize. %d %d \n", sizeof(oAESContext.qwInitializationVector), f_cbIV);
+-    }
+-
+-    return CDMi_S_FALSE;
+-}
+-
+-CDMi_RESULT MediaKeySession::ReleaseClearContent(
+-    const uint8_t *f_pbSessionKey,
+-    uint32_t f_cbSessionKey,
+-    const uint32_t  f_cbClearContentOpaque,
+-    uint8_t  *f_pbClearContentOpaque ) {
+-
+-  return CDMi_SUCCESS;
+-
+-}
+-
+-bool MediaKeySession::generateSessionId(uint8_t *pRandomBytes)
+-{
+-    NEXUS_RandomNumberGenerateSettings settings;
+-    NEXUS_RandomNumberOutput rngOutput;
+-
+-    NEXUS_RandomNumber_GetDefaultGenerateSettings(&settings);
+-    settings.randomNumberSize = SESSION_ID_SIZE;
+-
+-    if( (NEXUS_RandomNumber_Generate(&settings, &rngOutput) != 0) || (rngOutput.size != SESSION_ID_SIZE) )
+-    {
+-        printf("%s - Error generating '%u' random bytes (only '%u' bytes returned) ", __FUNCTION__, SESSION_ID_SIZE, rngOutput.size);
+-        return false;
+-    }
+-
+-    ::memcpy(pRandomBytes, rngOutput.buffer, SESSION_ID_SIZE);
+-
+-    return true;
+-}
+-
+-}  // namespace CDMi
+diff --git a/OpenCDMi/DRM/playready_nexus/MediaSession.h b/OpenCDMi/DRM/playready_nexus/MediaSession.h
+deleted file mode 100644
+index 2345253..0000000
+--- a/OpenCDMi/DRM/playready_nexus/MediaSession.h
++++ /dev/null
+@@ -1,113 +0,0 @@
+-/*
+- * Copyright 2016-2017 TATA ELXSI
+- * Copyright 2016-2017 Metrological
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-#pragma once
+-
+-#include "cdmi.h"
+-#include <core/core.h>
+-
+-#include <refsw/nexus_memory.h>
+-#include <refsw/nexus_random_number.h>
+-#include <refsw/drm_prdy.h>
+-
+-#undef __in
+-#undef __out
+-
+-namespace CDMi {
+-
+-class MediaKeySession : public IMediaKeySession {
+-private:
+-    enum KeyState {
+-        // Has been initialized.
+-        KEY_INIT = 0,
+-        // Has a key message pending to be processed.
+-        KEY_PENDING = 1,
+-        // Has a usable key.
+-        KEY_READY = 2,
+-        // Has an error.
+-        KEY_ERROR = 3,
+-        // Has been closed.
+-        KEY_CLOSED = 4
+-    };
+-    enum MessageType {
+-        LicenseRequest = 0,
+-        LicenseRenewal = 1,
+-        LicenseRelease = 2,
+-        IndividualizationRequest = 3
+-    };
+-public:
+-    //static const std::vector<std::string> m_mimeTypes;
+-
+-    MediaKeySession(const uint8_t *f_pbInitData, uint32_t f_cbInitData);
+-    ~MediaKeySession();
+-    bool playreadyGenerateKeyRequest();
+-    bool ready() const { return m_eKeyState == KEY_READY; }
+-
+-// MediaKeySession overrides
+-    virtual void Run(
+-        const IMediaKeySessionCallback *f_piMediaKeySessionCallback);
+-
+-    virtual CDMi_RESULT Load();
+-
+-    virtual void Update(
+-        const uint8_t *f_pbKeyMessageResponse,
+-        uint32_t f_cbKeyMessageResponse);
+-
+-    virtual CDMi_RESULT Remove();
+-
+-    virtual CDMi_RESULT Close(void);
+-
+-    virtual const char *GetSessionId(void) const;
+-    virtual const char *GetKeySystem(void) const;
+-    virtual CDMi_RESULT Decrypt(
+-        const uint8_t *f_pbSessionKey,
+-        uint32_t f_cbSessionKey,
+-        const uint32_t *f_pdwSubSampleMapping,
+-        uint32_t f_cdwSubSampleMapping,
+-        const uint8_t *f_pbIV,
+-        uint32_t f_cbIV,
+-        const uint8_t *f_pbData,
+-        uint32_t f_cbData,
+-        uint32_t *f_pcbOpaqueClearContent,
+-        uint8_t **f_ppbOpaqueClearContent);
+-
+-    virtual CDMi_RESULT ReleaseClearContent(
+-        const uint8_t *f_pbSessionKey,
+-        uint32_t f_cbSessionKey,
+-        const uint32_t  f_cbClearContentOpaque,
+-        uint8_t  *f_pbClearContentOpaque );
+-
+-private:
+-    bool generateSessionId(uint8_t *pRandomBytes);
+-
+-private:
+-    DRM_Prdy_Handle_t m_prdyHandle;
+-    DRM_Prdy_DecryptContext_t m_oDecryptContext;
+-    DRM_Prdy_DecryptContextKey_t m_oDecryptContextKey;
+-    uint32_t m_DecryptBufferSize;
+-    uint8_t* m_DecryptBuffer;
+-    char *m_rgchSessionID;
+-    bool m_fCommit;
+-    KeyState m_eKeyState;
+-    IMediaKeySessionCallback *m_piCallback;
+-    const uint8_t SESSION_ID_SIZE = 16;
+-
+-   WPEFramework::Core::CriticalSection _decoderLock;
+-
+-};
+-
+-} // namespace CDMi
+diff --git a/OpenCDMi/DRM/playready_nexus/MediaSystem.cpp b/OpenCDMi/DRM/playready_nexus/MediaSystem.cpp
+deleted file mode 100644
+index 9456e7f..0000000
+--- a/OpenCDMi/DRM/playready_nexus/MediaSystem.cpp
++++ /dev/null
+@@ -1,71 +0,0 @@
+-/*
+- * Copyright 2016-2017 TATA ELXSI
+- * Copyright 2016-2017 Metrological
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-#include "cdmi.h"
+-#include "MediaSession.h"
+-
+-namespace CDMi {
+-
+-class PlayReady : public IMediaKeys {
+-private:
+-    PlayReady (const PlayReady&) = delete;
+-    PlayReady& operator= (const PlayReady&) = delete;
+-
+-public:
+-    PlayReady() {
+-    }
+-
+-    ~PlayReady(void) {
+-    }
+-
+-    CDMi_RESULT CreateMediaKeySession(
+-        int32_t licenseType,
+-        const char *f_pwszInitDataType,
+-        const uint8_t *f_pbInitData,
+-        uint32_t f_cbInitData, 
+-        const uint8_t *f_pbCDMData,
+-        uint32_t f_cbCDMData, 
+-        IMediaKeySession **f_ppiMediaKeySession) {
+-
+-        *f_ppiMediaKeySession = new CDMi::MediaKeySession(f_pbInitData, f_cbInitData);
+-
+-        return CDMi_SUCCESS; 
+-    }
+-
+-    CDMi_RESULT SetServerCertificate(
+-        const uint8_t *f_pbServerCertificate,
+-        uint32_t f_cbServerCertificate) {
+-
+-        return CDMi_S_FALSE;
+-    }
+-
+-    CDMi_RESULT DestroyMediaKeySession(IMediaKeySession *f_piMediaKeySession) {
+-
+-        delete f_piMediaKeySession;
+-
+-        return CDMi_SUCCESS;
+-    }
+-};
+-
+-static SystemFactoryType<PlayReady> g_instance({"video/x-h264", "audio/mpeg"});
+-
+-}  // namespace CDMi
+-
+-CDMi::ISystemFactory* GetSystemFactory() {
+-
+-    return (&CDMi::g_instance); 
+-}
+diff --git a/OpenCDMi/DRM/widevine/CMakeLists.txt b/OpenCDMi/DRM/widevine/CMakeLists.txt
+deleted file mode 100644
+index 82188bc..0000000
+--- a/OpenCDMi/DRM/widevine/CMakeLists.txt
++++ /dev/null
+@@ -1,24 +0,0 @@
+-cmake_minimum_required(VERSION 2.8)
+-
+-set(DRM_PLUGIN_NAME WideVine)
+-
+-find_package(WideVine REQUIRED)
+-
+-file(GLOB DRM_PLUGIN_INCLUDES *.h)
+-
+-set(DRM_PLUGIN_LIBS 
+-    ${WIDEVINE_LIBRARIES})
+-
+-set(DRM_PLUGIN_SOURCES 
+-    MediaSession.cpp 
+-    MediaSystem.cpp)
+-
+-# add the library
+-add_library(${DRM_PLUGIN_NAME} SHARED ${DRM_PLUGIN_SOURCES})
+-target_compile_definitions(${DRM_PLUGIN_NAME} PRIVATE ${WIDEVINE_FLAGS})
+-target_include_directories(${DRM_PLUGIN_NAME} PRIVATE ${WIDEVINE_INCLUDE_DIRS})
+-target_link_libraries(${DRM_PLUGIN_NAME} ${DRM_PLUGIN_LIBS})
+-set_target_properties(${DRM_PLUGIN_NAME} PROPERTIES SUFFIX ".drm")
+-set_target_properties(${DRM_PLUGIN_NAME} PROPERTIES PREFIX "")
+-
+-install(TARGETS ${DRM_PLUGIN_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX}/share/WPEFramework/${PLUGIN_NAME})
+diff --git a/OpenCDMi/DRM/widevine/MediaSession.cpp b/OpenCDMi/DRM/widevine/MediaSession.cpp
+deleted file mode 100644
+index 8e74605..0000000
+--- a/OpenCDMi/DRM/widevine/MediaSession.cpp
++++ /dev/null
+@@ -1,320 +0,0 @@
+-/*
+- * Copyright 2016-2017 TATA ELXSI
+- * Copyright 2016-2017 Metrological
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-#include "MediaSession.h"
+-#include "Policy.h"
+-
+-#include <assert.h>
+-#include <iostream>
+-#include <openssl/aes.h>
+-#include <openssl/evp.h>
+-#include <sstream>
+-#include <string>
+-#include <string.h>
+-#include <sys/utsname.h>
+-
+-#define NYI_KEYSYSTEM "keysystem-placeholder"
+-#define IV_FIX_WORKAROUND 1
+-
+-using namespace std;
+-
+-namespace CDMi {
+-
+-static void hex_print(const void *pv, size_t len) {
+-  const unsigned char *p = (const unsigned char*)pv;
+-  if (!pv)
+-    printf("NULL");
+-  else
+-  {
+-    size_t i = 0;
+-    for (; i<len;++i)
+-      printf("%02X ", *p++);
+-  }
+-  printf("\n");
+-}
+-
+-MediaKeySession::MediaKeySession(Cdm *cdm, int32_t licenseType)
+-    : m_cdm(cdm)
+-    , m_CDMData("")
+-    , m_initData("")
+-    , m_initDataType(Cdm::kCenc)
+-    , m_licenseType((widevine::Cdm::SessionType)licenseType)
+-    , m_sessionId("") {
+-  m_cdm->createSession(m_licenseType, &m_sessionId);
+-}
+-
+-MediaKeySession::~MediaKeySession(void) {
+-}
+-
+-
+-void MediaKeySession::Run(const IMediaKeySessionCallback *f_piMediaKeySessionCallback) {
+-  printf("called with callback %p\n", f_piMediaKeySessionCallback);
+-
+-  if (f_piMediaKeySessionCallback) {
+-    m_piCallback = const_cast<IMediaKeySessionCallback*>(f_piMediaKeySessionCallback);
+-  }
+-
+-  Cdm::Status status = m_cdm->generateRequest(m_sessionId, m_initDataType, m_initData);
+-  if (Cdm::kSuccess == status)
+-     printf("generateRequest successful\n");
+-  else
+-     printf("generateRequest failed\n");
+-}
+-
+-void MediaKeySession::onMessage(const std::string& f_sessionId, Cdm::MessageType f_messageType, const std::string& f_message) {
+-  std::string destUrl;
+-  std::string message;
+-
+-  printf("called\n");
+-
+-  switch (f_messageType) {
+-  case Cdm::kLicenseRequest:
+-  {
+-    printf("message is a license request\n");
+-    destUrl.assign(kLicenseServer); 
+-    Cdm::MessageType messageType = Cdm::kLicenseRequest;
+-
+-    // FIXME: Errrr, this is weird.
+-    //if ((Cdm::MessageType)f_message[1] == (Cdm::kIndividualizationRequest + 1)) {
+-    //  LOGI("switching message type to kIndividualizationRequest");
+-    //  messageType = Cdm::kIndividualizationRequest;
+-    //}
+-    
+-    message = std::to_string(messageType) + ":Type:";
+-    break;
+-  }
+-  default:
+-    printf("unsupported message type\n");
+-    break;
+-  }
+-  message.append(f_message.c_str(),  f_message.size());
+-  m_piCallback->OnKeyMessage((const uint8_t*) message.c_str(), message.size(), (char*) destUrl.c_str());
+-}
+-
+-void MediaKeySession::onKeyStatusesChange(const std::string& f_sessionId) {
+-  Cdm::KeyStatusMap map;
+-  std::string keyStatus;
+-  if (Cdm::kSuccess == m_cdm->getKeyStatuses(f_sessionId, &map)) {
+-    switch (map.begin()->second) {
+-    case Cdm::kUsable:
+-      keyStatus = "KeyUsable";
+-      break;
+-    case Cdm::kExpired:
+-      keyStatus = "KeyExpired";
+-      break;
+-    case Cdm::kOutputRestricted:
+-      keyStatus = "KeyOutputRestricted";
+-      break;
+-    case Cdm::kStatusPending:
+-      keyStatus = "KeyStatusPending";
+-      break;
+-    case Cdm::kInternalError:
+-      keyStatus = "KeyInternalError";
+-      break;
+-    case Cdm::kReleased:
+-      keyStatus = "KeyReleased";
+-      break;
+-    default:
+-      keyStatus = "UnKnownError";
+-      break;
+-    }
+-  }
+-  m_piCallback->OnKeyStatusUpdate(keyStatus.c_str());
+-}
+-
+-
+-void MediaKeySession::onKeyStatusError(const std::string& f_sessionId, Cdm::Status status) {
+-  std::string errorStatus;
+-  switch (status) {
+-  case Cdm::kNeedsDeviceCertificate:
+-    errorStatus = "NeedsDeviceCertificate";
+-    break;
+-  case Cdm::kSessionNotFound:
+-    errorStatus = "SessionNotFound";
+-    break;
+-  case Cdm::kDecryptError:
+-    errorStatus = "DecryptError";
+-    break;
+-  case Cdm::kInvalidAccess:
+-    errorStatus = "InvalidAccess";
+-    break;
+-  case Cdm::kQuotaExceeded:
+-    errorStatus = "QuotaExceeded";
+-    break;
+-  case Cdm::kNotSupported:
+-    errorStatus = "NotSupported";
+-    break;
+-  default:
+-    errorStatus = "UnExpectedError";
+-    break;
+-  }
+-  m_piCallback->OnKeyError(0, CDMi_S_FALSE, errorStatus.c_str());
+-}
+-
+-void MediaKeySession::onRemoveComplete(const std::string& f_sessionId) {
+-  m_piCallback->OnKeyStatusUpdate("KeyReleased");
+-}
+-
+-CDMi_RESULT MediaKeySession::Load(void) {
+-  CDMi_RESULT ret = CDMi_S_FALSE;
+-  Cdm::Status status = m_cdm->load(m_sessionId);
+-  if (Cdm::kSuccess != status)
+-    onKeyStatusError(m_sessionId, status);
+-  else
+-    ret = CDMi_SUCCESS;
+-  return ret;
+-}
+-
+-void MediaKeySession::Update(
+-    const uint8_t *f_pbKeyMessageResponse,
+-    uint32_t f_cbKeyMessageResponse) {
+-  std::string keyResponse(reinterpret_cast<const char*>(f_pbKeyMessageResponse),
+-      f_cbKeyMessageResponse);
+-  if (Cdm::kSuccess != m_cdm->update(m_sessionId, keyResponse))
+-     onKeyStatusesChange(m_sessionId);
+-}
+-
+-CDMi_RESULT MediaKeySession::Remove(void) {
+-  CDMi_RESULT ret = CDMi_S_FALSE;
+-  Cdm::Status status = m_cdm->remove(m_sessionId);
+-  if (Cdm::kSuccess != status)
+-    onKeyStatusError(m_sessionId, status);
+-  else
+-    ret =  CDMi_SUCCESS;
+-  return ret;
+-}
+-
+-CDMi_RESULT MediaKeySession::Close(void) {
+-  CDMi_RESULT status = CDMi_S_FALSE;
+-  if (Cdm::kSuccess == m_cdm->close(m_sessionId))
+-    status = CDMi_SUCCESS;
+-  return status;
+-}
+-
+-const char* MediaKeySession::GetSessionId(void) const {
+-  return m_sessionId.c_str();
+-}
+-
+-const char* MediaKeySession::GetKeySystem(void) const {
+-  return NYI_KEYSYSTEM;//TODO: replace with keysystem and test
+-}
+-
+-CDMi_RESULT MediaKeySession::Init(
+-    int32_t licenseType,
+-    const char *f_pwszInitDataType,
+-    const uint8_t *f_pbInitData,
+-    uint32_t f_cbInitData,
+-    const uint8_t *f_pbCDMData,
+-    uint32_t f_cbCDMData) {
+-  switch ((LicenseType)licenseType) {
+-  case PersistentUsageRecord:
+-    m_licenseType = Cdm::kPersistentUsageRecord;
+-    break;
+-  case PersistentLicense:
+-    m_licenseType = Cdm::kPersistentLicense;
+-    break;
+-  default:
+-    m_licenseType = Cdm::kTemporary;
+-    break;
+-  }
+-
+-  if (f_pwszInitDataType) {
+-    if (!strcmp(f_pwszInitDataType, "cenc"))
+-       m_initDataType = Cdm::kCenc;
+-    else if (!strcmp(f_pwszInitDataType, "webm"))
+-       m_initDataType = Cdm::kWebM;
+-  }
+-
+-  if (f_pbInitData && f_cbInitData)
+-    m_initData.assign((const char*) f_pbInitData, f_cbInitData);
+-
+-  if (f_pbCDMData && f_cbCDMData)
+-    m_CDMData.assign((const char*) f_pbCDMData, f_cbCDMData);
+-  return CDMi_SUCCESS;
+-}
+-
+-CDMi_RESULT MediaKeySession::Decrypt(
+-    const uint8_t *f_pbSessionKey,
+-    uint32_t f_cbSessionKey,
+-    const uint32_t *f_pdwSubSampleMapping,
+-    uint32_t f_cdwSubSampleMapping,
+-    const uint8_t *f_pbIV,
+-    uint32_t f_cbIV,
+-    const uint8_t *f_pbData,
+-    uint32_t f_cbData,
+-    uint32_t *f_pcbOpaqueClearContent,
+-    uint8_t **f_ppbOpaqueClearContent) {
+-  Cdm::KeyStatusMap map;
+-  std::string keyStatus;
+-
+-  CDMi_RESULT status = CDMi_S_FALSE;
+-  *f_pcbOpaqueClearContent = 0;
+-
+-  /* Added a workaround to fix IV issue. Will revert once we have proper fix */
+-#ifdef IV_FIX_WORKAROUND
+-  unsigned char iv[16];
+-  memset(iv,0,16);
+-  memcpy(iv,(char*)f_pbIV, f_cbIV);
+-#endif
+-
+-  if (Cdm::kSuccess == m_cdm->getKeyStatuses(m_sessionId, &map)) {
+-    Cdm::KeyStatusMap::iterator it = map.begin();
+-    // FIXME: We just check the first key? How do we know that's the Widevine key and not, say, a PlayReady one?
+-    if (Cdm::kUsable == it->second) {
+-      Cdm::OutputBuffer output;
+-      uint8_t *outputBuffer = (uint8_t*) malloc(f_cbData * sizeof(uint8_t));
+-      output.data = outputBuffer;
+-      output.data_length = f_cbData;
+-      Cdm::InputBuffer input;
+-      input.data = f_pbData;
+-      input.data_length = f_cbData;
+-      input.key_id = reinterpret_cast<const uint8_t*>((it->first).c_str());
+-      input.key_id_length = (it->first).size();
+-#ifndef IV_FIX_WORKAROUND /* Added a workaround to fix IV issue. Will revert once we have proper fix */
+-      input.iv = f_pbIV;
+-      input.iv_length = f_cbIV;
+-#else
+-      input.iv = iv;
+-      input.iv_length = sizeof(iv);
+-#endif
+-      input.is_encrypted = true;
+-      if (Cdm::kSuccess == m_cdm->decrypt(input, output)) {
+-        /* Return clear content */
+-        *f_pcbOpaqueClearContent = output.data_length;
+-        *f_ppbOpaqueClearContent = outputBuffer;
+-        status = CDMi_SUCCESS;
+-      }
+-    }
+-  }
+-
+-
+-  return status;
+-}
+-
+-CDMi_RESULT MediaKeySession::ReleaseClearContent(
+-    const uint8_t *f_pbSessionKey,
+-    uint32_t f_cbSessionKey,
+-    const uint32_t  f_cbClearContentOpaque,
+-    uint8_t  *f_pbClearContentOpaque ){
+-  CDMi_RESULT ret = CDMi_S_FALSE;
+-  if (f_pbClearContentOpaque) {
+-    free(f_pbClearContentOpaque);
+-    ret = CDMi_SUCCESS;
+-  }
+-  return ret;
+-}
+-}  // namespace CDMi
+diff --git a/OpenCDMi/DRM/widevine/MediaSession.h b/OpenCDMi/DRM/widevine/MediaSession.h
+deleted file mode 100644
+index 9407720..0000000
+--- a/OpenCDMi/DRM/widevine/MediaSession.h
++++ /dev/null
+@@ -1,110 +0,0 @@
+-/*
+- * Copyright 2016-2017 TATA ELXSI
+- * Copyright 201-20176 Metrological
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-#pragma once
+-
+-#include "cdmi.h"
+-
+-#include "host/wv_host.h"
+-#include "scoped_ptr.h"
+-
+-using namespace std;
+-using namespace widevine;
+-using namespace wvcdm;
+-
+-namespace CDMi
+-{
+-class MediaKeySession : public IMediaKeySession
+-{
+-public:
+-    MediaKeySession(Cdm*, int32_t);
+-    virtual ~MediaKeySession(void);
+-
+-    virtual void Run(
+-        const IMediaKeySessionCallback *f_piMediaKeySessionCallback);
+-
+-    void* RunThread(int i);
+-
+-    virtual CDMi_RESULT Load();
+-
+-    virtual void Update(
+-        const uint8_t *f_pbKeyMessageResponse,
+-        uint32_t f_cbKeyMessageResponse);
+-
+-    virtual CDMi_RESULT Remove();
+-
+-    virtual CDMi_RESULT Close(void);
+-
+-    virtual const char* GetSessionId(void) const;
+-
+-    virtual const char* GetKeySystem(void) const;
+-
+-    CDMi_RESULT Init(
+-        int32_t licenseType,
+-        const char *f_pwszInitDataType,
+-        const uint8_t *f_pbInitData,
+-        uint32_t f_cbInitData,
+-        const uint8_t *f_pbCDMData,
+-        uint32_t f_cbCDMData);
+-
+-    virtual CDMi_RESULT Decrypt(
+-        const uint8_t *f_pbSessionKey,
+-        uint32_t f_cbSessionKey,
+-        const uint32_t *f_pdwSubSampleMapping,
+-        uint32_t f_cdwSubSampleMapping,
+-        const uint8_t *f_pbIV,
+-        uint32_t f_cbIV,
+-        const uint8_t *f_pbData,
+-        uint32_t f_cbData,
+-        uint32_t *f_pcbOpaqueClearContent,
+-        uint8_t **f_ppbOpaqueClearContent);
+-
+-    virtual CDMi_RESULT ReleaseClearContent(
+-        const uint8_t *f_pbSessionKey,
+-        uint32_t f_cbSessionKey,
+-        const uint32_t  f_cbClearContentOpaque,
+-        uint8_t  *f_pbClearContentOpaque );
+-
+-    // Callback Interfaces
+-    virtual void onMessageUrl(const std::string& f_sessionId,
+-        const std::string& f_serverUrl) {}
+-
+-    virtual void onMessage(const std::string& f_sessionId,
+-        Cdm::MessageType f_messageType,
+-        const std::string& f_message);
+-  
+-    virtual void onKeyStatusesChange(const std::string& f_sessionId);
+-    virtual void onRemoveComplete(const std::string& f_sessionId);
+-
+-private:
+-    static void* _CallRunThread(
+-        void *arg);
+-    static void* _CallRunThread2(
+-        void *arg);
+-    void onKeyStatusError(const std::string& f_sessionId, Cdm::Status status);
+-
+-private:
+-    Cdm *m_cdm;
+-    std::string m_CDMData;
+-    std::string m_initData;
+-    Cdm::InitDataType m_initDataType;
+-    Cdm::SessionType m_licenseType;
+-    std::string m_sessionId;
+-    IMediaKeySessionCallback *m_piCallback;
+-};
+-
+-}  // namespace CDMi
+diff --git a/OpenCDMi/DRM/widevine/MediaSystem.cpp b/OpenCDMi/DRM/widevine/MediaSystem.cpp
+deleted file mode 100644
+index af4554e..0000000
+--- a/OpenCDMi/DRM/widevine/MediaSystem.cpp
++++ /dev/null
+@@ -1,168 +0,0 @@
+-/*
+- * Copyright 2016-2017 TATA ELXSI
+- * Copyright 2016-2017 Metrological
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-#include "cdmi.h"
+-#include "MediaSession.h"
+-
+-#include <assert.h>
+-#include <iostream>
+-#include <sstream>
+-#include <sys/utsname.h>
+-
+-namespace CDMi {
+-
+-class WideVine : public IMediaKeys, public Cdm::IEventListener
+-{
+-private:
+-    WideVine (const WideVine&) = delete;
+-    WideVine& operator= (const WideVine&) = delete;
+-
+-public:
+-    WideVine()
+-        : _cdm(nullptr)
+-        , _wvHost(nullptr)
+-        , _mediaKeySession(nullptr) {
+-
+-        Cdm::ClientInfo client_info;
+-
+-        // Set client info that denotes this as the test suite:
+-        client_info.product_name = "CE cdm box";
+-        client_info.company_name = "www";
+-        client_info.model_name = "www";
+-
+-    #if defined(__linux__)
+-        client_info.device_name = "Linux";
+-        {
+-            struct utsname name;
+-            if (!uname(&name)) {
+-                client_info.arch_name = name.machine;
+-            }
+-        }
+-#else
+-        client_info.device_name = "unknown";
+-#endif
+-        client_info.build_info = __DATE__;
+-        _wvHost = new WVHost();
+-
+-        Cdm::DeviceCertificateRequest cert_request;
+-
+-        if (Cdm::kSuccess == Cdm::initialize(
+-                Cdm::kNoSecureOutput, client_info, _wvHost, _wvHost, _wvHost, &cert_request,
+-                static_cast<Cdm::LogLevel>(0))) {
+-            _cdm = Cdm::create(static_cast<Cdm::IEventListener*> (this), true);
+-        }
+-    }
+-    virtual ~WideVine() {
+-        assert (_mediaKeySession == nullptr);
+-
+-        if (_mediaKeySession != nullptr) {
+-            delete _mediaKeySession;
+-        }
+-
+-        if (_cdm != nullptr) {
+-            delete _cdm;
+-        }
+-        delete _wvHost;
+-    }
+-
+-    virtual CDMi_RESULT CreateMediaKeySession(
+-        int32_t licenseType,
+-        const char *f_pwszInitDataType,
+-        const uint8_t *f_pbInitData,
+-        uint32_t f_cbInitData,
+-        const uint8_t *f_pbCDMData,
+-        uint32_t f_cbCDMData,
+-        IMediaKeySession **f_ppiMediaKeySession) {
+-
+-        CDMi_RESULT dr = CDMi_S_FALSE;
+-        *f_ppiMediaKeySession = nullptr;
+-
+-        _mediaKeySession = new MediaKeySession(_cdm, licenseType);
+-
+-        dr = _mediaKeySession->Init(licenseType,
+-            f_pwszInitDataType,
+-            f_pbInitData,
+-            f_cbInitData,
+-            f_pbCDMData,
+-            f_cbCDMData);
+-
+-
+-        if (dr != CDMi_SUCCESS) {
+-            delete _mediaKeySession;
+-            _mediaKeySession = nullptr;
+-        }
+-        else {
+-            *f_ppiMediaKeySession = _mediaKeySession;
+-        }
+-
+-        return dr;
+-    }
+-
+-    virtual CDMi_RESULT SetServerCertificate(
+-        const uint8_t *f_pbServerCertificate,
+-        uint32_t f_cbServerCertificate) {
+-
+-        CDMi_RESULT dr = CDMi_S_FALSE;
+-
+-        std::string serverCertificate(reinterpret_cast<const char*>(f_pbServerCertificate), f_cbServerCertificate);
+-        if (Cdm::kSuccess == _cdm->setServerCertificate(serverCertificate)) {
+-            dr = CDMi_SUCCESS;
+-        }
+-        return dr;
+-    }
+-
+-    virtual CDMi_RESULT DestroyMediaKeySession(
+-        IMediaKeySession *f_piMediaKeySession) {
+-
+-        assert (_mediaKeySession == f_piMediaKeySession);
+-
+-        delete f_piMediaKeySession;
+-
+-        _mediaKeySession  = nullptr;
+-
+-        return CDMi_SUCCESS;
+-    }
+-
+-    virtual void onMessage(const std::string& f_sessionId,
+-        Cdm::MessageType f_messageType,
+-        const std::string& f_message) {
+-
+-        if (_mediaKeySession) _mediaKeySession->onMessage(f_sessionId, f_messageType, f_message);
+-    }
+-
+-    virtual void onKeyStatusesChange(const std::string& f_sessionId) {
+-        if (_mediaKeySession) _mediaKeySession->onKeyStatusesChange(f_sessionId);
+-    }
+-
+-    virtual void onRemoveComplete(const std::string& f_sessionId) {
+-        if (_mediaKeySession) _mediaKeySession->onRemoveComplete(f_sessionId);
+-    }
+-
+-private:
+-    Cdm* _cdm;
+-    WVHost* _wvHost;
+-    MediaKeySession* _mediaKeySession;
+-};
+-
+-static SystemFactoryType<WideVine> g_instance({"video/webm", "video/mp4", "audio/webm", "audio/mp4"});
+-
+-}  // namespace CDMi
+-
+-CDMi::ISystemFactory* GetSystemFactory() {
+-
+-    return (&CDMi::g_instance); 
+-}
+diff --git a/OpenCDMi/DRM/widevine/Policy.h b/OpenCDMi/DRM/widevine/Policy.h
+deleted file mode 100644
+index 1bc834a..0000000
+--- a/OpenCDMi/DRM/widevine/Policy.h
++++ /dev/null
+@@ -1,60 +0,0 @@
+-/*
+- * Copyright 2016-2017 TATA ELXSI
+- * Copyright 2016-2017 Metrological
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-#ifndef WV_POLICY_H_
+-#define WV_POLICY_H_
+-
+-#include "string_conversions.h"
+-
+-using namespace wvcdm;
+-
+-const std::string kDefaultServerCertificate = a2bs_hex(
+-    "0ABF020803121028703454C008F63618ADE7443DB6C4C8188BE7F99005228E023082010A02"
+-    "82010100B52112B8D05D023FCC5D95E2C251C1C649B4177CD8D2BEEF355BB06743DE661E3D"
+-    "2ABC3182B79946D55FDC08DFE95407815E9A6274B322A2C7F5E067BB5F0AC07A89D45AEA94"
+-    "B2516F075B66EF811D0D26E1B9A6B894F2B9857962AA171C4F66630D3E4C602718897F5E1E"
+-    "F9B6AAF5AD4DBA2A7E14176DF134A1D3185B5A218AC05A4C41F081EFFF80A3A040C50B09BB"
+-    "C740EEDCD8F14D675A91980F92CA7DDC646A06ADAD5101F74A0E498CC01F00532BAC217850"
+-    "BD905E90923656B7DFEFEF42486767F33EF6283D4F4254AB72589390BEE55808F1D668080D"
+-    "45D893C2BCA2F74D60A0C0D0A0993CEF01604703334C3638139486BC9DAF24FD67A07F9AD9"
+-    "4302030100013A1273746167696E672E676F6F676C652E636F6D128003983E30352675F40B"
+-    "A715FC249BDAE5D4AC7249A2666521E43655739529721FF880E0AAEFC5E27BC980DAEADABF"
+-    "3FC386D084A02C82537848CC753FF497B011A7DA97788A00E2AA6B84CD7D71C07A48EBF616"
+-    "02CCA5A3F32030A7295C30DA915B91DC18B9BC9593B8DE8BB50F0DEDC12938B8E9E039CDDE"
+-    "18FA82E81BB032630FE955D85A566CE154300BF6D4C1BD126966356B287D657B18CE63D0EF"
+-    "D45FC5269E97EAB11CB563E55643B26FF49F109C2101AFCAF35B832F288F0D9D45960E259E"
+-    "85FB5D24DBD2CF82764C5DD9BF727EFBE9C861F869321F6ADE18905F4D92F9A6DA6536DB84"
+-    "75871D168E870BB2303CF70C6E9784C93D2DE845AD8262BE7E0D4E2E4A0759CEF82D109D25"
+-    "92C72429F8C01742BAE2B3DECADBC33C3E5F4BAF5E16ECB74EADBAFCB7C6705F7A9E3B6F39"
+-    "40383F9C5116D202A20C9229EE969C2519718303B50D0130C3352E06B014D838540F8A0C22"
+-    "7C0011E0F5B38E4E298ED2CB301EB4564965F55C5D79757A250A4EB9C84AB3E6539F6B6FDF"
+-    "56899EA29914");
+-
+-const std::string kLicenseServer = "http://widevine-proxy.appspot.com/proxy";
+-
+-const std::string kCencInitData = a2bs_hex(
+-    "00000042"                          // blob size
+-    "70737368"                          // "pssh"
+-    "00000000"                          // flags
+-    "edef8ba979d64acea3c827dcd51d21ed"  // Widevine system id
+-    "00000022"                          // pssh data size
+-    // pssh data:
+-    "08011a0d7769646576696e655f746573"
+-    "74220f73747265616d696e675f636c69"
+-    "7031");
+-
+-#endif //WV_POLICY_H_
