@@ -1,0 +1,47 @@
+commit 59be39d9c504ff0b292acda4cb0dab7c8743eaeb
+Author: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date:   Thu Aug 10 16:24:32 2017 +0200
+
+    [UI] Added new buttons to the interface.
+
+diff --git a/UI/common.js b/UI/common.js
+index 6857d6e..ee2354a 100644
+--- a/UI/common.js
++++ b/UI/common.js
+@@ -730,6 +730,22 @@ function compositorSetFocus(){
+ 			handleRequest('POST', fullURL, null, null);
+ }
+ 
++function compositorSetTop(){
++    var menu = document.getElementById('compositorClients');
++    var client = menu.options[menu.selectedIndex].value;
++    var fullURL = getURLStart('http', true) + client + '/Top';
++    console.log(fullURL);
++    handleRequest('POST', fullURL, null, null);
++}
++
++function compositorSetInput(){
++    var menu = document.getElementById('compositorClients');
++    var client = menu.options[menu.selectedIndex].value;
++    var fullURL = getURLStart('http', true) + client + '/Input';
++    console.log(fullURL);
++    handleRequest('POST', fullURL, null, null);
++}
++
+ function compositorSetOpacity(){
+       var menu = document.getElementById('compositorClients');
+ 			var client = menu.options[menu.selectedIndex].value;
+diff --git a/UI/index.html b/UI/index.html
+index 8b9a8ed..7729fb9 100644
+--- a/UI/index.html
++++ b/UI/index.html
+@@ -397,7 +397,8 @@
+         Focus
+       </div>
+       <div class="text grid__col grid__col--6-of-8">
+-        <button type="button" id="compositorSetFocus" onclick="compositorSetFocus()">Set</button>
++        <button type="button" id="compositorSetTop" onclick="compositorSetTop()">Set Top</button>
++        <button type="button" id="compositorSetInput" onclick="compositorSetInput()">Set Input</button>
+       </div>
+       <div class="text grid__col grid__col--8-of-8"></div>
+       <div class="title grid__col grid__col--8-of-8">

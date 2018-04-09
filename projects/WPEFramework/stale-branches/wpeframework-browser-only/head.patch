@@ -1,0 +1,81 @@
+commit 441cea9c83443940a086ef222414f7d22051d5e8
+Author: Sander van der Maar <sandervandermaar@gmail.com>
+Date:   Wed Aug 30 16:11:51 2017 +0200
+
+    [Plugin Host] Enable Browser-only mode
+
+diff --git a/Source/WPEFramework/PluginHost.cpp b/Source/WPEFramework/PluginHost.cpp
+index 9213abd..22175e5 100644
+--- a/Source/WPEFramework/PluginHost.cpp
++++ b/Source/WPEFramework/PluginHost.cpp
+@@ -193,6 +193,43 @@ extern "C" {
+         }
+     }
+ 
++    // TODO: for now we assume we are either WPEFramework or the Browser.
++    //       Maybe get plugin name from symlink?
++    void LoadBrowser(Server::Config& config) {
++        // TODO: hardcoded, maybe cmd arg?
++        const string browserJsonPath = "/etc/WPEFramework/plugins/WebKitBrowser.json";
++        const char browserCallsign[] = "WebKitBrowser";
++
++        Core::File browserFile(browserJsonPath, false);
++        if (!browserFile.Open(true)) {
++            SYSLOG(PluginHost::Startup, (_T("Plugin config file [%s] could not be opened."), browserFile.Name().c_str()));
++        }
++
++        Plugin::Config pluginConfigBrowser;
++        pluginConfigBrowser.FromFile(browserFile);
++        browserFile.Close();
++
++        pluginConfigBrowser.Callsign = browserCallsign;
++
++        config.Plugins.Add(pluginConfigBrowser);
++
++        // TODO: For some reason to make the UI work, we need to also load the DeviceInfo. Is this expected?
++        const string devInfoJsonPath = "/etc/WPEFramework/plugins/DeviceInfo.json";
++        const char devInfoCallsign[] = "DeviceInfo";
++
++        Core::File devInfoFile(devInfoJsonPath, false);
++        if (!devInfoFile.Open(true)) {
++            SYSLOG(PluginHost::Startup, (_T("Plugin config file [%s] could not be opened."), devInfoFile.Name().c_str()));
++        }
++
++        Plugin::Config pluginConfigDevInfo;
++        pluginConfigDevInfo.FromFile(devInfoFile);
++        devInfoFile.Close();
++
++        pluginConfigDevInfo.Callsign = devInfoCallsign;
++
++        config.Plugins.Add(pluginConfigDevInfo);
++    }
+ 
+     #ifdef __WIN32__
+     int _tmain(int argc, _TCHAR* argv[])
+@@ -200,6 +237,13 @@ extern "C" {
+     int main(int argc, char** argv)
+     #endif
+     {
++        // Not called as WPEFramework, assume browser for now
++        // TODO: parse argv[0] correctly to find plugin name
++        bool startedAsBrowser = (strstr("WPEFramework", argv[0]) == nullptr);
++        if (startedAsBrowser) {
++            printf("Started as browser.\n");
++        }
++
+         #ifndef __WIN32__
+         //Set our Logging Mask and open the Log
+         setlogmask(LOG_UPTO(LOG_NOTICE));
+@@ -310,7 +354,11 @@ extern "C" {
+         }
+ 
+         // Load plugin configs from a directory.
+-        LoadPlugins(pluginPath, serviceConfig);
++        if (!startedAsBrowser) {
++            LoadPlugins(pluginPath, serviceConfig);
++        } else {
++            LoadBrowser(serviceConfig);
++        }
+ 
+         // Startup/load/initialize what we found in the configuration.
+         _dispatcher = new PluginHost::Server(serviceConfig, securityOptions, _background);
