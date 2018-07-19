@@ -2,8 +2,8 @@
 #define __OUTOFPROCESSTEST_H
 
 #include "Module.h"
-#include <WPEFramework/interfaces/IBrowser.h>
-#include <WPEFramework/interfaces/IMemory.h>
+#include <interfaces/IBrowser.h>
+#include <interfaces/IMemory.h>
 
 namespace WPEFramework {
 namespace Plugin {
@@ -45,6 +45,10 @@ namespace Plugin {
             virtual void Hidden(const bool hidden)
             {
                 _parent.Hidden(hidden);
+            }
+            virtual void Closure()
+            {
+                _parent.Closure();
             }
             virtual void StateChange(const PluginHost::IStateControl::state value)
             {
@@ -189,13 +193,14 @@ namespace Plugin {
         void LoadFinished(const string& URL);
         void URLChanged(const string& URL);
         void Hidden(const bool hidden);
+        void Closure();
         void StateChange(const PluginHost::IStateControl::state value);
         void Deactivated(RPC::IRemoteProcess* process);
 
     private:
         Core::CriticalSection _adminLock;
-        uint8 _skipURL;
-		uint32 _pid;
+        uint8_t _skipURL;
+		uint32_t _pid;
         string _webPath;
         PluginHost::IShell* _service;
         Exchange::IBrowser* _browser;

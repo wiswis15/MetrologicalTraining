@@ -5,7 +5,7 @@ namespace WPEFramework {
 namespace OutOfProcessTest {
 
     // An implementation file needs to implement this method to return an operational browser, wherever that would be :-)
-    extern Exchange::IMemory* MemoryObserver(const uint32 pid);
+    extern Exchange::IMemory* MemoryObserver(const uint32_t pid);
 }
 
 namespace Plugin {
@@ -36,10 +36,10 @@ namespace Plugin {
         config.FromString(_service->ConfigLine());
 
         if (config.OutOfProcess.Value() == true) {
-            _browser = _service->Instantiate<Exchange::IBrowser>(2000, _T("OutOfProcessImplementation"), static_cast<uint32>(~0), _pid, service->Locator());
+            _browser = _service->Instantiate<Exchange::IBrowser>(2000, _T("OutOfProcessImplementation"), static_cast<uint32_t>(~0), _pid, service->Locator());
         }
         else {
-            _browser = Core::ServiceAdministrator::Instance().Instantiate<Exchange::IBrowser>(Core::Library(), _T("OutOfProcessImplementation"), static_cast<uint32>(~0));
+            _browser = Core::ServiceAdministrator::Instance().Instantiate<Exchange::IBrowser>(Core::Library(), _T("OutOfProcessImplementation"), static_cast<uint32_t>(~0));
         }
 
         if (_browser == nullptr) {
@@ -164,7 +164,7 @@ namespace Plugin {
                     _browser->Hide(false);
 				} else if (index.Remainder() == _T("Notify4K")) {
 					string message;
-					for (uint32 teller = 0; teller < ((4 * 1024) + 64); teller++) {
+					for (uint32_t teller = 0; teller < ((4 * 1024) + 64); teller++) {
 						message += SampleData[teller % 64];
 					}
 					_service->Notify(message);
@@ -207,6 +207,11 @@ namespace Plugin {
         string message = "{ \"hidden\": \"" + string(hidden ? _T("true") : _T("false")) + "\" }";
 
         _service->Notify(message);
+    }
+
+    void OutOfProcessTest::Closure() {
+        TRACE(Trace::Information, (_T("Closure: \"true\"")));
+        _service->Notify(_T("{\"Closure\": true }"));
     }
 
     void OutOfProcessTest::StateChange(const PluginHost::IStateControl::state value)

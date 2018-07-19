@@ -5,7 +5,7 @@
 #define MODULE_NAME WPEFramework_Plugin_OutOfProcessTest
 #endif
 
-#include <WPEFramework/plugins/plugins.h>
+#include <plugins/plugins.h>
 
 #undef EXTERNAL
 #define EXTERNAL

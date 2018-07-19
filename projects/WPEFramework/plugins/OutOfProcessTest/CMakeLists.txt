@@ -9,7 +9,7 @@ if(CMAKE_CROSSCOMPILING)
       endif (EXISTS "${searchPath}/usr/share/WPEFramework/cmake/config.cmake")
    endforeach (path)
 else(CMAKE_CROSSCOMPILING)
-   include(${CMAKE_INSTALL_PREFIX}/share/WPEFramework/cmake/config.cmake)
+   include(${CMAKE_INSTALL_PREFIX}/include/WPEFramework/cmake/config.cmake)
 endif(CMAKE_CROSSCOMPILING)
 
 find_package(PkgConfig)
@@ -23,7 +23,7 @@ find_library(
 
 find_path(
    WPEFRAMEWORKPLUGINS_INCLUDE_DIR
-   WPEFramework/plugins/plugins.h
+   plugins/plugins.h
    HINTS ${PC_WPEFRAMEWORK_INCLUDEDIR} ${PC_WPEFRAMEWORK_INCLUDE_DIRS}
 )
 

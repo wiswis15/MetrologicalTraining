@@ -132,7 +132,7 @@ namespace Plugin {
         Run();
     }
 
-        virtual uint32 Configure(PluginHost::IShell* service)
+        virtual uint32_t Configure(PluginHost::IShell* service)
         {
         _dataPath = service->DataPath();
         _config.FromString(service->ConfigLine());
@@ -159,7 +159,7 @@ namespace Plugin {
         {
         return (!_hidden);
     }
-        virtual uint32 GetFPS() const
+        virtual uint32_t GetFPS() const
         {
 			TRACE(Trace::Fatal, (_T("Fatal ingested: %d!!!"), _fps));
 			return (++_fps);
@@ -233,10 +233,10 @@ namespace Plugin {
     }
 
 
-    virtual uint32 Request(const PluginHost::IStateControl::command command)
+    virtual uint32_t Request(const PluginHost::IStateControl::command command)
     {
 
-		uint32 result(Core::ERROR_ILLEGAL_STATE);
+		uint32_t result(Core::ERROR_ILLEGAL_STATE);
 
 		switch (command) {
 		case PluginHost::IStateControl::SUSPEND:
@@ -310,7 +310,7 @@ namespace Plugin {
 	END_INTERFACE_MAP
 
     private:
-        virtual uint32 Worker()
+        virtual uint32_t Worker()
         {
             TRACE(Trace::Information, (_T("In OutOfProcessTest: %d"), __LINE__));
         
@@ -344,17 +344,17 @@ namespace Plugin {
 
             Core::Time now(Core::Time::Now());
 
-        return (now > _endTime ? Core::infinite : static_cast<uint32>(1000));
+        return (now > _endTime ? Core::infinite : static_cast<uint32_t>(1000));
     }
 
     private:
-    mutable uint32 _reference;
+    mutable uint32_t _reference;
     Core::CriticalSection _adminLock;
     Config _config;
     string _requestedURL;
     string _setURL;
     string _dataPath;
-    mutable uint32 _fps;
+    mutable uint32_t _fps;
     bool _hidden;
     Core::Time _endTime;
     std::list<PluginHost::IStateControl::INotification*> _notificationClients;
@@ -375,7 +375,7 @@ namespace OutOfProcessTest {
         MemoryObserverImpl& operator=(const MemoryObserverImpl&);
 
     public:
-        MemoryObserverImpl(const uint32 id)
+        MemoryObserverImpl(const uint32_t id)
             : _main(id == 0 ? Core::ProcessInfo().Id() : id)
         {
     }
@@ -384,19 +384,22 @@ namespace OutOfProcessTest {
     }
 
     public:
-        virtual uint64 Resident() const
+        virtual void Observe(const bool enable)
+        {
+        }
+        virtual uint64_t Resident() const
         {
         return (_main.Resident());
     }
-        virtual uint64 Allocated() const
+        virtual uint64_t Allocated() const
         {
         return (_main.Allocated());
     }
-        virtual uint64 Shared() const
+        virtual uint64_t Shared() const
         {
         return (_main.Shared());
     }
-        virtual uint8 Processes() const
+        virtual uint8_t Processes() const
         {
         return (1);
     }
@@ -413,7 +416,7 @@ namespace OutOfProcessTest {
     Core::ProcessInfo _main;
     };
 
-    Exchange::IMemory* MemoryObserver(const uint32 PID)
+    Exchange::IMemory* MemoryObserver(const uint32_t PID)
     {
     return (Core::Service<MemoryObserverImpl>::Create<Exchange::IMemory>(PID));
     }
