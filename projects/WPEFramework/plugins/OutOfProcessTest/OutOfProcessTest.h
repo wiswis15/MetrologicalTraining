@@ -147,6 +147,7 @@ namespace Plugin {
             , _notification(Core::Service<Notification>::Create<Notification>(this))
             , _state(PluginHost::IStateControl::UNINITIALIZED)
             , _hidden(false)
+            , _pid(0)
         {
         }
         virtual ~OutOfProcessTest()
