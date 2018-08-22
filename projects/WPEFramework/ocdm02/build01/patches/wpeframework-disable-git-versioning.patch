@@ -1,0 +1,12 @@
+diff -ruNP a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt	2018-07-20 14:02:11.459703624 +0200
++++ b/CMakeLists.txt	2018-07-20 14:02:29.407443563 +0200
+@@ -50,7 +50,7 @@
+ set(VERSION_REVISION "0000000")
+ 
+ # Git (and its revision)
+-find_package(Git QUIET) # if we don't find git or FindGit.cmake is not on the system we ignore it.
++#find_package(Git QUIET) # if we don't find git or FindGit.cmake is not on the system we ignore it.
+ 
+ if(GIT_FOUND) # GIT revision
+     include(GetGitRevisionDescription)

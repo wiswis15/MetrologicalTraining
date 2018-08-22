@@ -1,0 +1,12 @@
+diff -ruNP a/OpenCDMi/CMakeLists.txt b/OpenCDMi/CMakeLists.txt
+--- a/OpenCDMi/CMakeLists.txt	2018-07-26 14:22:34.808874687 +0200
++++ b/OpenCDMi/CMakeLists.txt	2018-07-26 14:22:06.216911605 +0200
+@@ -6,7 +6,7 @@
+ include(module) # Setup default stuff needed for the cmake framework thingy.
+ 
+ set(PLUGIN_OPTIONS)
+-set(PLUGIN_LINK_OPTIONS -locdm)
++set(PLUGIN_LINK_OPTIONS -L${CMAKE_INSTALL_PREFIX}/lib -locdm)
+ 
+ set(PLUGIN_SOURCES 
+         Module.cpp
