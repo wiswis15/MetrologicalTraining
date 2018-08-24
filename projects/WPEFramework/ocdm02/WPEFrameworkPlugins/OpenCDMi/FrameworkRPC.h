@@ -100,6 +100,9 @@ private:
         std::vector<SessionImplementation*> _sessions;
         CDMi::IMediaKeys & _mediaKeys;
 
+        // TODO: Can accessorOCDM be a singleton?
+        //AccessorOCDM & GetAccessorOCDM() { return _parent; }
+
         friend SessionImplementation;
     };
 
@@ -161,7 +164,7 @@ private:
 
     public:
         //SessionImplementation(SystemImplementation* parent, CDMi::IMediaKeySession* mediaKeySession, const string& bufferName, const uint32_t defaultSize, const CommonEncryptionData* sessionData);
-        SessionImplementation(SystemImplementation* parent, const uint32_t defaultSize);
+        SessionImplementation(SystemImplementation* parent, const uint32_t defaultSize, const std::string& bufferName);
 
         virtual ~SessionImplementation();
 

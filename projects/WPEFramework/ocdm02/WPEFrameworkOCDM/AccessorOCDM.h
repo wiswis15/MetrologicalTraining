@@ -9,6 +9,9 @@ using namespace WPEFramework;
 
 namespace media {
 
+extern Core::CriticalSection _systemLock;
+
+
 // TODO: fully move to cpp file.
 
 class AccessorOCDM : public OCDM::IAccessor {
@@ -169,7 +172,6 @@ private:
     OCDM::IAccessor* _remote;
     static AccessorOCDM* _singleton;
 
-    static Core::CriticalSection _systemLock;
 };
 
 }

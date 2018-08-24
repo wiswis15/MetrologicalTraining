@@ -84,8 +84,20 @@ const char *MediaKeySession::GetKeySystem() const
    return "Null2";
 }
 
-CDMi_RESULT MediaKeySession::Decrypt(const uint8_t *f_pbSessionKey, uint32_t f_cbSessionKey, const uint32_t *f_pdwSubSampleMapping, uint32_t f_cdwSubSampleMapping, const uint8_t *f_pbIV, uint32_t f_cbIV, const uint8_t *f_pbData, uint32_t f_cbData, uint32_t *f_pcbOpaqueClearContent, uint8_t **f_ppbOpaqueClearContent)
+CDMi_RESULT MediaKeySession::Decrypt(const uint8_t *f_pbSessionKey, uint32_t f_cbSessionKey, const uint32_t *f_pdwSubSampleMapping,
+		uint32_t f_cdwSubSampleMapping, const uint8_t *f_pbIV, uint32_t f_cbIV, const uint8_t *f_pbData,
+		uint32_t f_cbData, uint32_t *f_pcbOpaqueClearContent, uint8_t **f_ppbOpaqueClearContent)
 {
+	cerr << "MediaKeySession::Decrypt, buffer size: " << f_cbData << ", IV length: " << f_cbIV << endl;
+
+	// TODO: why const?
+
+	*f_ppbOpaqueClearContent = const_cast<uint8_t *>(f_pbData);
+	*f_pcbOpaqueClearContent = f_cbData;
+	if (f_cbData > 0) {
+		(*f_ppbOpaqueClearContent)[0] = 0x80;
+	}
+
    return 0;
 }
 

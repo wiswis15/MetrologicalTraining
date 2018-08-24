@@ -37,6 +37,7 @@ include_directories("${CMAKE_INSTALL_PREFIX}/include"
 add_library(WPEFrameworkOCDM SHARED
    AccessorOCDM.cpp
    ProxyStubs.cpp
+   DataExchange.cpp
 )
 
 target_link_libraries(WPEFrameworkOCDM WPEFrameworkCore WPEFrameworkProtocols)

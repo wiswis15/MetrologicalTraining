@@ -1,6 +1,8 @@
 #include "Module.h"
 #include "IOCDM.h"
 
+#include "DataExchange.h"
+
 // TODO: shouldn't all these lambda-arrays be static?
 namespace WPEFramework {
 
@@ -398,8 +400,6 @@ namespace WPEFramework {
                                      const uint8_t* CDMData, const uint16_t CDMDataLength,
                                      OCDM::ISession*& session) override
         {
-            // TODO: make sure "session" is correctly returned
-
             IPCMessage newMessage(BaseClass::Message(1));
             RPC::Data::Frame::Writer writer(newMessage->Parameters().Writer());
             writer.Number(licenseType);
@@ -454,11 +454,14 @@ namespace WPEFramework {
     public:
         SessionProxy(Core::ProxyType<Core::IPCChannel>& channel, void* implementation,
             const bool otherSideInformed)
-            : BaseClass(channel, implementation, otherSideInformed)
+            : BaseClass(channel, implementation, otherSideInformed),
+			  _dataExchangeInitialized(false),
+			  _dataExchange(nullptr)
         {
         }
         virtual ~SessionProxy()
         {
+        	// TODO: clean up data exchange
         }
 
     public:
@@ -571,8 +574,22 @@ namespace WPEFramework {
 
             return (reader.Number<WPEFramework::Core::Error>());
         }
-        virtual WPEFramework::Core::Error Decrypt(uint8_t encrypted[], const uint32_t encryptedLength, const uint8_t IV[], const uint16_t IVLength) override {
+        virtual WPEFramework::Core::Error Decrypt(uint8_t encrypted[], const uint32_t encryptedLength, const uint8_t IV[], const uint16_t IVLength) override
+        {
+        	// TODO: no lazy initialization
+        	if (_dataExchange == nullptr) {
+        		std::string bufferId = BufferId();
+        		_dataExchange = new media::DataExchange(bufferId);
+        	}
 
+        	uint32_t result = _dataExchange->Decrypt(encrypted, encryptedLength, IV, IVLength);
+
+        	if (result != 0)
+        		return WPEFramework::Core::Error::ERROR_GENERAL;
+
+        	return WPEFramework::Core::Error::ERROR_NONE;
+
+        	/*
             IPCMessage newMessage(BaseClass::Message(10));
 
             RPC::Data::Frame::Writer writer(newMessage->Parameters().Writer());
@@ -585,7 +602,11 @@ namespace WPEFramework {
             RPC::Data::Frame::Reader reader(newMessage->Response().Reader());
 
             return (reader.Number<WPEFramework::Core::Error>());
+            */
         }
+    private:
+        bool _dataExchangeInitialized; // TODO: might not be needed
+        media::DataExchange * _dataExchange;
     };
  
     // -------------------------------------------------------------------------------------------

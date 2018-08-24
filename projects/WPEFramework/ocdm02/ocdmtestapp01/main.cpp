@@ -102,8 +102,24 @@ int main()
    cerr << "Called Remove" << endl;
 
    cerr << "About to call Error" << endl;
-   uint32_t error = session->Remove();
+   uint32_t error = session->Error(g_keyId, g_keyLength);
    cerr << "Called Error: " << error << endl;
+
+   cerr << "About to call SystemError" << endl;
+   WPEFramework::Core::Error systemError = session->SystemError();
+   cerr << "Called SystemError: " << systemError << endl;
+
+   uint8_t dataBuffer[] = { 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47 };
+   uint32_t dataBufferLength = sizeof(dataBuffer);
+   uint8_t ivBuffer[] = { 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57 };
+   uint32_t ivBufferLength = sizeof(ivBuffer);
+
+   cerr << "About to call decrypt" << endl;
+   session->Decrypt(dataBuffer, dataBufferLength, ivBuffer, ivBufferLength);
+   cerr << "Called decrypt" << endl;
+
+   fprintf(stderr, "First value: 0x%02X\n", static_cast<uint32_t>(dataBuffer[0]));
+
 
    returnedSession->Release();
    session->Release();

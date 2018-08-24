@@ -602,17 +602,13 @@ uint32_t AccessorOCDM::SessionImplementation::DataExchange::Worker()
         RequestConsume(WPEFramework::Core::infinite);
 
         if (IsRunning() == true) {
-            int cr = _mediaKeys->Decrypt(_sessionKey, _sessionKeyLength,
-                    nullptr,       //subsamples
+            int cr = _mediaKeys->Decrypt(_sessionKey, _sessionKeyLength, nullptr,       //subsamples
                     0,          //number of subsamples
-                    IVKey(), IVKeyLength(), Buffer(), BytesWritten(), &clearContentSize,
-                    &clearContent);
+                    IVKey(), IVKeyLength(), Buffer(), BytesWritten(), &clearContentSize, &clearContent);
 
             if ((cr == 0) && (clearContentSize != 0)) {
                 if (clearContentSize != BytesWritten()) {
-                    TRACE_L1(
-                            "Returned clear sample size (%d) differs from encrypted buffer size (%d)",
-                            clearContentSize, BytesWritten());
+                    TRACE_L1("Returned clear sample size (%d) differs from encrypted buffer size (%d)", clearContentSize, BytesWritten());
                     Size(clearContentSize);
                 }
 
@@ -725,7 +721,7 @@ void AccessorOCDM::SessionImplementation::Sink::Callback(OCDM::ISession::ICallba
 //            _parent(*parent),
 //            _sink(this, nullptr), // TODO
 //            _cencData(*sessionData)
-AccessorOCDM::SessionImplementation::SessionImplementation(SystemImplementation* parent, const uint32_t defaultSize) :
+AccessorOCDM::SessionImplementation::SessionImplementation(SystemImplementation* parent, const uint32_t defaultSize, const std::string& bufferName) :
             _parent(*parent),
             _sink(this), // TODO
             //_sink(this, nullptr), // TODO
@@ -750,6 +746,8 @@ AccessorOCDM::SessionImplementation::SessionImplementation(SystemImplementation*
 
     // TODO: so much TODO...
     parent->_mediaKeys.CreateMediaKeySession(0, nullptr, nullptr, 0, nullptr, 0, &_mediaKeySession);
+
+    _buffer = new DataExchange(_mediaKeySession, bufferName, defaultSize);
 
     _mediaKeySession->Run(&_sink);
 
@@ -851,7 +849,8 @@ WPEFramework::Core::Error AccessorOCDM::SessionImplementation::Callback(OCDM::IS
     return WPEFramework::Core::Error::ERROR_NONE;
 }
 
-WPEFramework::Core::Error AccessorOCDM::SessionImplementation::Decrypt(uint8_t encrypted[], const uint32_t encryptedLength, const uint8_t IV[], const uint16_t IVLength)
+WPEFramework::Core::Error AccessorOCDM::SessionImplementation::Decrypt(uint8_t encrypted[], const uint32_t encryptedLength,
+        const uint8_t IV[], const uint16_t IVLength)
 {
     // TODO
     return WPEFramework::Core::Error::ERROR_GENERAL;
@@ -934,7 +933,14 @@ WPEFramework::Core::Error AccessorOCDM::SystemImplementation::CreateSession(
             const CommonEncryptionData* sessionData
  */
 
-    SessionImplementation * sessionImpl = Core::Service<SessionImplementation>::Create<SessionImplementation>(this, _parent._defaultSize);
+    std::string bufferId;
+
+    //if (!_administrator.AquireBuffer(bufferId)) {
+    if (!_parent._administrator.AquireBuffer(bufferId)) {
+        fprintf(stderr, "%s:%d: ERROR: Failed to get buffer!!\n", __FILE__, __LINE__);
+    }
+
+    SessionImplementation * sessionImpl = Core::Service<SessionImplementation>::Create<SessionImplementation>(this, _parent._defaultSize, bufferId);
 
     session = sessionImpl;
 
@@ -1011,185 +1017,6 @@ OCDM::ISession* AccessorOCDM::AccessorOCDM::Session(const uint8_t data[], const 
     return (result);
 }
 
-
-            // TODO: move to System
-/*
-            // Create a MediaKeySession using the supplied init data and CDM data.
-            virtual ::OCDM::OCDM_RESULT CreateSession(
-                const std::string keySystem,
-                const int32_t licenseType,
-                const std::string initDataType,
-                const uint8_t* initData,
-                const uint16_t initDataLength,
-                const uint8_t* CDMData,
-                const uint16_t CDMDataLength,
-                ::OCDM::ISession::ICallback* callback,
-                std::string& sessionId,
-                ::OCDM::ISession*& session) override {
-
-                CDMi::IMediaKeys* system = _parent.KeySystem(keySystem);
-
-                if (system == nullptr) {
-                    session = nullptr;
-                }
-                else {
-                    CDMi::IMediaKeySession* sessionInterface = nullptr;
-                    CommonEncryptionData keyIds (initData, initDataLength);
-
-                    // OKe we got a buffer machanism to transfer the raw data, now create
-                    // the session.
-                    if ((session == nullptr) && (system->CreateMediaKeySession(
-                        licenseType,
-                        initDataType.c_str(),
-                        initData,
-                        initDataLength,
-                        CDMData,
-                        CDMDataLength,
-                        &sessionInterface) == 0)) {
-
-                        if (sessionInterface != nullptr) {
-
-                            std::string bufferId;
-
-                            // See if there is a buffer available we can use..
-                            if (_administrator.AquireBuffer(bufferId) == true) {
-
-                                SessionImplementation* newEntry = Core::Service<SessionImplementation>::Create<SessionImplementation>(this, keySystem, sessionInterface, callback, bufferId, _defaultSize, &keyIds);
-
-                                session = newEntry;
-                                sessionId = newEntry->SessionId();
-
-                                _adminLock.Lock();
-
-                                _sessionList.push_front(newEntry);
-                                ReportCreate(sessionId);
-
-                                _adminLock.Unlock();
-                            }
-                            else {
-                                TRACE_L1("Could not allocate a buffer for session: %s", sessionId.c_str());
-
-                                // TODO: We need to drop the session somehow...
-                            }
-                        } 
-                    }
-                }
-
-                if (session == nullptr) {
-                    TRACE_L1("Could not create a DRM session! [%d]", __LINE__);
-                }
-
-                return (session != nullptr ? 0 : 1);
-            }
-*/
-
-            // TODO: move to session
-/*
-            // Set Server Certificate
-            virtual ::OCDM::OCDM_RESULT SetServerCertificate(
-                const std::string keySystem,
-                const uint8_t* serverCertificate,
-                const uint16_t serverCertificateLength) override {
-
-                CDMi::IMediaKeys* system = _parent.KeySystem(keySystem);
-
-                if (system != nullptr) {
-                    TRACE(Trace::Information, ("Set ServerCertificate()"));
-                    system->SetServerCertificate(serverCertificate, serverCertificateLength);
-                }
-                else {
-                    TRACE_L1("Could not set the Server Certificates for system: %s", keySystem.c_str());
-                }
-		return (0);
-            }
- */
-
-/*
-            virtual void Register (::OCDM::IAccessor::INotification* callback) override {
-
-                _adminLock.Lock();
-
-                ASSERT (std::find(_observers.begin(), _observers.end(), callback) == _observers.end());
-
-                callback->AddRef();
-
-                _observers.push_back(callback);
-
-                std::list<SessionImplementation*>::const_iterator index (_sessionList.begin());
-                while (index != _sessionList.end()) { 
-                    (*index)->ReportKeyIds(callback);
-                    index++; 
-                }
-
- 
-                _adminLock.Unlock();
-            }
-
-            virtual void Unregister (::OCDM::IAccessor::INotification* callback) override {
-
-                _adminLock.Lock();
-
-                std::list<::OCDM::IAccessor::INotification*>::iterator  index (std::find(_observers.begin(), _observers.end(), callback));
-
-                if (index != _observers.end()) {
-                    (*index)->Release();
-                    _observers.erase(index);
-                }
-
-                _adminLock.Unlock();
-            }
-*/
- 
-
-//        private:
-/*
-            void ReportCreate(const string& sessionId) {
-                std::list<::OCDM::IAccessor::INotification*>::iterator  index (_observers.begin());
-                while (index != _observers.end()) {
-                    (*index)->Create(sessionId);
-                    index++;
-                }
-            }
-            void ReportDestroy(const string& sessionId) {
-                std::list<::OCDM::IAccessor::INotification*>::iterator  index (_observers.begin());
-                while (index != _observers.end()) {
-                    (*index)->Destroy(sessionId);
-                    index++;
-                }
-            }
-*/
-
-/*
-            void ReportKeyChange(const string& sessionId, const uint8_t keyId[], const uint8_t length, const OCDM::ISession::KeyStatus status) {
-                _adminLock.Lock();
-                std::list<::OCDM::IAccessor::INotification*>::iterator  index (_observers.begin());
-                while (index != _observers.end()) {
-                    (*index)->KeyChange(sessionId, keyId, length, status);
-                    index++;
-                }
-                
-                _adminLock.Unlock();
-            }
-*/
-
-//OCDM::ISession* AccessorOCDM::FindSession(const CommonEncryptionData& keyIds, const string& keySystem) const
-//{
-//    OCDM::ISession* result = nullptr;
-//
-//    std::list<SessionImplementation*>::const_iterator index(_sessionList.begin());
-//
-//    while ((index != _sessionList.end()) && (result == nullptr)) {
-//
-//        if ((*index)->IsSupported(keyIds, keySystem) == true) {
-//            result = *index;
-//            result->AddRef();
-//        } else {
-//            index++;
-//        }
-//    }
-//    return (result);
-//}
-
 void AccessorOCDM::Remove(SessionImplementation* session, const string& keySystem,
         CDMi::IMediaKeySession* mediaKeySession)
 {
@@ -1238,7 +1065,6 @@ void AccessorOCDM::Register(SessionImplementation * session)
     _sessionList.push_back(session);
 }
 
- 
 SERVICE_REGISTRATION(OCDMImplementation, 1, 0);
 
 } } /* namespace iWPEFramework::Plugin */

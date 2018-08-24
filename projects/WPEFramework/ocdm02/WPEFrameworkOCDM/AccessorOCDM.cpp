@@ -1,6 +1,9 @@
 #include "AccessorOCDM.h"
 
-Core::CriticalSection media::AccessorOCDM::_systemLock;
+//Core::CriticalSection media::AccessorOCDM::_systemLock;
+
+Core::CriticalSection media::_systemLock;
+
 media::AccessorOCDM * media::AccessorOCDM::_singleton = nullptr;
 
 namespace media {
