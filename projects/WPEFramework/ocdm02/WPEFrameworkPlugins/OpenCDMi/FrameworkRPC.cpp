@@ -633,21 +633,20 @@ AccessorOCDM::SessionImplementation::Sink::Sink(SessionImplementation* parent) :
 AccessorOCDM::SessionImplementation::Sink::~Sink()
 {
     if (_callback != nullptr) {
-        // TODO: do we need to do something here about any outstanding callbacks?
-        //Revoke(_callback);
+        _callback->Release();
     }
 }
 
-void AccessorOCDM::SessionImplementation::Sink::OnKeyMessage(const uint8_t *f_pbKeyMessage, //__in_bcount(f_cbKeyMessage)
-        uint32_t f_cbKeyMessage, //__in
-        char *f_pszUrl)
+void AccessorOCDM::SessionImplementation::Sink::OnKeyMessage(const uint8_t *f_pbKeyMessage, uint32_t f_cbKeyMessage, char *f_pszUrl)
 {
     TRACE(Trace::Information, ("OnKeyMessage(%s)", f_pszUrl));
     if (_callback != nullptr) {
         std::string url(f_pszUrl, strlen(f_pszUrl));
         _callback->ProcessChallenge(url, f_pbKeyMessage, f_cbKeyMessage);
+    } else {
+        WaitingMessage message = WaitingMessage::ConstructChallenge(f_pbKeyMessage, f_cbKeyMessage, f_pszUrl);
+        _WaitingMessages.push_back(message);
     }
-    // TODO: store message if no callback yet.
 }
 
 void AccessorOCDM::SessionImplementation::Sink::OnKeyReady()
@@ -659,8 +658,11 @@ void AccessorOCDM::SessionImplementation::Sink::OnKeyReady()
         fprintf(stderr, "%s:%d: Calling KeyUpdate with invalid key (OnKeyReady)!\n", __FILE__,
                 __LINE__);
         _callback->KeyUpdate(nullptr, 0);
+    } else {
+        // TODO: what does this even mean, key ready without key???
+        WaitingMessage message = WaitingMessage::ConstructKeyMessage({}, 0);
+        _WaitingMessages.push_back(message);
     }
-    // TODO: store message if no callback yet.
 }
 
 void AccessorOCDM::SessionImplementation::Sink::OnKeyError(int16_t f_nError, CDMi::CDMi_RESULT f_crSysError, const char* errorMessage)
@@ -672,8 +674,11 @@ void AccessorOCDM::SessionImplementation::Sink::OnKeyError(int16_t f_nError, CDM
         fprintf(stderr, "%s:%d: Calling KeyUpdate with invalid key (OnKeyError)!\n", __FILE__,
                 __LINE__);
         _callback->KeyUpdate(nullptr, 0);
+    } else {
+        // TODO: what does this even mean, key error without key???
+        WaitingMessage message = WaitingMessage::ConstructKeyMessage({}, 0);
+        _WaitingMessages.push_back(message);
     }
-    // TODO: store message if no callback yet.
 }
 
 //Event fired on key status update
@@ -694,7 +699,6 @@ void AccessorOCDM::SessionImplementation::Sink::OnKeyStatusUpdate(const char* ke
     else
         key = ::OCDM::ISession::InternalError;
 
-    fprintf(stderr, "%s:%d\n", __FILE__, __LINE__);
     _parent.UpdateKeyStatus(key, buffer, length);
 
     if (_callback != nullptr) {
@@ -702,18 +706,73 @@ void AccessorOCDM::SessionImplementation::Sink::OnKeyStatusUpdate(const char* ke
         //_callback->OnKeyStatusUpdate(key);
         fprintf(stderr, "%s:%d %u\n", __FILE__, __LINE__, length);
         _callback->KeyUpdate(buffer, length);
+    } else {
+        WaitingMessage message = WaitingMessage::ConstructKeyMessage(buffer, length);
+        _WaitingMessages.push_back(message);
     }
-    // TODO: store message if no callback yet.
 }
 
 void AccessorOCDM::SessionImplementation::Sink::Callback(OCDM::ISession::ICallback* callback)
 {
+    if (_callback != nullptr) {
+        _callback->Release();
+    }
+
     _callback = callback;
 
     if (_callback != nullptr) {
         _callback->AddRef();
+
+        for (WaitingMessage & message: _WaitingMessages) {
+            switch(message._Type) {
+            case WaitingMessage::Challenge:
+                _callback->ProcessChallenge(message._Url, &message._Key[0], message._Key.size());
+                break;
+            case WaitingMessage::Message:
+                // TODO: ignore empty keys?
+                _callback->KeyUpdate(&message._Key[0], message._Key.size());
+                break;
+            default:
+                ASSERT(!"Unexpected waiting message type.");
+                TRACE_L1("ERROR: Unexpected waiting message type: %u!", message._Type);
+            }
+        }
+        _WaitingMessages.clear();
     }
     // TODO: if valid callback, and messages waiting, send messages.
+}
+
+AccessorOCDM::SessionImplementation::Sink::WaitingMessage::_WaitingMessage()
+    : _Type(MessageType::Invalid)
+{
+}
+
+AccessorOCDM::SessionImplementation::Sink::WaitingMessage AccessorOCDM::SessionImplementation::Sink::WaitingMessage::ConstructChallenge(const uint8_t key[], uint32_t length, const std::string& url)
+{
+    WaitingMessage waitingMessage;
+    waitingMessage._Type = MessageType::Challenge;
+
+    std::vector<uint8_t> & keyVector = waitingMessage._Key;
+    keyVector.resize(length);
+    memcpy(&keyVector[0], key, length);
+
+    waitingMessage._Url = url;
+
+    return waitingMessage;
+}
+
+AccessorOCDM::SessionImplementation::Sink::WaitingMessage AccessorOCDM::SessionImplementation::Sink::WaitingMessage::ConstructKeyMessage(const uint8_t key[], uint32_t length)
+{
+    WaitingMessage waitingMessage;
+    waitingMessage._Type = MessageType::Message;
+
+    std::vector<uint8_t> & keyVector = waitingMessage._Key;
+    keyVector.resize(length);
+    memcpy(&keyVector[0], key, length);
+
+    waitingMessage._Url = "";
+
+    return waitingMessage;
 }
 
 //AccessorOCDM::SessionImplementation::SessionImplementation(SystemImplementation* parent, CDMi::IMediaKeySession* mediaKeySession, const string& bufferName, const uint32_t defaultSize,
@@ -923,19 +982,8 @@ WPEFramework::Core::Error AccessorOCDM::SystemImplementation::CreateSession(
         const uint16_t initDataLength, const uint8_t* CDMData, const uint16_t CDMDataLength,
         OCDM::ISession*& session)
 {
-    // TODO
-
-/*
-            SystemImplementation* parent,
-            CDMi::IMediaKeySession* mediaKeySession,
-            const string bufferName,
-            const uint32_t defaultSize,
-            const CommonEncryptionData* sessionData
- */
-
     std::string bufferId;
 
-    //if (!_administrator.AquireBuffer(bufferId)) {
     if (!_parent._administrator.AquireBuffer(bufferId)) {
         fprintf(stderr, "%s:%d: ERROR: Failed to get buffer!!\n", __FILE__, __LINE__);
     }
@@ -957,7 +1005,6 @@ AccessorOCDM::AccessorOCDM(OCDMImplementation* parent, const std::string& name,
             _administrator(name),
             _defaultSize(defaultSize),
             _sessionList()
-//, _observers()
 {
     ASSERT(parent != nullptr);
 }
@@ -980,7 +1027,6 @@ WPEFramework::Core::Error AccessorOCDM::AccessorOCDM::IsTypeSupported(const std:
 
 OCDM::ISystem * AccessorOCDM::AccessorOCDM::CreateSystem(const std::string& keySystem)
 {
-    // TODO
     CDMi::IMediaKeys* mediaKeys = _parent.KeySystem(keySystem);
     SystemImplementation* newEntry = Core::Service<SystemImplementation>::Create<SystemImplementation>(this, keySystem, mediaKeys);
     return newEntry;

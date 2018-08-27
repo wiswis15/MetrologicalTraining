@@ -26,6 +26,14 @@ private:
     class SystemImplementation;
     class SessionImplementation;
 
+    struct SessionKey {
+        std::vector<uint8_t> _Data;
+
+        bool operator==(const SessionKey& rhs) {
+            return (_Data == rhs._Data);
+        }
+    };
+
 private:
     class BufferAdministrator {
     private:
@@ -160,6 +168,28 @@ private:
        private:
             SessionImplementation& _parent;
             OCDM::ISession::ICallback* _callback;
+
+            // TODO: is the underscore worth the shorter names?
+            typedef struct _WaitingMessage
+            {
+                typedef enum {
+                    Invalid,
+                    Challenge,
+                    Message
+                } MessageType;
+
+                MessageType _Type;
+                std::vector<uint8_t> _Key;
+                std::string _Url;
+
+                static _WaitingMessage ConstructChallenge(const uint8_t key[], uint32_t length, const std::string& url);
+                static _WaitingMessage ConstructKeyMessage(const uint8_t key[], uint32_t length);
+
+            private:
+                _WaitingMessage();
+            } WaitingMessage;
+
+            std::vector<WaitingMessage> _WaitingMessages;
         };
 
     public:
