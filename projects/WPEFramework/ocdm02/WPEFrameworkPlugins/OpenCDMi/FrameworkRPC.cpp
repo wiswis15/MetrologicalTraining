@@ -686,24 +686,25 @@ void AccessorOCDM::SessionImplementation::Sink::OnKeyStatusUpdate(const char* ke
 {
     fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, keyMessage);
 
-    OCDM::ISession::KeyStatus key;
+    OCDM::ISession::KeyStatus keyStatus;
 
     TRACE(Trace::Information, ("OnKeyStatusUpdate(%s)", keyMessage));
 
     if (::strcmp(keyMessage, "KeyUsable") == 0)
-        key = ::OCDM::ISession::Usable;
+        keyStatus = ::OCDM::ISession::Usable;
     else if (::strcmp(keyMessage, "KeyReleased") == 0)
-        key = ::OCDM::ISession::Released;
+        keyStatus = ::OCDM::ISession::Released;
     else if (::strcmp(keyMessage, "KeyExpired") == 0)
-        key = ::OCDM::ISession::Expired;
+        keyStatus = ::OCDM::ISession::Expired;
     else
-        key = ::OCDM::ISession::InternalError;
+        keyStatus = ::OCDM::ISession::InternalError;
 
-    _parent.UpdateKeyStatus(key, buffer, length);
+    // TODO: this one is still needed to find Session from OCDMAccessor, replace it
+    _parent.UpdateKeyStatus(keyStatus, buffer, length);
+    SessionKey sessionKey(buffer, length);
+    _KeyStatusMap[sessionKey] = keyStatus;
 
     if (_callback != nullptr) {
-        // TODO: update key state internally in session.
-        //_callback->OnKeyStatusUpdate(key);
         fprintf(stderr, "%s:%d %u\n", __FILE__, __LINE__, length);
         _callback->KeyUpdate(buffer, length);
     } else {
@@ -726,11 +727,11 @@ void AccessorOCDM::SessionImplementation::Sink::Callback(OCDM::ISession::ICallba
         for (WaitingMessage & message: _WaitingMessages) {
             switch(message._Type) {
             case WaitingMessage::Challenge:
-                _callback->ProcessChallenge(message._Url, &message._Key[0], message._Key.size());
+                _callback->ProcessChallenge(message._Url, &message._Key._Data[0], message._Key._Data.size());
                 break;
             case WaitingMessage::Message:
                 // TODO: ignore empty keys?
-                _callback->KeyUpdate(&message._Key[0], message._Key.size());
+                _callback->KeyUpdate(&message._Key._Data[0], message._Key._Data.size());
                 break;
             default:
                 ASSERT(!"Unexpected waiting message type.");
@@ -739,7 +740,23 @@ void AccessorOCDM::SessionImplementation::Sink::Callback(OCDM::ISession::ICallba
         }
         _WaitingMessages.clear();
     }
-    // TODO: if valid callback, and messages waiting, send messages.
+}
+
+OCDM::ISession::KeyStatus AccessorOCDM::SessionImplementation::Sink::Status(const uint8_t keyId[], const uint8_t length) const
+{
+    SessionKey sessionKey(keyId, length);
+    OCDM::ISession::KeyStatus output;
+
+
+    return output;
+}
+
+uint32_t AccessorOCDM::SessionImplementation::Sink::Error(const uint8_t keyId[], const uint8_t length) const
+{
+    uint32_t output;
+
+
+    return output;
 }
 
 AccessorOCDM::SessionImplementation::Sink::WaitingMessage::_WaitingMessage()
@@ -752,7 +769,7 @@ AccessorOCDM::SessionImplementation::Sink::WaitingMessage AccessorOCDM::SessionI
     WaitingMessage waitingMessage;
     waitingMessage._Type = MessageType::Challenge;
 
-    std::vector<uint8_t> & keyVector = waitingMessage._Key;
+    std::vector<uint8_t> & keyVector = waitingMessage._Key._Data;
     keyVector.resize(length);
     memcpy(&keyVector[0], key, length);
 
@@ -766,11 +783,11 @@ AccessorOCDM::SessionImplementation::Sink::WaitingMessage AccessorOCDM::SessionI
     WaitingMessage waitingMessage;
     waitingMessage._Type = MessageType::Message;
 
-    std::vector<uint8_t> & keyVector = waitingMessage._Key;
+    std::vector<uint8_t> & keyVector = waitingMessage._Key._Data;
     keyVector.resize(length);
     memcpy(&keyVector[0], key, length);
 
-    waitingMessage._Url = "";
+    waitingMessage._Url.clear();
 
     return waitingMessage;
 }
@@ -888,15 +905,13 @@ void AccessorOCDM::SessionImplementation::Close()
 
 uint32_t AccessorOCDM::SessionImplementation::Error(const uint8_t keyId[], const uint8_t length) const
 {
-    // TODO
-    fprintf(stderr, "%s:%d Error\n", __FILE__, __LINE__);
-    return 42;
+    return _sink.Error(keyId, length);
 }
 
 WPEFramework::Core::Error AccessorOCDM::SessionImplementation::SystemError() const
 {
-    // TODO
-    return WPEFramework::Core::Error::ERROR_GENERAL;
+    // TODO: where should we get this one?
+    return WPEFramework::Core::Error::ERROR_NONE;
 }
 
 WPEFramework::Core::Error AccessorOCDM::SessionImplementation::Callback(OCDM::ISession::ICallback* callback)
@@ -936,7 +951,6 @@ void AccessorOCDM::SessionImplementation::UpdateKeyStatus(OCDM::ISession::KeySta
     } else {
         TRACE(Trace::Information, ("There was no key to update !!!"));
     }
-
 }
 
 AccessorOCDM::SystemImplementation::SystemImplementation(AccessorOCDM* parent,

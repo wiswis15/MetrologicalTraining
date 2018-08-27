@@ -13,6 +13,7 @@
 
 #include <interfaces/IContentDecryption.h>
 #include <vector>
+#include <cstring>
 
 #include "CENCParser.h"
 
@@ -27,11 +28,24 @@ private:
     class SessionImplementation;
 
     struct SessionKey {
-        std::vector<uint8_t> _Data;
+        // TODO: do we need this?
+        SessionKey() {
+        }
 
-        bool operator==(const SessionKey& rhs) {
+        SessionKey(const uint8_t buffer[], uint32_t length) {
+            _Data.resize(length);
+            std::memcpy(&_Data[0], buffer, length);
+        }
+
+        bool operator==(const SessionKey& rhs) const {
             return (_Data == rhs._Data);
         }
+
+        bool operator<(const SessionKey& rhs) const {
+            return (_Data < rhs._Data);
+        }
+
+        std::vector<uint8_t> _Data;
     };
 
 private:
@@ -108,9 +122,6 @@ private:
         std::vector<SessionImplementation*> _sessions;
         CDMi::IMediaKeys & _mediaKeys;
 
-        // TODO: Can accessorOCDM be a singleton?
-        //AccessorOCDM & GetAccessorOCDM() { return _parent; }
-
         friend SessionImplementation;
     };
 
@@ -139,7 +150,6 @@ private:
             uint32_t _sessionKeyLength;
         };
 
-        // IMediaKeys defines the MediaKeys interface.
         class Sink: public CDMi::IMediaKeySessionCallback {
         private:
             Sink() = delete;
@@ -165,6 +175,10 @@ private:
 
             void Callback(OCDM::ISession::ICallback* callback);
 
+            OCDM::ISession::KeyStatus Status(const uint8_t keyId[], const uint8_t length) const;
+
+            uint32_t Error(const uint8_t keyId[], const uint8_t length) const;
+
        private:
             SessionImplementation& _parent;
             OCDM::ISession::ICallback* _callback;
@@ -179,7 +193,7 @@ private:
                 } MessageType;
 
                 MessageType _Type;
-                std::vector<uint8_t> _Key;
+                SessionKey _Key;
                 std::string _Url;
 
                 static _WaitingMessage ConstructChallenge(const uint8_t key[], uint32_t length, const std::string& url);
@@ -190,17 +204,19 @@ private:
             } WaitingMessage;
 
             std::vector<WaitingMessage> _WaitingMessages;
+
+            std::map<SessionKey, OCDM::ISession::KeyStatus> _KeyStatusMap;
+            std::map<SessionKey, uint32_t> _KeyErrorMap;
         };
 
     public:
-        //SessionImplementation(SystemImplementation* parent, CDMi::IMediaKeySession* mediaKeySession, const string& bufferName, const uint32_t defaultSize, const CommonEncryptionData* sessionData);
         SessionImplementation(SystemImplementation* parent, const uint32_t defaultSize, const std::string& bufferName);
 
         virtual ~SessionImplementation();
 
     public:
         //inline bool IsSupported (const CommonEncryptionData& keyIds, const string& keySystem) const;
-        inline bool HasKeyId(const uint8_t keyId[]);
+        bool HasKeyId(const uint8_t keyId[]);
         virtual std::string SessionId() const override;
 
         virtual OCDM::ISession::KeyStatus Status(const uint8_t keyId[], const uint8_t length) const override;

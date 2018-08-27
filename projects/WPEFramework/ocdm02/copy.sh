@@ -34,3 +34,4 @@ rm -rf WPEFrameworkPlugins/TraceControl/doc
 rm -rf WPEFrameworkPlugins/WifiControl/doc
 
 rm -f 'WPEFrameworkPlugins/WebKitBrowser/doc/WPE - API - WebKitBrowser.docx'
+
