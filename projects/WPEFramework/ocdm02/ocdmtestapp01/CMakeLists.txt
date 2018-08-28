@@ -14,11 +14,11 @@ include_directories("${CMAKE_INSTALL_PREFIX}/include"
                     
 link_directories(${CMAKE_INSTALL_PREFIX}/lib)
 
-add_executable(ocdmtestapp
+add_executable(ocdmtestapp01
    main.cpp
 )
 
-target_link_libraries(ocdmtestapp WPEFrameworkCore WPEFrameworkProtocols WPEFrameworkOCDM)
+target_link_libraries(ocdmtestapp01 WPEFrameworkCore WPEFrameworkProtocols WPEFrameworkOCDM)
 
-install(TARGETS ocdmtestapp DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+install(TARGETS ocdmtestapp01 DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 

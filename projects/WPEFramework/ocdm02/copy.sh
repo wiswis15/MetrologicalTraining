@@ -35,3 +35,9 @@ rm -rf WPEFrameworkPlugins/WifiControl/doc
 
 rm -f 'WPEFrameworkPlugins/WebKitBrowser/doc/WPE - API - WebKitBrowser.docx'
 
+mkdir -p build01
+rm -f build01/*.sh
+
+cp $SOURCE_DIR/build01/*.sh build01
+
+

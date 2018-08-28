@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # How to start in gdb:
-#   WPEFRAMEWORK_PREFIX='gdb --args' ./run.sh
+#   WPEFRAMEWORK_PREFIX='gdb --args' ./wpeframework-run.sh
 
 STAGING="$PWD/staging"
 
