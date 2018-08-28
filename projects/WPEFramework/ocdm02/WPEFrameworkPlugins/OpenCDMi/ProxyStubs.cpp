@@ -1,5 +1,5 @@
 #include "Module.h"
-#include <ocdm/IOCDM.h>
+#include <ocdm-accessor/IOCDM.h>
 
 // TODO: shouldn't all these lambda-arrays be static?
 namespace WPEFramework {

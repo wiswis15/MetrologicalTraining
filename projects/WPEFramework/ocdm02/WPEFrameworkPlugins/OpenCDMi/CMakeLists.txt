@@ -6,7 +6,7 @@ set(WPEFRAMEWORK_PLUGIN_OPENCDMI_OOP false CACHE STRING true)
 include(module) # Setup default stuff needed for the cmake framework thingy.
 
 set(PLUGIN_OPTIONS)
-set(PLUGIN_LINK_OPTIONS -locdm)
+#set(PLUGIN_LINK_OPTIONS -locdm)
 
 set(PLUGIN_SOURCES 
         Module.cpp

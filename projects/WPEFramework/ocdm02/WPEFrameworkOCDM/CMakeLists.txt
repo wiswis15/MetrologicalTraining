@@ -31,6 +31,7 @@ link_directories(${CMAKE_INSTALL_PREFIX}/lib)
 find_package(WPEFramework)
 
 include_directories("${CMAKE_INSTALL_PREFIX}/include"
+                    "${CMAKE_CURRENT_SOURCE_DIR}"
                     "${WPEFRAMEWORK_INCLUDE_DIRS}"
                     "${WPEFRAMEWORK_INCLUDE_DIRS}/ocdm") # TODO: Should we explicitly mention ocdm here?
 

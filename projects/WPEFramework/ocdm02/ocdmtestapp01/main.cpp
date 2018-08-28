@@ -1,5 +1,5 @@
 #include <ocdm-accessor/AccessorOCDM.h>
-#include <ocdm/IOCDM.h>
+#include <ocdm-accessor/IOCDM.h>
 
 #include <iostream>
 #include <string>

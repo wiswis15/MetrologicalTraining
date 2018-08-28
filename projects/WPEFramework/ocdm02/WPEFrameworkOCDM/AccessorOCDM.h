@@ -1,6 +1,6 @@
 #pragma once
 
-#include <opencdm/IOCDM.h>
+#include <IOCDM.h>
 #include <core/core.h>
 #include <com/com.h>
 

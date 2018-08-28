@@ -8,8 +8,8 @@
 
 // Get in the definitions required for access to the OCDM 
 // counter part living in the applications
-#include <ocdm/IOCDM.h>
-#include <ocdm/DataExchange.h>
+//#include <ocdm/IOCDM.h>
+//#include <ocdm/DataExchange.h>
 
 #include <interfaces/IContentDecryption.h>
 
@@ -28,7 +28,6 @@ static WPEFramework::Core::Error CdmiResultToWpeError(CDMi::CDMi_RESULT result)
 {
     if (CDMi_SUCCEEDED(result))
         return WPEFramework::Core::Error::ERROR_NONE;
-
     WPEFramework::Core::Error output = WPEFramework::Core::Error::ERROR_GENERAL;
     switch(result) {
         case CDMi_E_FAIL:
@@ -569,7 +568,8 @@ bool AccessorOCDM::BufferAdministrator::ReleaseBuffer(const string& locator)
 
 AccessorOCDM::SessionImplementation::DataExchange::DataExchange(CDMi::IMediaKeySession* mediaKeys,
         const string& name, const uint32_t defaultSize) :
-            OCDM::DataExchange(name, defaultSize),
+            //media::DataExchange(name, defaultSize),
+            media::DataExchange(name), // TODO: sort out defaultSize: is it needed or not?
             Core::Thread(Core::Thread::DefaultStackSize(), _T("DRMSessionThread")),
             _mediaKeys(mediaKeys),
             _sessionKey(nullptr),
@@ -582,7 +582,7 @@ AccessorOCDM::SessionImplementation::DataExchange::DataExchange(CDMi::IMediaKeyS
 
 AccessorOCDM::SessionImplementation::DataExchange::~DataExchange()
 {
-    TRACE_L1("Destructing buffer server side: %p - %s", this, OCDM::DataExchange::Name().c_str());
+    TRACE_L1("Destructing buffer server side: %p - %s", this, media::DataExchange::Name().c_str());
     // Make sure the thread reaches a HALT.. We are done.
     Core::Thread::Stop();
 

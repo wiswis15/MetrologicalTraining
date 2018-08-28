@@ -2,7 +2,9 @@
 #define __CENCPARSER_H
 
 #include "Module.h"
-#include <ocdm/IOCDM.h>
+
+// TODO: rename dir
+#include <ocdm-accessor/IOCDM.h>
 
 namespace WPEFramework {
 namespace Plugin {

@@ -8,8 +8,10 @@
 
 // Get in the definitions required for access to the OCDM
 // counter part living in the applications
-#include <ocdm/IOCDM.h>
-#include <ocdm/DataExchange.h>
+//#include <ocdm/IOCDM.h>
+
+// TODO: rename dir
+#include <ocdm-accessor/DataExchange.h>
 
 #include <interfaces/IContentDecryption.h>
 #include <vector>
@@ -132,7 +134,7 @@ private:
         SessionImplementation& operator= (const SessionImplementation&) = delete;
 
     private:
-        class DataExchange: public ::OCDM::DataExchange, public Core::Thread {
+        class DataExchange: public media::DataExchange, public Core::Thread {
         private:
             DataExchange() = delete;
             DataExchange(const DataExchange&) = delete;
