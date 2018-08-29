@@ -2,8 +2,8 @@
 
 mkdir -p build
 cd build
-rm -rf ocdmtestapp
-mkdir ocdmtestapp
-cd ocdmtestapp
+rm -rf ocdmtestapp01
+mkdir ocdmtestapp01
+cd ocdmtestapp01
 cp -r ../../../ocdmtestapp01 src
 

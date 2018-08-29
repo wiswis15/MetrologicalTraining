@@ -39,6 +39,7 @@ add_library(WPEFrameworkOCDM SHARED
    AccessorOCDM.cpp
    ProxyStubs.cpp
    DataExchange.cpp
+   open_cdm.cpp
 )
 
 target_link_libraries(WPEFrameworkOCDM WPEFrameworkCore WPEFrameworkProtocols)

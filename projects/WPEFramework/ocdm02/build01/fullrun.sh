@@ -18,5 +18,8 @@ rm -rf build staging
 ./ocdmtestapp01-copy.sh
 ./ocdmtestapp01-build.sh
 
+./ocdmtestapp02-copy.sh
+./ocdmtestapp02-build.sh
+
 python/updateConfig.py
 
