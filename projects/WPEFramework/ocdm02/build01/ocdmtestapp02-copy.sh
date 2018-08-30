@@ -7,3 +7,6 @@ mkdir ocdmtestapp02
 cd ocdmtestapp02
 cp -r ../../../ocdmtestapp02 src
 
+rm -rf src/ocdm-accessor
+
+

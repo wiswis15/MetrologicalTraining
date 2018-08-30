@@ -79,7 +79,8 @@ struct OpenCDMSystem * opencdm_create_system(const char keySystem[]);
  * \param keyId Array containing key ID.
  * \param length Length of keyId array.
  * \param maxWaitTime Maximum allowed time to block (in miliseconds).
- * \return \ref OpenCDMSession belonging to key ID, or NULL when not found or timed out.
+ * \return \ref OpenCDMSession belonging to key ID, or NULL when not found or timed out. This instance
+ *         also needs to be destructed using \ref opencdm_session_destruct.
  */
 struct OpenCDMSession * opencdm_get_session(const uint8_t keyId[], uint8_t length, uint32_t maxWaitTime);
 

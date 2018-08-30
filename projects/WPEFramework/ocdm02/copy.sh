@@ -15,6 +15,7 @@ rm -rf ocdmtestapp01/build
 
 rm -rf ocdmtestapp02
 cp -r $SOURCE_DIR/ocdmtestapp02 .
+rm -f ocdmtestapp02/ocdm-accessor
 
 rm -rf WPEFramework
 cp -r $SOURCE_DIR/WPEFramework .
