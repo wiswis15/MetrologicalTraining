@@ -1,0 +1,176 @@
+diff --git a/netflix/cmake/FindToolchainLibrary.cmake b/netflix/cmake/FindToolchainLibrary.cmake
+index 063379ed..a26878b4 100644
+--- a/netflix/cmake/FindToolchainLibrary.cmake
++++ b/netflix/cmake/FindToolchainLibrary.cmake
+@@ -65,6 +65,8 @@ macro(find_toolchain_library)
+     unset(find_library_name CACHE)
+     unset(library_found CACHE)
+ 
++    list(APPEND include_dirs "${CMAKE_INSTALL_PREFIX}/include" "${CMAKE_INSTALL_PREFIX}/include/playready" "${CMAKE_INSTALL_PREFIX}/include/freetype2")
++
+     if(FIND_DEBUG)
+         message(STATUS "Include directories:")
+         foreach(directory ${include_dirs})
+@@ -94,6 +96,8 @@ macro(find_toolchain_library)
+         endif()
+     endif()
+ 
++    list(APPEND library_dirs "${CMAKE_INSTALL_PREFIX}/lib")
++
+     # Find the requested library
+     if(FIND_DEBUG)
+         message(STATUS "Looking for ${FIND_LIBRARY} in ${library_dirs}")
+diff --git a/netflix/src/dpi/common/CMakeLists.txt b/netflix/src/dpi/common/CMakeLists.txt
+index a6a4c508..1caabdb1 100644
+--- a/netflix/src/dpi/common/CMakeLists.txt
++++ b/netflix/src/dpi/common/CMakeLists.txt
+@@ -1,5 +1,7 @@
+ # (c) 2011 Netflix, Inc. Do not copy or use without prior written permission from Netflix, Inc.
+ 
++include_directories(${CMAKE_INSTALL_PREFIX}/include)
++
+ add_definitions(
+    -DREE_DRM_DEBUG
+ )
+diff --git a/netflix/src/integration/CMakeLists.txt b/netflix/src/integration/CMakeLists.txt
+index d2db6057..52af432d 100644
+--- a/netflix/src/integration/CMakeLists.txt
++++ b/netflix/src/integration/CMakeLists.txt
+@@ -2,6 +2,8 @@
+ cmake_minimum_required(VERSION 2.8)
+ include_directories(${CMAKE_CURRENT_LIST_DIR})
+ 
++include_directories(${CMAKE_INSTALL_PREFIX}/include)
++
+ include(CheckCXXSymbolExists)
+ 
+ check_cxx_symbol_exists(inotify_init "sys/inotify.h" HAVE_INOTIFY)
+diff --git a/netflix/src/net/CMakeLists.txt b/netflix/src/net/CMakeLists.txt
+index c566976e..4d9eaca5 100644
+--- a/netflix/src/net/CMakeLists.txt
++++ b/netflix/src/net/CMakeLists.txt
+@@ -2,6 +2,8 @@
+ 
+ cmake_minimum_required(VERSION 2.8)
+ 
++include_directories(${CMAKE_INSTALL_PREFIX}/include)
++
+ set(GROUP_NET "Networking library options")
+ add_component_option(NET_FIONREAD "Enable TCP throughput measurement (FIONREAD)" ON nrd)
+ 
+diff --git a/netflix/src/nrd/CMakeLists.txt b/netflix/src/nrd/CMakeLists.txt
+index a085a303..58a3c79c 100644
+--- a/netflix/src/nrd/CMakeLists.txt
++++ b/netflix/src/nrd/CMakeLists.txt
+@@ -2,6 +2,8 @@
+ 
+ cmake_minimum_required(VERSION 2.8)
+ 
++include_directories(${CMAKE_INSTALL_PREFIX}/include)
++
+ project(nrd)
+ 
+ include_directories(Core)
+diff --git a/netflix/src/platform/gibbon/CMakeLists.txt b/netflix/src/platform/gibbon/CMakeLists.txt
+index 6db18bba..a9e81fb7 100644
+--- a/netflix/src/platform/gibbon/CMakeLists.txt
++++ b/netflix/src/platform/gibbon/CMakeLists.txt
+@@ -2,6 +2,8 @@
+ 
+ cmake_minimum_required(VERSION 2.8)
+ 
++include_directories(${CMAKE_INSTALL_PREFIX}/include)
++
+ include(gibbon.cmake)
+ include(CheckCSourceCompiles)
+ include(CheckCXXSourceCompiles)
+@@ -564,6 +566,7 @@ else()
+         endif ()
+ 
+         set(GIBBON_TARGET_NAME "gibbon_app")
++        SET(CMAKE_EXE_LINKER_FLAGS " ${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath-link,${CMAKE_INSTALL_PREFIX}/lib -L${CMAKE_INSTALL_PREFIX}/lib")
+         add_executable(gibbon_app main.cpp)
+         if(NRDP_HAS_SOCKETIZER)
+             target_link_libraries(gibbon_app nrdsocketizer)
+diff --git a/netflix/src/platform/gibbon/decoders/decoders.cmake b/netflix/src/platform/gibbon/decoders/decoders.cmake
+index 0bd45624..7e0446a1 100644
+--- a/netflix/src/platform/gibbon/decoders/decoders.cmake
++++ b/netflix/src/platform/gibbon/decoders/decoders.cmake
+@@ -28,7 +28,8 @@ endif()
+ set(GIBBON_IMAGE_JPEG_METHOD "fast" CACHE STRING "JPEG DCT Method: fast, slow, float")
+ set(GIBBON_IMAGE_JPEG_UPSAMPLE "no" CACHE STRING "JPEG Fancy Upsample: yes, no")
+ if(GIBBON_IMAGE_JPEG STREQUAL AUTO)
+-    set(CMAKE_REQUIRED_LIBRARIES "jpeg")
++    set(CMAKE_REQUIRED_LIBRARIES "${CMAKE_INSTALL_PREFIX}/lib/libjpeg.so")
++    set(CMAKE_REQUIRED_INCLUDES "${CMAKE_INSTALL_PREFIX}/include")
+     set(LIBJPEG_TEST "
+         #include <stdlib.h>
+         #include <stddef.h>
+diff --git a/partner/dpi/reference/CMakeLists.txt b/partner/dpi/reference/CMakeLists.txt
+index d0372b7e..07518064 100644
+--- a/partner/dpi/reference/CMakeLists.txt
++++ b/partner/dpi/reference/CMakeLists.txt
+@@ -2,6 +2,8 @@
+ 
+ cmake_minimum_required(VERSION 2.8)
+ 
++include_directories(${CMAKE_INSTALL_PREFIX}/include)
++
+ # reference REE/TEE interface implementation
+ add_subdirectory(${REE_TEE_IMPLEMENTATION} ${CMAKE_BINARY_DIR}/reeteebin)
+ 
+diff --git a/partner/dpi/reference/drm.cmake b/partner/dpi/reference/drm.cmake
+index 17a90548..8ce09376 100644
+--- a/partner/dpi/reference/drm.cmake
++++ b/partner/dpi/reference/drm.cmake
+@@ -6,7 +6,7 @@ include("FindToolchainLibrary")
+ 
+ # DRM
+ # --------------------------------------------------------------
+-if(DPI_REFERENCE_DRM STREQUAL "playready2.5-ss-tee")
++if(DPI_REFERENCE_DRM STREQUAL "playready2.5-ss-tee__")
+     if (NOT APPLE AND NOT "${SANITIZER_FLAGS}" STREQUAL "")
+         set(PLAYREADYLIB playready-2.5-ss-tee)
+     else()
+@@ -34,6 +34,41 @@ if(DPI_REFERENCE_DRM STREQUAL "playready2.5-ss-tee")
+         COMMAND ${CMAKE_COMMAND} -E make_directory ${HAVE_DPI_DIRECTORY}/playready/storage
+         COMMAND ${CMAKE_COMMAND} -E copy_directory ${PLAYREADY_DIRECTORY}/etc/playready ${HAVE_DPI_DIRECTORY}/playready
+     )
++elseif(DPI_REFERENCE_DRM STREQUAL "playready2.5-ss-tee")
++    # Copied from 4.2
++    set(PLAYREADY_INCLUDE "${CMAKE_INSTALL_PREFIX}/include/playready")
++
++    set(CMAKE_REQUIRED_INCLUDES_SAVED "${CMAKE_REQUIRED_INCLUDES}")
++    set(CMAKE_REQUIRED_DEFINITIONS_SAVED "${CMAKE_REQUIRED_DEFINITIONS}")
++    set(CMAKE_REQUIRED_INCLUDES "${PLAYREADY_INCLUDE};${PLAYREADY_INCLUDE}/oem/inc;${PLAYREADY_INCLUDE}/oem/ansi/inc;${PLAYREADY_INCLUDE}/oem/common/inc")
++
++    add_definitions( -DPLAYREADY )
++    add_definitions( -DPLAYREADY2 )
++    add_definitions( -DPLAYREADY2TEE )
++    add_definitions( -DPLAYREADY2_5 )
++    add_definitions( -DPLAYREADY2_5_TEE )
++    add_definitions( -DPLAYREADY2_5_TEE_LDL )
++
++    include("${PLAYREADY_INCLUDE}/playready.cmake")
++    add_definitions(${CMAKE_REQUIRED_DEFINITIONS})
++
++    include_directories(${PLAYREADY_INCLUDE})
++    include_directories(${PLAYREADY_INCLUDE}/oem/inc)
++    include_directories(${PLAYREADY_INCLUDE}/oem/ansi/inc)
++    include_directories(${PLAYREADY_INCLUDE}/oem/common/inc)
++
++    link_directories(${PLAYREADY_LIB})
++
++    target_link_libraries(nrddpi playready)
++    add_custom_command(TARGET nrddpi POST_BUILD
++        COMMAND ${CMAKE_COMMAND} -E make_directory ${HAVE_DPI_DIRECTORY}/playready
++        COMMAND ${CMAKE_COMMAND} -E make_directory ${HAVE_DPI_DIRECTORY}/playready/storage
++        COMMAND ${CMAKE_COMMAND} -E copy_directory ${PLAYREADY_INCLUDE}/etc/playready ${HAVE_DPI_DIRECTORY}/playready
++    )
++
++    set(CMAKE_REQUIRED_INCLUDES "${CMAKE_REQUIRED_INCLUDES_SAVED}")
++    set(CMAKE_REQUIRED_DEFINITIONS "${CMAKE_REQUIRED_DEFINITIONS_SAVED}")
++
+ 
+ elseif(DPI_REFERENCE_DRM STREQUAL "playready3.0")
+ 

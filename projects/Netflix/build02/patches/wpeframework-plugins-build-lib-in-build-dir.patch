@@ -1,0 +1,11 @@
+diff -ruNP a/cmake/setup_target_properties_library.cmake b/cmake/setup_target_properties_library.cmake
+--- a/cmake/setup_target_properties_library.cmake	2018-07-20 14:47:17.210126892 +0200
++++ b/cmake/setup_target_properties_library.cmake	2018-07-20 14:46:37.743210624 +0200
+@@ -7,7 +7,5 @@
+         endif()
+     elseif (APPLE)
+         set_target_properties(${target} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${OUTPUT_BASE_DIR}/${CONFIG_DIR}/bin)
+-    elseif (UNIX)
+-        set_target_properties(${target} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${OUTPUT_BASE_DIR}/${CONFIG_DIR}/lib)
+     endif()
+ endfunction()
