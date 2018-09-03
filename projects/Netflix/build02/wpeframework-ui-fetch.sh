@@ -3,9 +3,9 @@
 mkdir -p zips
 cd zips
 rm -f wpeframework-ui wpeframework-ui.tgz
-git clone git@github.com:WebPlatformForEmbedded/WPEFrameworkUI-legacy.git wpeframework-ui
+git clone git@github.com:WebPlatformForEmbedded/WPEFrameworkUI.git wpeframework-ui
 cd wpeframework-ui
-git checkout d7b707d4031d501a2d4d33896dce7393762d601f
+git checkout 7ff4eff4c66d24845efe0ba0bcb2fbc15a61d120
 rm -rf .git
 cd ..
 tar czf wpeframework-ui.tgz wpeframework-ui/

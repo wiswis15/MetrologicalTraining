@@ -3,9 +3,9 @@
 mkdir -p zips
 cd zips
 rm -f wpeframework wpeframework.tgz
-git clone git@github.com:WebPlatformForEmbedded/WPEFramework-legacy.git wpeframework
+git clone git@github.com:WebPlatformForEmbedded/WPEFramework.git wpeframework
 cd wpeframework
-git checkout 839e9ccabe2ac0dc272f1c2a41769da39534a3e8
+git checkout dc64db6ab27e2ed9d80411da725e7b63df416956
 rm -rf .git
 cd ..
 tar czf wpeframework.tgz wpeframework/

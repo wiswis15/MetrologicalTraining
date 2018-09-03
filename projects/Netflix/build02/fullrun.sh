@@ -10,7 +10,6 @@ mkdir -p staging/usr
 ./libprovision-build.sh
 
 ./wpeframework-unzip.sh
-./wpeframework-patch.sh
 ./wpeframework-build.sh
 
 ./playready-unzip.sh
