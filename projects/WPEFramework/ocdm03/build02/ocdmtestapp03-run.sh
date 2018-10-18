@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # How to start in gdb:
-#   OCDMTESTAPP03_PREFIX='gdb --args' ./ocdmtestapp02-run.sh
+#   OCDMTESTAPP03_PREFIX='gdb --args' ./ocdmtestapp03-run.sh
 
 STAGING="$PWD/staging"
 
