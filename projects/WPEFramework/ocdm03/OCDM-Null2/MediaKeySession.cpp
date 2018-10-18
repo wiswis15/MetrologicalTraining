@@ -106,13 +106,7 @@ CDMi_RESULT MediaKeySession::ReleaseClearContent(const uint8_t *f_pbSessionKey, 
    return 0;
 }
 
-time_t MediaKeySession::GetDrmSystemTime() const
-{
-   return 42;
-}
-
-
-class Null2 : public IMediaKeys {
+class Null2 : public IMediaKeys, public IMediaKeysExt {
 private:
     Null2 (const Null2&) = delete;
     Null2& operator= (const Null2&) = delete;
@@ -152,6 +146,12 @@ public:
         delete f_piMediaKeySession;
 
         return CDMi_SUCCESS; 
+    }
+
+    time_t GetDrmSystemTime() const override
+    {
+       fprintf(stderr, "%s:%d: Null2 is asked for system time\n", __FILE__, __LINE__);
+       return 46;
     }
 };
 

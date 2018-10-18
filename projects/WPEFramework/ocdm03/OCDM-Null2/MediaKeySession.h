@@ -5,7 +5,7 @@
 
 namespace CDMi {
 
-class MediaKeySession : public IMediaKeySession, public IMediaKeySessionExt
+class MediaKeySession : public IMediaKeySession
 {
 public:
     MediaKeySession(const uint8_t *f_pbInitData, uint32_t f_cbInitData);
@@ -32,9 +32,6 @@ public:
         const uint8_t* keyId) override;
 
     CDMi_RESULT ReleaseClearContent(const uint8_t *f_pbSessionKey, uint32_t f_cbSessionKey, const uint32_t f_cbClearContentOpaque, uint8_t *f_pbClearContentOpaque) override;
-
-    // IMediaKeySessionExt
-    time_t GetDrmSystemTime() const override;
 };
 
 } // namespace CDMi
