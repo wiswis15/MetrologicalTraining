@@ -1,4 +1,7 @@
+// TODO: seems like WPEFramework OCDM doesn't export its stuff as extern "C".
+
 #include <opencdm/open_cdm.h>
+#include <opencdm/open_cdm_ext.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,7 +22,7 @@ static void KeyUpdate(void * userData, const uint8_t keyId[], uint8_t length)
 {
 	fprintf(stderr, "MyCallback::KeyUpdate, length: %u\n", (unsigned int)length);
 
-	g_keyId = malloc(length);
+	g_keyId = (uint8_t*)malloc(length);
 	memcpy(g_keyId, keyId, length);
 	g_keyLength = length;
 }
@@ -36,6 +39,12 @@ int main()
    isSupported = opencdm_is_type_supported(accessor, "foobar", "");
    fprintf(stderr, "foobar is supported (should be 1): %u\n", isSupported);
    
+   time_t drmSystemTime;
+
+   fprintf(stderr, "About to call opencdm_system_get_drm_time\n");
+   opencdm_system_get_drm_time(accessor, &drmSystemTime);
+   fprintf(stderr, "Called opencdm_system_get_drm_time: %lu\n", drmSystemTime);
+
 /*
 //   struct OpenCDMSystem * system = opencdm_create_system(keySystem);
 //   fprintf(stderr, "Created system: %p\n", system);
