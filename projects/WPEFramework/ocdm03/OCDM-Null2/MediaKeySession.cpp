@@ -114,6 +114,7 @@ CDMi_RESULT MediaKeySession::ReleaseClearContent(const uint8_t *f_pbSessionKey, 
 
 uint32_t MediaKeySession::GetSessionIdExt() const
 {
+	cerr << "Null2 session is asked for Session ID Ext" << endl;
 	return 56;
 }
 
