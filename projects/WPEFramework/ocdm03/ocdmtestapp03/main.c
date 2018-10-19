@@ -58,6 +58,12 @@ int main()
                                   licenseType, drmHeader, drmHeaderLength);
    fprintf(stderr, "Called opencdm_create_session_netflix: %p\n", session);
 
+   fprintf(stderr, "About to call opencdm_session_get_session_id_netflix\n");
+   uint32_t sessionIdNetflix = opencdm_session_get_session_id_netflix(session);
+   fprintf(stderr, "Called opencdm_session_get_session_id_netflix: %u\n", sessionIdNetflix);
+
+
+
 /*
 //   struct OpenCDMSystem * system = opencdm_create_system(keySystem);
 //   fprintf(stderr, "Created system: %p\n", system);
