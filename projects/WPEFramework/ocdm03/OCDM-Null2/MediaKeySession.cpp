@@ -38,6 +38,12 @@ MediaKeySession::MediaKeySession(const uint8_t *f_pbInitData, uint32_t f_cbInitD
 {
 }
 
+MediaKeySession::MediaKeySession(uint32_t sessionId, const char contentId[], uint32_t contentIdLength, LicenseTypeExt licenseType, const uint8_t drmHeader[], uint32_t drmHeaderLength)
+{
+	fprintf(stderr, "%s:%d: create media key session ext in null2\n", __FILE__, __LINE__);
+}
+
+
 void MediaKeySession::Run(const IMediaKeySessionCallback *f_piMediaKeySessionCallback)
 {
 	// TODO: why is this one passed const?
@@ -106,6 +112,12 @@ CDMi_RESULT MediaKeySession::ReleaseClearContent(const uint8_t *f_pbSessionKey, 
    return 0;
 }
 
+uint32_t MediaKeySession::GetSessionIdExt() const
+{
+	return 56;
+}
+
+
 class Null2 : public IMediaKeys, public IMediaKeysExt {
 private:
     Null2 (const Null2&) = delete;
@@ -153,6 +165,23 @@ public:
        fprintf(stderr, "%s:%d: Null2 is asked for system time\n", __FILE__, __LINE__);
        return 46;
     }
+
+    CDMi_RESULT CreateMediaKeySessionExt(uint32_t sessionId,
+            const char contentId[],
+            uint32_t contentIdLength,
+            LicenseTypeExt licenseType,
+            const uint8_t drmHeader[],
+            uint32_t drmHeaderLength,
+            IMediaKeySessionExt** session) override
+	{
+
+        *session = new CDMi::MediaKeySession(sessionId, contentId, contentIdLength, licenseType, drmHeader, drmHeaderLength);
+
+        fprintf(stderr, "%s:%d: Null2 created a session\n", __FILE__, __LINE__);
+
+        return CDMi_SUCCESS;
+	}
+
 };
 
 
