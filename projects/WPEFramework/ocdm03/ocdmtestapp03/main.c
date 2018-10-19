@@ -45,6 +45,19 @@ int main()
    opencdm_system_get_drm_time(accessor, &drmSystemTime);
    fprintf(stderr, "Called opencdm_system_get_drm_time: %lu\n", drmSystemTime);
 
+   struct OpenCDMSession * session = NULL;
+   uint32_t sessionId = 61;
+   const char contentId[] = "content_id_62";
+   uint32_t contentIdLength = strlen(contentId) + 1;
+   enum OcdmLicenseType licenseType = OCDM_LICENSE_LIMITED_DURATION;
+   const uint8_t drmHeader[] = { 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63 };
+   uint32_t drmHeaderLength = sizeof(drmHeader);
+
+   fprintf(stderr, "About to call opencdm_create_session_netflix\n");
+   opencdm_create_session_netflix(accessor, &session, sessionId, contentId, contentIdLength,
+                                  licenseType, drmHeader, drmHeaderLength);
+   fprintf(stderr, "Called opencdm_create_session_netflix: %p\n", session);
+
 /*
 //   struct OpenCDMSystem * system = opencdm_create_system(keySystem);
 //   fprintf(stderr, "Created system: %p\n", system);
