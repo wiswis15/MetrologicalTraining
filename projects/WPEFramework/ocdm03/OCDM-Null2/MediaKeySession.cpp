@@ -101,7 +101,7 @@ CDMi_RESULT MediaKeySession::Decrypt(const uint8_t *f_pbSessionKey, uint32_t f_c
 	*f_ppbOpaqueClearContent = const_cast<uint8_t *>(f_pbData);
 	*f_pcbOpaqueClearContent = f_cbData;
 	if (f_cbData > 0) {
-		(*f_ppbOpaqueClearContent)[0] = 0x80;
+		(*f_ppbOpaqueClearContent)[0]++;
 	}
 
    return 0;

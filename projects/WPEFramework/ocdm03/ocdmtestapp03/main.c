@@ -53,24 +53,39 @@ int main()
    const uint8_t drmHeader[] = { 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63 };
    uint32_t drmHeaderLength = sizeof(drmHeader);
 
-   fprintf(stderr, "About to call opencdm_create_session_netflix\n");
-   opencdm_create_session_netflix(accessor, &session, sessionId, contentId, contentIdLength,
-                                  licenseType, drmHeader, drmHeaderLength);
-   fprintf(stderr, "Called opencdm_create_session_netflix: %p\n", session);
+   for (int j = 0; j < 10; j++) {
+      fprintf(stderr, "About to call opencdm_create_session_netflix\n");
+      opencdm_create_session_netflix(accessor, &session, sessionId, contentId, contentIdLength,
+                                     licenseType, drmHeader, drmHeaderLength);
+      fprintf(stderr, "Called opencdm_create_session_netflix: %p\n", session);
 
-   fprintf(stderr, "About to call opencdm_session_get_session_id_netflix\n");
-   uint32_t sessionIdNetflix = opencdm_session_get_session_id_netflix(session);
-   fprintf(stderr, "Called opencdm_session_get_session_id_netflix: %u\n", sessionIdNetflix);
+      fprintf(stderr, "About to call opencdm_session_get_session_id_netflix\n");
+      uint32_t sessionIdNetflix = opencdm_session_get_session_id_netflix(session);
+      fprintf(stderr, "Called opencdm_session_get_session_id_netflix: %u\n", sessionIdNetflix);
 
-   uint8_t dataBuffer[] = { 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47 };
-   uint32_t dataBufferLength = sizeof(dataBuffer);
-   uint8_t ivBuffer[] = { 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57 };
-   uint32_t ivBufferLength = sizeof(ivBuffer);
+      uint8_t dataBuffer[] = { 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47 };
+      uint32_t dataBufferLength = sizeof(dataBuffer);
+      uint8_t ivBuffer[] = { 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57 };
+      uint32_t ivBufferLength = sizeof(ivBuffer);
 
-   fprintf(stderr, "About to call decrypt\n");
-   opencdm_session_decrypt(session, dataBuffer, dataBufferLength, ivBuffer, ivBufferLength);
-   fprintf(stderr, "Called decrypt: 0x%02x\n", (int)dataBuffer[0]);
+      for (int i = 0; i < 100; i++) {
+         dataBuffer[0] = (uint8_t)i;
+         //fprintf(stderr, "About to call decrypt\n");
+         opencdm_session_decrypt(session, dataBuffer, dataBufferLength, ivBuffer, ivBufferLength);
+         //fprintf(stderr, "Called decrypt: 0x%02x -> 0x%02x\n", i, (int)dataBuffer[0]);
 
+         int expectedValue = (i + 1) % 256;
+         int receivedValue = (int)dataBuffer[0];
+
+         if (expectedValue != receivedValue) {
+            fprintf(stderr, ">> ERROR during test decryption: 0x%02x -> 0x%02x (expected: 0x%02x)\n", i, receivedValue, expectedValue);
+         }
+      }
+
+      fprintf(stderr, "About to call opencdm_destroy_session_netflix\n");
+      opencdm_destroy_session_netflix(session);
+      fprintf(stderr, "Called opencdm_destroy_session_netflix\n");
+   }
 
 /*
 //   struct OpenCDMSystem * system = opencdm_create_system(keySystem);
