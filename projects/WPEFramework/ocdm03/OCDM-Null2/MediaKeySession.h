@@ -41,6 +41,8 @@ public:
 
     CDMi_RESULT ReleaseClearContent(const uint8_t *f_pbSessionKey, uint32_t f_cbSessionKey, const uint32_t f_cbClearContentOpaque, uint8_t *f_pbClearContentOpaque) override;
     uint32_t GetSessionIdExt(void) const override;
+
+    uint16_t PlaylevelCompressedVideo() const override;
 };
 
 } // namespace CDMi

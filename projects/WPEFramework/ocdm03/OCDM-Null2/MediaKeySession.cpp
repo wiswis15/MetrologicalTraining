@@ -118,6 +118,11 @@ uint32_t MediaKeySession::GetSessionIdExt() const
 	return 56;
 }
 
+uint16_t MediaKeySession::PlaylevelCompressedVideo() const
+{
+	cerr << "Null2 session is asked for PlaylevelCompressedVideo" << endl;
+	return 57;
+}
 
 class Null2 : public IMediaKeys, public IMediaKeysExt {
 private:
