@@ -62,6 +62,14 @@ int main()
    uint32_t sessionIdNetflix = opencdm_session_get_session_id_netflix(session);
    fprintf(stderr, "Called opencdm_session_get_session_id_netflix: %u\n", sessionIdNetflix);
 
+   uint8_t dataBuffer[] = { 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47 };
+   uint32_t dataBufferLength = sizeof(dataBuffer);
+   uint8_t ivBuffer[] = { 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57 };
+   uint32_t ivBufferLength = sizeof(ivBuffer);
+
+   fprintf(stderr, "About to call decrypt\n");
+   opencdm_session_decrypt(session, dataBuffer, dataBufferLength, ivBuffer, ivBufferLength);
+   fprintf(stderr, "Called decrypt: 0x%02x\n", (int)dataBuffer[0]);
 
 
 /*
