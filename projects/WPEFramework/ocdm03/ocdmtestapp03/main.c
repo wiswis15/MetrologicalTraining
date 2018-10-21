@@ -16,13 +16,34 @@ int main()
    fprintf(stderr, "com.metrological.null is supported (should be 0): %u\n", isSupported);
 
    isSupported = opencdm_is_type_supported(accessor, "foobar", "");
-   fprintf(stderr, "foobar is supported (should be 1): %u\n", isSupported);
+   fprintf(stderr, "foobar is supported (should be != 0): %u\n", isSupported);
    
    time_t drmSystemTime;
 
    fprintf(stderr, "About to call opencdm_system_get_drm_time\n");
    opencdm_system_get_drm_time(accessor, &drmSystemTime);
    fprintf(stderr, "Called opencdm_system_get_drm_time: %lu\n", drmSystemTime);
+
+   char versionStr01[65];
+   fprintf(stderr, "About to call opencdm_system_get_version\n");
+   opencdm_system_get_version(accessor, versionStr01);
+   fprintf(stderr, "Called opencdm_system_get_version: %s\n", versionStr01);
+
+   uint32_t ldlLimit01;
+   fprintf(stderr, "About to call opencdm_system_get_ldl_session_limit\n");
+   opencdm_system_get_ldl_session_limit(accessor, &ldlLimit01);
+   fprintf(stderr, "Called opencdm_system_get_ldl_session_limit: %u\n", ldlLimit01);
+
+   fprintf(stderr, "About to call opencdm_system_enable_secure_stop\n");
+   opencdm_system_enable_secure_stop(accessor, 1);
+   fprintf(stderr, "Called opencdm_system_enable_secure_stop\n");
+
+   uint8_t sessionId01[] = { 0xa0, 0xa1, 0xa2, 0xa3 };
+   unsigned char serverResponse[] = { 0xb0, 0xb1, 0xb2, 0xb3 };
+
+   fprintf(stderr, "About to call opencdm_system_commit_secure_stop\n");
+   opencdm_system_commit_secure_stop(accessor, sessionId01, sizeof(sessionId01), serverResponse, sizeof(serverResponse));
+   fprintf(stderr, "Called opencdm_system_commit_secure_stop\n");
 
    struct OpenCDMSession * session = NULL;
    uint32_t sessionId = 61;

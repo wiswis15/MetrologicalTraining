@@ -261,6 +261,29 @@ public:
         return CDMi_SUCCESS;
 	}
 
+    std::string GetVersionExt() const override
+    {
+    	return "Null2-version";
+    }
+
+    uint32_t GetLdlSessionLimit() const override
+    {
+    	return 17;
+    }
+
+    CDMi_RESULT EnableSecureStop(bool enable) override
+    {
+    	return 0;
+    }
+
+    CDMi_RESULT CommitSecureStop(
+            const unsigned char sessionID[],
+            uint32_t sessionIDLength,
+            const unsigned char serverResponse[],
+            uint32_t serverResponseLength) override
+    {
+    	return 0;
+    }
 };
 
 
