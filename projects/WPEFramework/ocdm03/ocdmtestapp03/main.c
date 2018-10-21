@@ -1,5 +1,3 @@
-// TODO: seems like WPEFramework OCDM doesn't export its stuff as extern "C".
-
 #include <opencdm/open_cdm.h>
 #include <opencdm/open_cdm_ext.h>
 
@@ -7,25 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-// To store key ID we get in callback.
-uint8_t * g_keyId = NULL;
-uint8_t g_keyLength = 0;
-
-// Callbacks
-static void ProcessChallenge(void * userData, const char url[], const uint8_t challenge[], uint16_t challengeLength)
-{
-	fprintf(stderr, "MyCallback::ProcessChallenge, url: %s, challenge length: %u\n", url, challengeLength);
-}
-
-static void KeyUpdate(void * userData, const uint8_t keyId[], uint8_t length)
-{
-	fprintf(stderr, "MyCallback::KeyUpdate, length: %u\n", (unsigned int)length);
-
-	g_keyId = (uint8_t*)malloc(length);
-	memcpy(g_keyId, keyId, length);
-	g_keyLength = length;
-}
 
 int main()
 {
@@ -75,11 +54,74 @@ int main()
    uint16_t playLevel01 = opencdm_session_get_playlevel_compressed_video(session);
    fprintf(stderr, "Called opencdm_session_get_playlevel_compressed_video: %u\n", playLevel01);
 
+   fprintf(stderr, "About to call opencdm_session_get_playlevel_uncompressed_video\n");
+   playLevel01 = opencdm_session_get_playlevel_uncompressed_video(session);
+   fprintf(stderr, "Called opencdm_session_get_playlevel_uncompressed_video: %u\n", playLevel01);
 
+   fprintf(stderr, "About to call opencdm_session_get_playlevel_analog_video\n");
+   playLevel01 = opencdm_session_get_playlevel_analog_video(session);
+   fprintf(stderr, "Called opencdm_session_get_playlevel_analog_video: %u\n", playLevel01);
 
+   fprintf(stderr, "About to call opencdm_session_get_playlevel_compressed_audio\n");
+   playLevel01 = opencdm_session_get_playlevel_compressed_audio(session);
+   fprintf(stderr, "Called opencdm_session_get_playlevel_compressed_audio: %u\n", playLevel01);
 
+   fprintf(stderr, "About to call opencdm_session_get_playlevel_uncompressed_audio\n");
+   playLevel01 = opencdm_session_get_playlevel_uncompressed_audio(session);
+   fprintf(stderr, "Called opencdm_session_get_playlevel_uncompressed_audio: %u\n", playLevel01);
 
+   char contentId01[30];
+   strcpy(contentId01, "this_is_content_id_01");
 
+   fprintf(stderr, "About to call opencdm_session_set_content_id\n");
+   opencdm_session_set_content_id(session, contentId01, sizeof(contentId01));
+   fprintf(stderr, "Called opencdm_session_set_content_id\n");
+
+   uint32_t bufferSize = 0;
+   fprintf(stderr, "About to call opencdm_session_get_content_id (1)\n");
+   opencdm_session_get_content_id(session, NULL, &bufferSize);
+   fprintf(stderr, "Called opencdm_session_get_content_id, size: %u\n", bufferSize);
+
+   char * contentId02 = malloc(bufferSize);
+   fprintf(stderr, "About to call opencdm_session_get_content_id (2)\n");
+   opencdm_session_get_content_id(session, contentId02, &bufferSize);
+   fprintf(stderr, "Called opencdm_session_get_content_id, id: %s\n", contentId02);
+
+   fprintf(stderr, "About to call opencdm_session_set_license_type\n");
+   opencdm_session_set_license_type(session, OCDM_LICENSE_LIMITED_DURATION);
+   fprintf(stderr, "Called opencdm_session_set_license_type\n");
+
+   fprintf(stderr, "About to call opencdm_session_get_license_type\n");
+   enum OcdmLicenseType licenseType02 = opencdm_session_get_license_type(session);
+   fprintf(stderr, "Called opencdm_session_get_license_type: %u\n", licenseType02);
+
+   uint8_t drmHeader01[] = { 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77 };
+
+   fprintf(stderr, "About to call opencdm_session_set_drm_header\n");
+   opencdm_session_set_drm_header(session, drmHeader01, sizeof(drmHeader01));
+   fprintf(stderr, "Called opencdm_session_set_drm_header\n");
+
+   uint32_t challengeSize01 = 0;
+   fprintf(stderr, "About to call opencdm_session_get_challenge_data_netflix (1)\n");
+   opencdm_session_get_challenge_data_netflix(session, NULL, &challengeSize01, 1);
+   fprintf(stderr, "Called opencdm_session_get_challenge_data_netflix, size: %u\n", challengeSize01);
+
+   uint8_t * challengeData01 = malloc(challengeSize01);
+   fprintf(stderr, "About to call opencdm_session_get_challenge_data_netflix (2)\n");
+   opencdm_session_get_challenge_data_netflix(session, challengeData01, &challengeSize01, 1);
+   fprintf(stderr, "Called opencdm_session_get_challenge_data_netflix, data[0]: 0x%02x\n", challengeData01[0]);
+
+   uint8_t licenseData01[] = { 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87 };
+   unsigned char secureStopId[16];
+   memset(secureStopId, 0, sizeof(secureStopId));
+
+   fprintf(stderr, "About to call opencdm_session_store_license_data, id: %p\n", secureStopId);
+   opencdm_session_store_license_data(session, licenseData01, sizeof(licenseData01), secureStopId);
+   fprintf(stderr, "Called opencdm_session_store_license_data, last entry: 0x%02x\n", secureStopId[15]);
+
+   fprintf(stderr, "About to call opencdm_session_init_decrypt_context_by_kid\n");
+   opencdm_session_init_decrypt_context_by_kid(session);
+   fprintf(stderr, "Called opencdm_session_init_decrypt_context_by_kid\n");
 
    fprintf(stderr, "About to call opencdm_destroy_session_netflix\n");
    opencdm_destroy_session_netflix(session);
