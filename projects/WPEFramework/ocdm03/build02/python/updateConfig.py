@@ -61,6 +61,7 @@ if os.path.isfile(configPath):
    addedMapping = {}
    addedMapping["key"] = "com.microsoft.playready"
    addedMapping["system"] = "PlayReady"
+   #addedMapping["system"] = "Null2"
    addedMappings.append(addedMapping)
 
    configuration["configuration"]["mapping"] = addedMappings

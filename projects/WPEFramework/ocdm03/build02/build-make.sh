@@ -35,3 +35,7 @@ if [[ $rc != 0 ]]; then
    exit $rc
 fi
 
+if [[ -v AFTER_MAKE_INSTALL_CMD ]]; then
+   $AFTER_MAKE_INSTALL_CMD
+fi
+

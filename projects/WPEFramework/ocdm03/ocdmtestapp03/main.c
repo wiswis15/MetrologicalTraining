@@ -68,10 +68,15 @@ int main()
    uint32_t dataBufferLength = sizeof(dataBuffer);
    uint8_t ivBuffer[] = { 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57 };
    uint32_t ivBufferLength = sizeof(ivBuffer);
+   unsigned long long byteOffset = 3;
 
-   fprintf(stderr, "About to call decrypt\n");
-   opencdm_session_decrypt(session, dataBuffer, dataBufferLength, ivBuffer, ivBufferLength);
-   fprintf(stderr, "Called decrypt: 0x%02x -> 0x%02x\n", 0x40, (int)dataBuffer[0]);
+//   fprintf(stderr, "About to call decrypt\n");
+//   opencdm_session_decrypt(session, dataBuffer, dataBufferLength, ivBuffer, ivBufferLength);
+//   fprintf(stderr, "Called decrypt: 0x%02x -> 0x%02x\n", 0x40, (int)dataBuffer[0]);
+
+   fprintf(stderr, "About to call opencdm_session_decrypt_netflix\n");
+   opencdm_session_decrypt_netflix(session, ivBuffer, ivBufferLength, byteOffset, dataBuffer, dataBufferLength);
+   fprintf(stderr, "Called opencdm_session_decrypt_netflix: 0x%02x -> 0x%02x\n", 0x40, (int)dataBuffer[0]);
 
    fprintf(stderr, "About to call opencdm_session_get_playlevel_compressed_video\n");
    uint16_t playLevel01 = opencdm_session_get_playlevel_compressed_video(session);

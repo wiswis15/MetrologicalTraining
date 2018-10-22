@@ -197,6 +197,19 @@ CDMi_RESULT MediaKeySession::GetChallengeDataNetflix(uint8_t * challenge, uint32
 	return 0;
 }
 
+CDMi_RESULT MediaKeySession::DecryptNetflix(const unsigned char* IVData, uint32_t IVDataSize, unsigned long long byteOffset, unsigned char data[], uint32_t size)
+{
+	cerr << "Null2 in DecryptNetflix, byteOffset: " << byteOffset << endl;
+
+	if (size > 0) {
+		cerr << "Decrypting from: " << (int)data[0] << endl;
+		data[0]++;
+		cerr << "Decrypting to: " << (int)data[0] << endl;
+	}
+
+	return 0;
+}
+
 class Null2 : public IMediaKeys, public IMediaKeysExt {
 private:
     Null2 (const Null2&) = delete;
@@ -256,7 +269,7 @@ public:
 
         *session = new CDMi::MediaKeySession(sessionId, contentId, contentIdLength, licenseType, drmHeader, drmHeaderLength);
 
-        fprintf(stderr, "%s:%d: Null2 created a session\n", __FILE__, __LINE__);
+        fprintf(stderr, "%s:%d: Null2 created a session, drmHeaderLength: %u\n", __FILE__, __LINE__, drmHeaderLength);
 
         return CDMi_SUCCESS;
 	}
@@ -296,7 +309,6 @@ public:
     {
     	return 0;
     }
-
 };
 
 
