@@ -11,7 +11,8 @@ int main()
 	struct OpenCDMAccessor* accessor = opencdm_create_system();
    fprintf(stderr, "Created system: %p\n", accessor);
 
-   const char keySystem[] = "com.metrological.null";
+   //const char keySystem[] = "com.metrological.null";
+   const char keySystem[] = "com.microsoft.playready";
    OpenCDMError isSupported = opencdm_is_type_supported(accessor, keySystem, "");
    fprintf(stderr, "com.metrological.null is supported (should be 0): %u\n", isSupported);
 

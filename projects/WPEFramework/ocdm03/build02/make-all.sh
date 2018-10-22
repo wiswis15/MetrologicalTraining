@@ -18,6 +18,22 @@ if [[ $rc != 0 ]]; then
 fi
 cd $BASE_DIR
 
+cd build/playready/build
+make -j4 install
+rc=$?
+if [[ $rc != 0 ]]; then
+   exit $rc
+fi
+cd $BASE_DIR
+
+cd build/ocdm-playready/build
+make -j4 install
+rc=$?
+if [[ $rc != 0 ]]; then
+   exit $rc
+fi
+cd $BASE_DIR
+
 cd build/ocdm-null2/build
 make -j4 install
 rc=$?
