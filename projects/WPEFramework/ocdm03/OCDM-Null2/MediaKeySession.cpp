@@ -284,6 +284,19 @@ public:
     {
     	return 0;
     }
+
+    CDMi_RESULT CreateSystemNetflix(
+                const std::string& readDir,
+                const std::string& storeLocation) override
+	{
+    	return 0;
+	}
+
+    CDMi_RESULT InitSystemNetflix() override
+    {
+    	return 0;
+    }
+
 };
 
 

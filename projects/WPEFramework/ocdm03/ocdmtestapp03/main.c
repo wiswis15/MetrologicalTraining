@@ -8,7 +8,8 @@
 
 int main()
 {
-	struct OpenCDMAccessor* accessor = opencdm_create_system();
+	//struct OpenCDMAccessor* accessor = opencdm_create_system();
+   struct OpenCDMAccessor* accessor = opencdm_create_system_netflix("", "");
    fprintf(stderr, "Created system: %p\n", accessor);
 
    //const char keySystem[] = "com.metrological.null";
