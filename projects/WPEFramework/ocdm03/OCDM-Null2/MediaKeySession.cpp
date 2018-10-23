@@ -169,11 +169,12 @@ void MediaKeySession::SetLicenseTypeExt(LicenseTypeExt licenseType)
 
 SessionStateExt MediaKeySession::GetSessionStateExt() const
 {
-	return ActiveDecryptionState;
+	return mSessionStateExt;
 }
 
 void MediaKeySession::SetSessionStateExt(SessionStateExt sessionState)
 {
+	mSessionStateExt = sessionState;
 }
 
 CDMi_RESULT MediaKeySession::SetDrmHeader(const uint8_t drmHeader[], uint32_t drmHeaderLength)
@@ -309,6 +310,25 @@ public:
     {
     	return 0;
     }
+
+    CDMi_RESULT TeardownSystemNetflix() override
+    {
+    	return 0;
+    }
+
+    CDMi_RESULT DeleteSecureStore() override
+    {
+    	return 0;
+    }
+
+    CDMi_RESULT GetSecureStoreHash(
+            uint8_t secureStoreHash[],
+            uint32_t secureStoreHashLength) override
+    {
+    	secureStoreHash[secureStoreHashLength - 1] = 0xed;
+    	return 0;
+    }
+
 };
 
 

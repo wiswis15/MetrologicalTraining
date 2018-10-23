@@ -62,6 +62,7 @@ public:
 
 private:
     std::string _contentIdExt;
+    SessionStateExt mSessionStateExt;
 };
 
 } // namespace CDMi
