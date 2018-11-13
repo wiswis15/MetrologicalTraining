@@ -12,14 +12,8 @@ namespace Plugin {
         Plugin01& operator=(const Plugin01&) = delete;
 
     public:
-        Plugin01()
-            : _skipURL(0)
-        {
-        }
-
-        virtual ~Plugin01()
-        {
-        }
+        Plugin01();
+        virtual ~Plugin01();
 
         BEGIN_INTERFACE_MAP(Plugin01)
             INTERFACE_ENTRY(PluginHost::IPlugin)

@@ -5,6 +5,15 @@ namespace Plugin {
 
 SERVICE_REGISTRATION(Plugin01, 1, 0);
 
+Plugin01::Plugin01()
+   : _skipURL(0)
+{
+}
+
+Plugin01::~Plugin01()
+{
+}
+
 /* virtual */ const string Plugin01::Initialize(PluginHost::IShell* service)
 {
    string result;
