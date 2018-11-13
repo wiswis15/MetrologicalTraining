@@ -15,3 +15,8 @@ cp $SOURCE_DIR/build02/*.sh build02
 cp -r $SOURCE_DIR/build02/python build02
 cp -r $SOURCE_DIR/build02/patches build02
 
+cp -r $SOURCE_DIR/build02/apps build02
+
+rm -rf build02/apps/02-rpc/build
+rm -rf build02/apps/03-out_of_process/build
+

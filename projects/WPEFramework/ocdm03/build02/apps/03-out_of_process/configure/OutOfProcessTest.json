@@ -1,0 +1,6 @@
+{
+ "locator":"libWPEFrameworkOutOfProcessTest.so",
+ "classname":"OutOfProcessTest",
+ "autostart":false
+}
+

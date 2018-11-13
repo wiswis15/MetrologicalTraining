@@ -70,3 +70,17 @@ if os.path.isfile(configPath):
    json.dump(configuration, configFile, indent=1, separators=(',', ':'))
    configFile.close()
 
+# Provisioning.json
+configPath = "staging/etc/WPEFramework/plugins/Provisioning.json"
+if os.path.isfile(configPath):
+   configFile = open(configPath, "r")
+   configuration = json.load(configFile, object_pairs_hook=OrderedDict)
+   configFile.close()
+
+   configuration["configuration"]["operator"] = "liberty"
+   configuration["configuration"]["server"] = "provisioning-sdk.metrological.com:80"
+
+   configFile = open(configPath, "w")
+   json.dump(configuration, configFile, indent=1, separators=(',', ':'))
+   configFile.close()
+
