@@ -1,5 +1,9 @@
 #include "Plugin01.h"
 
+#include <iostream>
+
+using namespace std;
+
 namespace WPEFramework {
 namespace Plugin {
 
@@ -8,14 +12,17 @@ SERVICE_REGISTRATION(Plugin01, 1, 0);
 Plugin01::Plugin01()
    : _skipURL(0)
 {
+   cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
 }
 
 Plugin01::~Plugin01()
 {
+   cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
 }
 
 /* virtual */ const string Plugin01::Initialize(PluginHost::IShell* service)
 {
+   cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
    string result;
 
    // Capture PNG file name
@@ -31,20 +38,24 @@ Plugin01::~Plugin01()
 
 /* virtual */ void Plugin01::Deinitialize(PluginHost::IShell* service)
 {
+   cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
 }
 
 /* virtual */ string Plugin01::Information() const
 {
+   cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
    // No additional info to report.
    return (string());
 }
 
 /* virtual */ void Plugin01::Inbound(Web::Request& /* request */)
 {
+   cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
 }
 
 /* virtual */ Core::ProxyType<Web::Response> Plugin01::Process(const Web::Request& request)
 {
+   cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
    ASSERT(_skipURL <= request.Path.length());
 
    // Proxy object for response type.
