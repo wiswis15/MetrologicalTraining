@@ -1,4 +1,4 @@
-#include "Plugin01.h"
+#include "Plugin02.h"
 
 #include <iostream>
 
@@ -7,20 +7,20 @@ using namespace std;
 namespace WPEFramework {
 namespace Plugin {
 
-SERVICE_REGISTRATION(Plugin01, 1, 0);
+SERVICE_REGISTRATION(Plugin02, 1, 0);
 
-Plugin01::Plugin01()
+Plugin02::Plugin02()
    : _skipURL(0)
 {
    cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
 }
 
-Plugin01::~Plugin01()
+Plugin02::~Plugin02()
 {
    cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
 }
 
-/* virtual */ const string Plugin01::Initialize(PluginHost::IShell* service)
+/* virtual */ const string Plugin02::Initialize(PluginHost::IShell* service)
 {
    cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << ", callsign: " << service->Callsign() << endl;
    string result;
@@ -36,24 +36,24 @@ Plugin01::~Plugin01()
    return (result);
 }
 
-/* virtual */ void Plugin01::Deinitialize(PluginHost::IShell* service)
+/* virtual */ void Plugin02::Deinitialize(PluginHost::IShell* service)
 {
    cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
 }
 
-/* virtual */ string Plugin01::Information() const
+/* virtual */ string Plugin02::Information() const
 {
    cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
    // No additional info to report.
    return (string());
 }
 
-/* virtual */ void Plugin01::Inbound(Web::Request& /* request */)
+/* virtual */ void Plugin02::Inbound(Web::Request& /* request */)
 {
    cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
 }
 
-/* virtual */ Core::ProxyType<Web::Response> Plugin01::Process(const Web::Request& request)
+/* virtual */ Core::ProxyType<Web::Response> Plugin02::Process(const Web::Request& request)
 {
    cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
    ASSERT(_skipURL <= request.Path.length());

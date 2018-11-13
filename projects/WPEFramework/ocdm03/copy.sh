@@ -21,4 +21,6 @@ rm -rf build02/apps/02-rpc/build
 rm -rf build02/apps/03-out_of_process/build
 rm -rf build02/apps/04-plugin01/build
 rm -rf build02/apps/04-plugin01/build_nos
+rm -rf build02/apps/05-plugin02/build
+rm -rf build02/apps/05-plugin02/build_nos
 
