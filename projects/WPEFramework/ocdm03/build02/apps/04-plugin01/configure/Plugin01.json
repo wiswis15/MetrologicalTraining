@@ -1,0 +1,6 @@
+{
+ "locator":"libWPEFrameworkPlugin01.so",
+ "classname":"Plugin01",
+ "autostart":false
+}
+
