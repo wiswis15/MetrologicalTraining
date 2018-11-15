@@ -21,10 +21,7 @@ int main()
 
     Core::ProxyType<RPC::CommunicatorClient> client(Core::ProxyType<RPC::CommunicatorClient>::Create(remoteNode, handler));
 
-    //WPEFramework::RPC::CommunicatorClient & realClient = *client;
-
     Exchange::IAdder * adder = client->Open<Exchange::IAdder>(_T("Adder"));
-    //Exchange::IAdder * adder = realClient.Open<Exchange::IAdder>(_T("Adder"));
 
     cerr << "Client, adder: " << adder << endl;
 
