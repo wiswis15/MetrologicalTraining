@@ -23,6 +23,14 @@ namespace WPEFramework {
 
               message->Parameters().Implementation<Exchange::IAdder>()->Add(value);
           },
+          [](Core::ProxyType<Core::IPCChannel>& channel VARIABLE_IS_NOT_USED, Core::ProxyType<RPC::InvokeMessage>& message) {
+              //
+              // virtual pid_t GetPid() = 0;
+              //
+              RPC::Data::Frame::Writer response(message->Response().Writer());
+
+              response.Number(message->Parameters().Implementation<Exchange::IAdder>()->GetPid());
+          },
     };
 
     typedef ProxyStub::StubType<Exchange::IAdder, AdderStubMethods, ProxyStub::UnknownStub> AdderStub;
@@ -59,6 +67,16 @@ namespace WPEFramework {
             Invoke(newMessage);
         }
 
+        virtual pid_t GetPid()
+        {
+            IPCMessage newMessage(BaseClass::Message(2));
+
+            Invoke(newMessage);
+
+            RPC::Data::Frame::Reader reader(newMessage->Response().Reader());
+
+            return (reader.Number<pid_t>());
+        }
     };
 
     namespace {

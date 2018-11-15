@@ -26,7 +26,12 @@ public:
 
     void Add(uint32_t value)
     {
-        m_value = value;
+        m_value += value;
+    }
+
+    pid_t GetPid()
+    {
+        return getpid();
     }
 
     BEGIN_INTERFACE_MAP(Adder)
@@ -37,20 +42,51 @@ private:
     uint32_t m_value;
 };
 
+// TODO: can we straight-away use PRC::Administrator?
+class ExternalAccess : public RPC::Communicator
+{
+private:
+    ExternalAccess() = delete;
+    ExternalAccess(const ExternalAccess &) = delete;
+    ExternalAccess & operator=(const ExternalAccess &) = delete;
+
+public:
+    ExternalAccess(const Core::NodeId & source)
+        : RPC::Communicator(source, Core::ProxyType< RPC::InvokeServerType<4, 1> >::Create(), _T(""))
+    {
+        Open(Core::infinite);
+    }
+
+    ~ExternalAccess()
+    {
+        Close(Core::infinite);
+    }
+
+private:
+    virtual void* Aquire(const string& className, const uint32_t interfaceId, const uint32_t versionId)
+    {
+        void* result = nullptr;
+
+        if (interfaceId == Exchange::IAdder::ID) {
+            Exchange::IAdder * newAdder = Core::Service<Adder>::Create<Exchange::IAdder>();
+            result = newAdder;
+        }
+
+        return result;
+    }
+};
+
 int main()
 {
     cerr << "Server PID: " << getpid() << endl;
 
     Core::NodeId remoteNode(g_connectorName.c_str());
-    RPC::Communicator communicator(remoteNode, Core::ProxyType< RPC::InvokeServerType<4, 1> >::Create(), _T(""));
 
-    Exchange::IAdder * localAdder = Core::Service<Adder>::Create<Exchange::IAdder>();
+    ExternalAccess communicator(remoteNode);
 
-    cerr << "Server is in infinite loop" << endl;
+    cerr << "Server, communicator is listening: " << communicator.IsListening() << endl;
 
-    while(true);
-
-    //sleep(10);
+    sleep(10);
 
     WPEFramework::Core::Singleton::Dispose();
 }

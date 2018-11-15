@@ -21,21 +21,30 @@ int main()
 
     Core::ProxyType<RPC::CommunicatorClient> client(Core::ProxyType<RPC::CommunicatorClient>::Create(remoteNode, handler));
 
-    sleep(1);
-
-    cerr << "Client, is valid: " << client.IsValid() << endl;
-
-    sleep(1);
-
-    cerr << "Client, about to call Open" << endl;
+    //WPEFramework::RPC::CommunicatorClient & realClient = *client;
 
     Exchange::IAdder * adder = client->Open<Exchange::IAdder>(_T("Adder"));
+    //Exchange::IAdder * adder = realClient.Open<Exchange::IAdder>(_T("Adder"));
 
     cerr << "Client, adder: " << adder << endl;
 
+    cerr << "Client, original value: " << adder->GetValue() << endl;
 
+    cerr << "Client, adding 20..." << endl;
+    adder->Add(20);
 
+    cerr << "Client, new value: " << adder->GetValue() << endl;
 
+    cerr << "Client, adding 22..." << endl;
+    adder->Add(22);
+
+    cerr << "Client, new value: " << adder->GetValue() << endl;
+
+    cerr << "Client, adder is running in process: " << adder->GetPid() << ", our pid: " << getpid() << endl;
+
+    adder->Release();
+
+    client->Close(Core::infinite);
 
     WPEFramework::Core::Singleton::Dispose();
 }
