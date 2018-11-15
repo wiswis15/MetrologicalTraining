@@ -3,6 +3,7 @@
 #include "Module.h"
 #include <interfaces/ICapture.h>
 #include <compositor/Client.h>
+#include <core/Thread.h>
 
 namespace WPEFramework {
 namespace Plugin {
@@ -36,6 +37,7 @@ namespace Plugin {
     private:
         uint8_t m_skipURL;
         Compositor::IDisplay* m_display;
+        Core::Thread * m_renderThread;
     };
 
 } // Namespace Plugin.
