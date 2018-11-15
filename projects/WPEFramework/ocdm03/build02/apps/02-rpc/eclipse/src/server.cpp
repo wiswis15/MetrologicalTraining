@@ -13,11 +13,28 @@ using namespace std;
 
 class Adder : public Exchange::IAdder
 {
+public:
+    Adder()
+        : m_value(0)
+    {
+    }
+
+    uint32_t GetValue()
+    {
+        return m_value;
+    }
+
+    void Add(uint32_t value)
+    {
+        m_value = value;
+    }
 
     BEGIN_INTERFACE_MAP(Adder)
         INTERFACE_ENTRY(Exchange::IAdder)
     END_INTERFACE_MAP
 
+private:
+    uint32_t m_value;
 };
 
 int main()
@@ -29,11 +46,11 @@ int main()
 
     Exchange::IAdder * localAdder = Core::Service<Adder>::Create<Exchange::IAdder>();
 
-    //cerr << "Server is in infinite loop" << endl;
+    cerr << "Server is in infinite loop" << endl;
 
-    //while(true);
+    while(true);
 
-    sleep(10);
+    //sleep(10);
 
     WPEFramework::Core::Singleton::Dispose();
 }

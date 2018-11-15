@@ -13,7 +13,7 @@ mkdir build
 cd build
 
 INC="-I$PREFIX_DIR/include"
-LIBS="-L$PREFIX_DIR/lib -lWPEFrameworkCore -lWPEFrameworkProtocols -lWPEFrameworkCryptalgo -lWPEFrameworkTracing"
+LIBS="-Wl,-rpath,$PREFIX_DIR/lib -L$PREFIX_DIR/lib -lWPEFrameworkCore -lWPEFrameworkProtocols -lWPEFrameworkCryptalgo -lWPEFrameworkTracing"
 GXX='g++ -m32 -std=c++11 -g -O0'
 
 $GXX -c $INC ../eclipse/src/proxystubs.cpp -o proxystubs.o
