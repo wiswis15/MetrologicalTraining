@@ -10,7 +10,8 @@ namespace Plugin {
 SERVICE_REGISTRATION(Plugin02, 1, 0);
 
 Plugin02::Plugin02()
-   : _skipURL(0)
+   : m_skipURL(0)
+   , m_display(nullptr)
 {
    cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
 }
@@ -25,13 +26,13 @@ Plugin02::~Plugin02()
    cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << ", callsign: " << service->Callsign() << endl;
    string result;
 
-   // Capture PNG file name
-   ASSERT(service->PersistentPath() != _T(""));
-
-   Core::Directory directory(service->PersistentPath().c_str());
-
    // Setup skip URL for right offset.
-   _skipURL = service->WebPrefix().length();
+   m_skipURL = service->WebPrefix().length();
+
+   string displayName = service->Callsign();
+   m_display = Compositor::IDisplay::Instance(displayName);
+
+   cerr << "m_display: " << m_display << endl;
 
    return (result);
 }
@@ -56,7 +57,7 @@ Plugin02::~Plugin02()
 /* virtual */ Core::ProxyType<Web::Response> Plugin02::Process(const Web::Request& request)
 {
    cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
-   ASSERT(_skipURL <= request.Path.length());
+   ASSERT(m_skipURL <= request.Path.length());
 
    // Proxy object for response type.
    Core::ProxyType<Web::Response> response(PluginHost::Factories::Instance().Response());
@@ -66,7 +67,7 @@ Plugin02::~Plugin02()
    response->ErrorCode = Web::STATUS_METHOD_NOT_ALLOWED;
 
    // Decode request path.
-   Core::TextSegmentIterator index(Core::TextFragment(request.Path, _skipURL, request.Path.length() - _skipURL), false, '/');
+   Core::TextSegmentIterator index(Core::TextFragment(request.Path, m_skipURL, request.Path.length() - m_skipURL), false, '/');
 
    // Get first plugin verb.
    index.Next();

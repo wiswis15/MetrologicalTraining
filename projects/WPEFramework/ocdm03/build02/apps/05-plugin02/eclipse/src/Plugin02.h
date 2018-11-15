@@ -2,6 +2,7 @@
 
 #include "Module.h"
 #include <interfaces/ICapture.h>
+#include <compositor/Client.h>
 
 namespace WPEFramework {
 namespace Plugin {
@@ -33,7 +34,8 @@ namespace Plugin {
         virtual Core::ProxyType<Web::Response> Process(const Web::Request& request);
 
     private:
-        uint8_t _skipURL;
+        uint8_t m_skipURL;
+        Compositor::IDisplay* m_display;
     };
 
 } // Namespace Plugin.
