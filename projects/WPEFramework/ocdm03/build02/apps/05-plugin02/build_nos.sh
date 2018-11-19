@@ -21,5 +21,5 @@ INC="-I$BUILDROOT_INC/WPEFramework"
 $GXX $INC -c ../eclipse/src/Module.cpp -o Module.o
 $GXX $INC -c ../eclipse/src/Plugin02.cpp -o Plugin02.o
 
-$GXX -shared -o libWPEFrameworkPlugin02.so Module.o Plugin02.o -lcompositorclient
+$GXX -shared -o libWPEFrameworkPlugin02.so Module.o Plugin02.o -lcompositorclient -lEGL -lGLESv2
 
