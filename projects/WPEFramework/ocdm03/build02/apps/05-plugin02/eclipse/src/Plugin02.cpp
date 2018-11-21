@@ -83,6 +83,25 @@ public:
     }
 };
 
+class ProcessThread : public Core::Thread
+{
+public:
+   explicit ProcessThread(Compositor::IDisplay * display)
+      : m_display(display)
+   {
+   }
+
+   virtual uint32_t Worker()
+   {
+      while (true) {
+         m_display->Process(1);
+      }
+   }
+
+private:
+   Compositor::IDisplay * m_display;
+};
+
 class RenderThread : public Core::Thread
 {
 public:
@@ -90,6 +109,7 @@ public:
 		: m_callsign(callsign)
 	   , m_display(nullptr)
 	   , m_graphicsSurface(nullptr)
+	   , m_processThread(nullptr)
 	{
 	}
 
@@ -224,6 +244,9 @@ protected:
 
       cerr << "Plugin02: surface size, according to compositor: " << m_graphicsSurface->Width() << "x" << m_graphicsSurface->Height() << endl;
 
+      m_processThread = new ProcessThread(m_display);
+      m_processThread->Run();
+
       const int frameReportInterval = 300;
       int frameIndex = 0;
 
@@ -260,6 +283,7 @@ private:
 	Compositor::IDisplay * m_display;
 	Compositor::IDisplay::ISurface * m_graphicsSurface;
 	Keyboard m_keyboard;
+	ProcessThread * m_processThread;
 };
 
 SERVICE_REGISTRATION(Plugin02, 1, 0);
@@ -288,7 +312,6 @@ Plugin02::~Plugin02()
    string callsign = service->Callsign();
 
    m_renderThread = new RenderThread(callsign);
-
    m_renderThread->Run();
 
    return (result);

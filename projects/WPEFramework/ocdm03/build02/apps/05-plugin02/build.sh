@@ -19,6 +19,8 @@ LIBS="-L$PREFIX_DIR/lib -lWPEFrameworkCore -lWPEFrameworkProtocols -lWPEFramewor
 GXX='g++ -m32 -std=c++11 -g -O0'
 
 $GXX -c $INC ../eclipse/src/Module.cpp -o Module.o
+
+echo "$GXX -c $INC ../eclipse/src/Plugin02.cpp -o Plugin02.o"
 $GXX -c $INC ../eclipse/src/Plugin02.cpp -o Plugin02.o
 
 $GXX -shared -o libWPEFrameworkPlugin02.so Module.o Plugin02.o
