@@ -91,6 +91,7 @@ public:
    {
    }
 
+protected:
    virtual uint32_t Worker()
    {
       while (true) {
