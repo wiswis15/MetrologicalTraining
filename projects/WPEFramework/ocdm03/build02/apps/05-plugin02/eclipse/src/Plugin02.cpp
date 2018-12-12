@@ -218,7 +218,7 @@ protected:
 	   }
 
 	   EGLNativeWindowType nativewindow = m_graphicsSurface->Native();
-      EGLSurface eglSurface = eglCreateWindowSurface(dpy, config, nativewindow, 0);
+      EGLSurface eglSurface = eglCreateWindowSurface(dpy, config, nativewindow, nullptr);
       EGL_CHECK_ERROR();
 
       EGLint eglWidth, eglHeight;
