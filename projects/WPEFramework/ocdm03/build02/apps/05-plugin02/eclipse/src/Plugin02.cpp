@@ -90,13 +90,18 @@ public:
       : m_display(display)
    {
    }
+   ~ProcessThread() {
+      Core::Thread::Stop();
+      // TODO: tell m_display to send a key to get out of read
+      //SendAKey();
+      Core::Thread::Wait(STOPPED, Core::infinite);
+   }
 
 protected:
    virtual uint32_t Worker()
    {
-      while (true) {
-         m_display->Process(1);
-      }
+      m_display->Process(1);
+      return(0);
    }
 
 private:
@@ -110,82 +115,79 @@ public:
 		: m_callsign(callsign)
 	   , m_display(nullptr)
 	   , m_graphicsSurface(nullptr)
-	   , m_processThread(nullptr)
+	   //, m_processThread(nullptr)
+	   , m_dpy(EGL_NO_DISPLAY)
+	   , m_eglSurface(EGL_NO_SURFACE)
+	   , m_nativeContext(EGL_NO_CONTEXT)
 	{
+
 	}
 
-protected:
-	virtual uint32_t Worker()
+	~RenderThread()
 	{
-	   // TODO: don't return -1, but "STOPPED" ?
-		sleep(1);
+      eglMakeCurrent(m_dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+      fprintf(stderr, __FILE__ ":%d\n", __LINE__);
 
-		string displayName = m_callsign;
-	   m_display = Compositor::IDisplay::Instance(displayName);
-	   if (m_display == nullptr) {
-	      cerr << "ERROR: IDisplay::Instance returned nullptr!" << endl;
-	      return STOPPED;
-	   }
+      eglDestroySurface(m_dpy, m_eglSurface);
+      fprintf(stderr, __FILE__ ":%d\n", __LINE__);
 
-	   // Compositor code dumps a lot on stderr, wait for it to print
-	   sleep(1);
+      eglDestroyContext(m_dpy, m_nativeContext);
+      fprintf(stderr, __FILE__ ":%d\n", __LINE__);
 
-	   //string surfaceName = displayName + "-0";
-	   string surfaceName = displayName;
-	   uint32_t width = 1280;
-	   uint32_t height = 720;
+      eglTerminate(m_dpy);
+      fprintf(stderr, __FILE__ ":%d\n", __LINE__);
 
-	   m_graphicsSurface = m_display->Create(surfaceName, width, height);
-	   m_graphicsSurface->Keyboard(&m_keyboard);
+      m_graphicsSurface->Release();
+      fprintf(stderr, __FILE__ ":%d\n", __LINE__);
 
-	   EGLDisplay dpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-	   if (dpy == EGL_NO_DISPLAY) {
+      m_display->Release();
+      fprintf(stderr, __FILE__ ":%d\n", __LINE__);
+	}
+
+	virtual bool Initialize()
+	{
+      m_display = Compositor::IDisplay::Instance(m_callsign);
+      if (m_display == nullptr) {
+         cerr << "ERROR: IDisplay::Instance returned nullptr!" << endl;
+         return false;
+      }
+
+      // TODO: make configurable
+      const uint32_t width = 1280;
+      const uint32_t height = 720;
+
+      m_graphicsSurface = m_display->Create(m_callsign, width, height);
+      //m_graphicsSurface->Keyboard(&m_keyboard);
+
+      m_dpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+      if (m_dpy == EGL_NO_DISPLAY) {
          cerr << "ERROR: eglGetDisplay returned EGL_NO_DISPLAY!" << endl;
-         return -1;
-	   }
+         return false;
+      }
 
-	   EGLint result;
-	   EGLint majorVersion = 0, minorVersion = 0;
-	   result = eglInitialize(dpy, &majorVersion, &minorVersion);
 
-	   sleep(1);
+      EGLint result;
+      EGLint majorVersion = 0, minorVersion = 0;
+      result = eglInitialize(m_dpy, &majorVersion, &minorVersion);
 
-	   cerr << "Plugin02, EGL version: " << majorVersion << "." << minorVersion << endl;
+      sleep(1);
 
-	   EGLint numConfigs = 0;
-      result = eglGetConfigs(dpy, 0, 0, &numConfigs);
+      cerr << "Plugin02, EGL version: " << majorVersion << "." << minorVersion << endl;
+
+      EGLint numConfigs = 0;
+      result = eglGetConfigs(m_dpy, 0, 0, &numConfigs);
 
       if (result == EGL_FALSE) {
          cerr << "ERROR: eglGetConfigs returned EGL_FALSE! Line: " << __LINE__ << endl;
-         return -1;
+         return false;
       }
 
       cerr << "Plugin02, numConfigs: " << numConfigs << endl;
 
       if (numConfigs <= 0) {
          cerr << "ERROR: eglGetConfigs returned no configs" << endl;
-         return -1;
+         return false;
       }
-
-/*
-      const EGLint configAttributes[] = {
-          EGL_RED_SIZE,        1,
-          EGL_GREEN_SIZE,      1,
-          EGL_BLUE_SIZE,       1,
-          EGL_ALPHA_SIZE,      1,
-          EGL_DEPTH_SIZE,      0,
-          EGL_STENCIL_SIZE,    0,
-          EGL_BUFFER_SIZE,     EGL_DONT_CARE,
-
-          EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
-          EGL_SURFACE_TYPE,    EGL_WINDOW_BIT,
-
-          EGL_SAMPLE_BUFFERS,  EGL_DONT_CARE,
-          EGL_SAMPLES,         EGL_DONT_CARE,
-
-          EGL_NONE
-      };
-*/
 
       EGLint const configAttributes[] = {
          EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
@@ -195,45 +197,44 @@ protected:
          EGL_NONE
       };
 
-
       EGLConfig config;
       int chooseConfigs = numConfigs;
-      result = eglChooseConfig(dpy, configAttributes, &config, 1, &chooseConfigs);
+      result = eglChooseConfig(m_dpy, configAttributes, &config, 1, &chooseConfigs);
       if ((result != EGL_TRUE) || (chooseConfigs == 0)) {
          cerr << "ERROR: Something went wrong when calling eglChooseConfig on line " << __LINE__ << endl;
-         return -1;
+         return false;
       }
 
       cerr << "Plugin02, config: " << config << endl;
 
-	   EGLint eglContextAttributes[] = {
-	      EGL_CONTEXT_CLIENT_VERSION, 2,
-	      EGL_NONE
-	   };
+      EGLint eglContextAttributes[] = {
+         EGL_CONTEXT_CLIENT_VERSION, 2,
+         EGL_NONE
+      };
 
-	   EGLContext nativeContext = eglCreateContext(dpy, config, EGL_NO_CONTEXT, eglContextAttributes);
-	   if (nativeContext == EGL_NO_CONTEXT) {
+      m_nativeContext = eglCreateContext(m_dpy, config, EGL_NO_CONTEXT, eglContextAttributes);
+      if (m_nativeContext == EGL_NO_CONTEXT) {
          cerr << "ERROR: eglCreateContext returned EGL_NO_CONTEXT!" << endl;
          return -1;
-	   }
+      }
 
-	   EGLNativeWindowType nativewindow = m_graphicsSurface->Native();
-      EGLSurface eglSurface = eglCreateWindowSurface(dpy, config, nativewindow, nullptr);
+      EGLNativeWindowType nativewindow = m_graphicsSurface->Native();
+      m_eglSurface = eglCreateWindowSurface(m_dpy, config, nativewindow, nullptr);
       EGL_CHECK_ERROR();
 
       EGLint eglWidth, eglHeight;
-      eglQuerySurface(dpy, eglSurface, EGL_WIDTH, &eglWidth);
-      eglQuerySurface(dpy, eglSurface, EGL_HEIGHT, &eglHeight);
+      eglQuerySurface(m_dpy, m_eglSurface, EGL_WIDTH, &eglWidth);
+      eglQuerySurface(m_dpy, m_eglSurface, EGL_HEIGHT, &eglHeight);
 
       cerr << "Surface size according to EGL: " << width << "x" << height << endl;
 
-      result = eglMakeCurrent(dpy, eglSurface, eglSurface, nativeContext);
+      result = eglMakeCurrent(m_dpy, m_eglSurface, m_eglSurface, m_nativeContext);
       if (result != EGL_TRUE) {
          cerr << "eglMakeCurrent didn't return EGL_TRUE" << endl;
          return -1;
       }
 
-      result = eglSwapInterval(dpy, 1);
+      result = eglSwapInterval(m_dpy, 1);
       if (result != EGL_TRUE) {
          cerr << "eglSwapInterval didn't return EGL_TRUE (" << result << "), eglGetError: " << eglGetError() << endl;
          cerr << "EGL_BAD_CONTEXT: " << EGL_BAD_CONTEXT << endl;
@@ -245,53 +246,50 @@ protected:
 
       cerr << "Plugin02: surface size, according to compositor: " << m_graphicsSurface->Width() << "x" << m_graphicsSurface->Height() << endl;
 
-      m_processThread = new ProcessThread(m_display);
-      m_processThread->Run();
+      //m_processThread = new ProcessThread(m_display);
+      //m_processThread->Run();
 
-      const int frameReportInterval = 300;
-      int frameIndex = 0;
 
+      return true;
+	}
+
+protected:
+	virtual uint32_t Worker()
+	{
       GL_CHECK_ERROR();
-      while (true) {
-		   float fR = ((float)rand()) / ((float)RAND_MAX);
+      float fR = ((float)rand()) / ((float)RAND_MAX);
 
-		   glClearColor(fR, 1.0, 0.0, 1.0);
-		   GL_CHECK_ERROR();
+      glClearColor(fR, 1.0, 0.0, 1.0);
+      GL_CHECK_ERROR();
 
-		   glClear(GL_COLOR_BUFFER_BIT);
-		   GL_CHECK_ERROR();
+      glClear(GL_COLOR_BUFFER_BIT);
+      GL_CHECK_ERROR();
 
-		   glFlush();
-		   GL_CHECK_ERROR();
+      glFlush();
+      GL_CHECK_ERROR();
 
-		   eglSwapBuffers(dpy, eglSurface);
+      eglSwapBuffers(m_dpy, m_eglSurface);
 
-/*
-		   if ((frameIndex % frameReportInterval) == 0) {
-		      cerr << "Plugin02, rendered frame no: " << frameIndex << endl;
-		   }
- */
-		   frameIndex++;
-		}
+      fprintf(stderr, __FILE__ ":%d\n", __LINE__);
 
-		// TODO: clean up
-
-	   return 0;
+      return 0;
 	}
 
 private:
 	string m_callsign;
 	Compositor::IDisplay * m_display;
 	Compositor::IDisplay::ISurface * m_graphicsSurface;
-	Keyboard m_keyboard;
-	ProcessThread * m_processThread;
+	//Keyboard m_keyboard;
+	//ProcessThread * m_processThread;
+	EGLDisplay m_dpy;
+	EGLSurface m_eglSurface;
+	EGLContext m_nativeContext;
 };
 
 SERVICE_REGISTRATION(Plugin02, 1, 0);
 
 Plugin02::Plugin02()
    : m_skipURL(0)
-   , m_display(nullptr)
    , m_renderThread(nullptr)
 {
    cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
@@ -321,11 +319,14 @@ Plugin02::~Plugin02()
 /* virtual */ void Plugin02::Deinitialize(PluginHost::IShell* service)
 {
    cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
+
+   delete m_renderThread;
 }
 
 /* virtual */ string Plugin02::Information() const
 {
    cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
+
    // No additional info to report.
    return (string());
 }
