@@ -90,10 +90,10 @@ public:
       : m_display(display)
    {
    }
+
    ~ProcessThread() {
       Core::Thread::Stop();
-      // TODO: tell m_display to send a key to get out of read
-      //SendAKey();
+      m_display->QuitKeyProcess();
       Core::Thread::Wait(STOPPED, Core::infinite);
    }
 
@@ -115,7 +115,7 @@ public:
 		: m_callsign(callsign)
 	   , m_display(nullptr)
 	   , m_graphicsSurface(nullptr)
-	   //, m_processThread(nullptr)
+	   , m_processThread(nullptr)
 	   , m_dpy(EGL_NO_DISPLAY)
 	   , m_eglSurface(EGL_NO_SURFACE)
 	   , m_nativeContext(EGL_NO_CONTEXT)
@@ -131,6 +131,10 @@ public:
 
 	~RenderThread()
 	{
+	   // Stop worker (render) loop
+      Core::Thread::Stop();
+      Core::Thread::Wait(STOPPED, Core::infinite);
+
       eglMakeCurrent(m_dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
       fprintf(stderr, __FILE__ ":%d\n", __LINE__);
 
@@ -163,7 +167,7 @@ public:
       const uint32_t height = 720;
 
       m_graphicsSurface = m_display->Create(m_callsign, width, height);
-      //m_graphicsSurface->Keyboard(&m_keyboard);
+      m_graphicsSurface->Keyboard(&m_keyboard);
 
       m_dpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
       if (m_dpy == EGL_NO_DISPLAY) {
@@ -250,9 +254,8 @@ public:
 
       cerr << "Plugin02: surface size, according to compositor: " << m_graphicsSurface->Width() << "x" << m_graphicsSurface->Height() << endl;
 
-      //m_processThread = new ProcessThread(m_display);
-      //m_processThread->Run();
-
+      m_processThread = new ProcessThread(m_display);
+      m_processThread->Run();
 
       return true;
 	}
@@ -305,8 +308,8 @@ private:
 	string m_callsign;
 	Compositor::IDisplay * m_display;
 	Compositor::IDisplay::ISurface * m_graphicsSurface;
-	//Keyboard m_keyboard;
-	//ProcessThread * m_processThread;
+	Keyboard m_keyboard;
+	ProcessThread * m_processThread;
 	EGLDisplay m_dpy;
 	EGLSurface m_eglSurface;
 	EGLContext m_nativeContext;
