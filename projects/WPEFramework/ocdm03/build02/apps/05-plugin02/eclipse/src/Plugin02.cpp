@@ -119,6 +119,12 @@ public:
 	   , m_dpy(EGL_NO_DISPLAY)
 	   , m_eglSurface(EGL_NO_SURFACE)
 	   , m_nativeContext(EGL_NO_CONTEXT)
+	   , m_red(0.0f)
+	   , m_green(1.0f)
+	   , m_blue(0.0f)
+      , m_redDir(0.003f)
+      , m_greenDir(0.01f)
+      , m_blueDir(0.015f)
 	{
 
 	}
@@ -215,7 +221,7 @@ public:
       m_nativeContext = eglCreateContext(m_dpy, config, EGL_NO_CONTEXT, eglContextAttributes);
       if (m_nativeContext == EGL_NO_CONTEXT) {
          cerr << "ERROR: eglCreateContext returned EGL_NO_CONTEXT!" << endl;
-         return -1;
+         return false;
       }
 
       EGLNativeWindowType nativewindow = m_graphicsSurface->Native();
@@ -231,7 +237,7 @@ public:
       result = eglMakeCurrent(m_dpy, m_eglSurface, m_eglSurface, m_nativeContext);
       if (result != EGL_TRUE) {
          cerr << "eglMakeCurrent didn't return EGL_TRUE" << endl;
-         return -1;
+         return false;
       }
 
       result = eglSwapInterval(m_dpy, 1);
@@ -239,9 +245,7 @@ public:
          cerr << "eglSwapInterval didn't return EGL_TRUE (" << result << "), eglGetError: " << eglGetError() << endl;
          cerr << "EGL_BAD_CONTEXT: " << EGL_BAD_CONTEXT << endl;
          cerr << "EGL_BAD_SURFACE: " << EGL_BAD_SURFACE << endl;
-         //return 1;
-         Block();
-         return (Core::infinite);
+         return false;
       }
 
       cerr << "Plugin02: surface size, according to compositor: " << m_graphicsSurface->Width() << "x" << m_graphicsSurface->Height() << endl;
@@ -257,9 +261,10 @@ protected:
 	virtual uint32_t Worker()
 	{
       GL_CHECK_ERROR();
-      float fR = ((float)rand()) / ((float)RAND_MAX);
 
-      glClearColor(fR, 1.0, 0.0, 1.0);
+      UpdateColors();
+
+      glClearColor(m_red, m_green, m_blue, 1.0);
       GL_CHECK_ERROR();
 
       glClear(GL_COLOR_BUFFER_BIT);
@@ -269,13 +274,34 @@ protected:
       GL_CHECK_ERROR();
 
       eglSwapBuffers(m_dpy, m_eglSurface);
-
-      fprintf(stderr, __FILE__ ":%d\n", __LINE__);
+      EGL_CHECK_ERROR();
 
       return 0;
 	}
 
 private:
+	void UpdateColor(float & color, float & colorDir)
+	{
+	   color += colorDir;
+
+	   if (color < 0.0f) {
+	      color = 0.0f;
+	      colorDir *= -1.0f;
+	   }
+
+	   if (color > 1.0f) {
+         color = 1.0f;
+         colorDir *= -1.0f;
+      }
+	}
+
+	void UpdateColors()
+	{
+	   UpdateColor(m_red, m_redDir);
+	   UpdateColor(m_green, m_greenDir);
+	   UpdateColor(m_blue, m_blueDir);
+	}
+
 	string m_callsign;
 	Compositor::IDisplay * m_display;
 	Compositor::IDisplay::ISurface * m_graphicsSurface;
@@ -284,6 +310,8 @@ private:
 	EGLDisplay m_dpy;
 	EGLSurface m_eglSurface;
 	EGLContext m_nativeContext;
+	float m_red, m_green, m_blue;
+	float m_redDir, m_greenDir, m_blueDir;
 };
 
 SERVICE_REGISTRATION(Plugin02, 1, 0);
