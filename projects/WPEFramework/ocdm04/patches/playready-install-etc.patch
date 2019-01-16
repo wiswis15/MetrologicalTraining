@@ -1,0 +1,12 @@
+diff -ruNP a/src/CMakeLists.txt b/src/CMakeLists.txt
+--- a/src/CMakeLists.txt	2018-03-30 16:46:49.000000000 +0200
++++ b/src/CMakeLists.txt	2018-04-03 09:44:01.126093124 +0200
+@@ -100,7 +100,7 @@
+ install( DIRECTORY certs/         DESTINATION ${DEST_INC}     FILES_MATCHING PATTERN "*.h" )
+ install( DIRECTORY tee/           DESTINATION ${DEST_INC}     FILES_MATCHING PATTERN "*.h" )
+ install( DIRECTORY xmr/           DESTINATION ${DEST_INC}     FILES_MATCHING PATTERN "*.h" )
+-install( DIRECTORY etc/playready/ DESTINATION /etc/playready   FILES_MATCHING PATTERN "*.dat" PATTERN "PK2.5" EXCLUDE PATTERN "certs" EXCLUDE )
++install( DIRECTORY etc/playready/ DESTINATION ${CMAKE_INSTALL_PREFIX}/../etc/playready   FILES_MATCHING PATTERN "*.dat" PATTERN "PK2.5" EXCLUDE PATTERN "certs" EXCLUDE )
+ 
+ # OTADLAClient test executible
+ #add_subdirectory(tools/otadla)
