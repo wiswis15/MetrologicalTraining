@@ -18,5 +18,11 @@ rm -rf build staging
 ./ocdm-null2-build.sh
 ./ocdmtestapp03-build.sh
 
+./netflix5-deps-unzip.sh
+./netflix5-deps-build.sh
+
+./netflix5-unzip.sh
+./netflix5-build.sh
+
 python/updateConfig.py
 

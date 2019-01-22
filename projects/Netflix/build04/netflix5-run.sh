@@ -1,7 +1,6 @@
 #!/bin/bash
 
-#BOUND_KEY_MESSAGE=$HOME/Projects/netflix/5/ESN/boundKeyMsg.bin
-BOUND_KEY_MESSAGE=/tmp/boundKeyMsg.bin
+BOUND_KEY_MESSAGE=$HOME/Projects/Netflix/5.0/ESN/boundKeyMsg.bin
 
 export LD_LIBRARY_PATH=$PWD/staging/usr/lib
 
