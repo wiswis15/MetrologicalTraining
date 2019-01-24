@@ -8,7 +8,6 @@
 
 int main()
 {
-	//struct OpenCDMAccessor* accessor = opencdm_create_system();
    struct OpenCDMAccessor* accessor = opencdm_create_system_netflix("", "");
    fprintf(stderr, "Created system: %p\n", accessor);
 
@@ -60,19 +59,11 @@ int main()
                                   licenseType, drmHeader, drmHeaderLength);
    fprintf(stderr, "Called opencdm_create_session_netflix: %p\n", session);
 
-   fprintf(stderr, "About to call opencdm_session_get_session_id_netflix\n");
-   uint32_t sessionIdNetflix = opencdm_session_get_session_id_netflix(session);
-   fprintf(stderr, "Called opencdm_session_get_session_id_netflix: %u\n", sessionIdNetflix);
-
    uint8_t dataBuffer[] = { 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47 };
    uint32_t dataBufferLength = sizeof(dataBuffer);
    uint8_t ivBuffer[] = { 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57 };
    uint32_t ivBufferLength = sizeof(ivBuffer);
    unsigned long long byteOffset = 3;
-
-//   fprintf(stderr, "About to call decrypt\n");
-//   opencdm_session_decrypt(session, dataBuffer, dataBufferLength, ivBuffer, ivBufferLength);
-//   fprintf(stderr, "Called decrypt: 0x%02x -> 0x%02x\n", 0x40, (int)dataBuffer[0]);
 
    fprintf(stderr, "About to call opencdm_session_decrypt_netflix\n");
    opencdm_session_decrypt_netflix(session, ivBuffer, ivBufferLength, byteOffset, dataBuffer, dataBufferLength);
@@ -97,72 +88,6 @@ int main()
    fprintf(stderr, "About to call opencdm_session_get_playlevel_uncompressed_audio\n");
    playLevel01 = opencdm_session_get_playlevel_uncompressed_audio(session);
    fprintf(stderr, "Called opencdm_session_get_playlevel_uncompressed_audio: %u\n", playLevel01);
-
-   char contentId01[30];
-   memset(contentId01, 0, sizeof(contentId01));
-   strcpy(contentId01, "this_is_content_id_01");
-
-   int extraCharIndex = strlen(contentId01) + 2;
-   contentId01[extraCharIndex] = 'a'; // Netflix uses content IDs that aren't valid UTF-8 strings.
-
-   fprintf(stderr, "About to call opencdm_session_set_content_id\n");
-   opencdm_session_set_content_id(session, contentId01, sizeof(contentId01));
-   fprintf(stderr, "Called opencdm_session_set_content_id\n");
-
-   uint32_t bufferSize = 0;
-   fprintf(stderr, "About to call opencdm_session_get_content_id (1)\n");
-   opencdm_session_get_content_id(session, NULL, &bufferSize);
-   fprintf(stderr, "Called opencdm_session_get_content_id, size: %u\n", bufferSize);
-
-   char * contentId02 = malloc(bufferSize);
-   fprintf(stderr, "About to call opencdm_session_get_content_id (2)\n");
-   opencdm_session_get_content_id(session, contentId02, &bufferSize);
-   fprintf(stderr, "Called opencdm_session_get_content_id, id: %s, extra char: %c\n", contentId02, contentId02[extraCharIndex]);
-
-   fprintf(stderr, "About to call opencdm_session_set_license_type\n");
-   opencdm_session_set_license_type(session, OCDM_LICENSE_LIMITED_DURATION);
-   fprintf(stderr, "Called opencdm_session_set_license_type\n");
-
-   fprintf(stderr, "About to call opencdm_session_get_license_type\n");
-   enum OcdmLicenseType licenseType02 = opencdm_session_get_license_type(session);
-   fprintf(stderr, "Called opencdm_session_get_license_type: %u\n", licenseType02);
-
-   enum OcdmSessionState sessionState01 = LicenseAcquisitionState;
-
-   fprintf(stderr, "About to call opencdm_session_set_session_state\n");
-   opencdm_session_set_session_state(session, sessionState01);
-   fprintf(stderr, "Called opencdm_session_set_session_state\n");
-
-   fprintf(stderr, "About to opencdm_session_get_session_state\n");
-   enum OcdmSessionState sessionState02 = opencdm_session_get_session_state(session);
-   fprintf(stderr, "Called opencdm_session_get_session_state: %u <-> %u\n", sessionState01, sessionState02);
-
-   sessionState01 = InactiveDecryptionState;
-   fprintf(stderr, "About to call opencdm_session_set_session_state\n");
-   opencdm_session_set_session_state(session, sessionState01);
-   fprintf(stderr, "Called opencdm_session_set_session_state\n");
-
-   fprintf(stderr, "About to opencdm_session_get_session_state\n");
-   sessionState02 = opencdm_session_get_session_state(session);
-   fprintf(stderr, "Called opencdm_session_get_session_state: %u <-> %u\n", sessionState01, sessionState02);
-
-   sessionState01 = ActiveDecryptionState;
-   fprintf(stderr, "About to call opencdm_session_set_session_state\n");
-   opencdm_session_set_session_state(session, sessionState01);
-   fprintf(stderr, "Called opencdm_session_set_session_state\n");
-
-   fprintf(stderr, "About to opencdm_session_get_session_state\n");
-   sessionState02 = opencdm_session_get_session_state(session);
-   fprintf(stderr, "Called opencdm_session_get_session_state: %u <-> %u\n", sessionState01, sessionState02);
-
-   sessionState01 = InvalidState;
-   fprintf(stderr, "About to call opencdm_session_set_session_state\n");
-   opencdm_session_set_session_state(session, sessionState01);
-   fprintf(stderr, "Called opencdm_session_set_session_state\n");
-
-   fprintf(stderr, "About to opencdm_session_get_session_state\n");
-   sessionState02 = opencdm_session_get_session_state(session);
-   fprintf(stderr, "Called opencdm_session_get_session_state: %u <-> %u\n", sessionState01, sessionState02);
 
    uint8_t drmHeader01[] = { 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77 };
 
