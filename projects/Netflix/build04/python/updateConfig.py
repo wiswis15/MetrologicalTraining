@@ -64,8 +64,8 @@ if os.path.isfile(configPath):
    addedMapping["designators"] = ["com.metrological.null2"]
    addedMappings.append(addedMapping)
    addedMapping = {}
-   addedMapping["name"] = "PlayReady"
-   #addedMapping["name"] = "Null2"
+   #addedMapping["name"] = "PlayReady"
+   addedMapping["name"] = "Null2"
    addedMapping["designators"] = ["com.microsoft.playready"]
    addedMappings.append(addedMapping)
 
