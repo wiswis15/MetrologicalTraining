@@ -8,7 +8,7 @@
 
 int main()
 {
-   struct OpenCDMAccessor* accessor = opencdm_create_system_netflix("", "");
+   struct OpenCDMAccessor* accessor = opencdm_create_system_ext("", "");
    fprintf(stderr, "Created system: %p\n", accessor);
 
    //const char keySystem[] = "com.metrological.null";
@@ -50,14 +50,12 @@ int main()
    uint32_t sessionId = 61;
    const char contentId[] = "content_id_62";
    uint32_t contentIdLength = strlen(contentId) + 1;
-   enum OcdmLicenseType licenseType = OCDM_LICENSE_LIMITED_DURATION;
    const uint8_t drmHeader[] = { 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63 };
    uint32_t drmHeaderLength = sizeof(drmHeader);
 
-   fprintf(stderr, "About to call opencdm_create_session_netflix\n");
-   opencdm_create_session_netflix(accessor, &session, sessionId, contentId, contentIdLength,
-                                  licenseType, drmHeader, drmHeaderLength);
-   fprintf(stderr, "Called opencdm_create_session_netflix: %p\n", session);
+   fprintf(stderr, "About to call opencdm_create_session_ext\n");
+   opencdm_create_session_ext(accessor, &session, drmHeader, drmHeaderLength);
+   fprintf(stderr, "Called opencdm_create_session_ext: %p\n", session);
 
    uint8_t dataBuffer[] = { 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47 };
    uint32_t dataBufferLength = sizeof(dataBuffer);
@@ -65,9 +63,9 @@ int main()
    uint32_t ivBufferLength = sizeof(ivBuffer);
    unsigned long long byteOffset = 3;
 
-   fprintf(stderr, "About to call opencdm_session_decrypt_netflix\n");
-   opencdm_session_decrypt_netflix(session, ivBuffer, ivBufferLength, byteOffset, dataBuffer, dataBufferLength);
-   fprintf(stderr, "Called opencdm_session_decrypt_netflix: 0x%02x -> 0x%02x\n", 0x40, (int)dataBuffer[0]);
+   fprintf(stderr, "About to call opencdm_session_decrypt\n");
+   opencdm_session_decrypt(session, dataBuffer, dataBufferLength, ivBuffer, ivBufferLength, byteOffset, 1);
+   fprintf(stderr, "Called opencdm_session_decrypt: 0x%02x -> 0x%02x\n", 0x40, (int)dataBuffer[0]);
 
    fprintf(stderr, "About to call opencdm_session_get_playlevel_compressed_video\n");
    uint16_t playLevel01 = opencdm_session_get_playlevel_compressed_video(session);
@@ -96,14 +94,14 @@ int main()
    fprintf(stderr, "Called opencdm_session_set_drm_header\n");
 
    uint32_t challengeSize01 = 0;
-   fprintf(stderr, "About to call opencdm_session_get_challenge_data_netflix (1)\n");
-   opencdm_session_get_challenge_data_netflix(session, NULL, &challengeSize01, 1);
-   fprintf(stderr, "Called opencdm_session_get_challenge_data_netflix, size: %u\n", challengeSize01);
+   fprintf(stderr, "About to call opencdm_session_get_challenge_data_ext (1)\n");
+   opencdm_session_get_challenge_data_ext(session, NULL, &challengeSize01, 1);
+   fprintf(stderr, "Called opencdm_session_get_challenge_data_ext, size: %u\n", challengeSize01);
 
    uint8_t * challengeData01 = malloc(challengeSize01);
-   fprintf(stderr, "About to call opencdm_session_get_challenge_data_netflix (2)\n");
-   opencdm_session_get_challenge_data_netflix(session, challengeData01, &challengeSize01, 1);
-   fprintf(stderr, "Called opencdm_session_get_challenge_data_netflix, data[0]: 0x%02x\n", challengeData01[0]);
+   fprintf(stderr, "About to call opencdm_session_get_challenge_data_ext (2)\n");
+   opencdm_session_get_challenge_data_ext(session, challengeData01, &challengeSize01, 1);
+   fprintf(stderr, "Called opencdm_session_get_challenge_data_ext, data[0]: 0x%02x\n", challengeData01[0]);
 
    uint8_t licenseData01[] = { 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87 };
    unsigned char secureStopId[16];
@@ -117,9 +115,9 @@ int main()
    opencdm_session_init_decrypt_context_by_kid(session);
    fprintf(stderr, "Called opencdm_session_init_decrypt_context_by_kid\n");
 
-   fprintf(stderr, "About to call opencdm_destroy_session_netflix\n");
-   opencdm_destroy_session_netflix(session);
-   fprintf(stderr, "Called opencdm_destroy_session_netflix\n");
+   fprintf(stderr, "About to call opencdm_destroy_session_ext\n");
+   opencdm_destroy_session_ext(session);
+   fprintf(stderr, "Called opencdm_destroy_session_ext\n");
 
    const uint32_t secureStoreHashSize = 256;
    uint8_t secureStoreHash[secureStoreHashSize];
