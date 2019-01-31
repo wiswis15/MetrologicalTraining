@@ -1,0 +1,14 @@
+INPUT = "/home/sander/Projects/Netflix/5.0/backup/01-ocdm-interface/01/proposed01/interface/process/src.doxygen/src/"
+OUTPUT_DIRECTORY = "/home/sander/Projects/Netflix/5.0/backup/01-ocdm-interface/01/proposed01/interface/process/src.doxygen/output/"
+WARN_LOGFILE = "/home/sander/Projects/Netflix/5.0/backup/01-ocdm-interface/01/proposed01/interface/process/src.doxygen/log/log.txt"
+PROJECT_NAME = "OpenCDM Interface Definition + Extended Functionality"
+CREATE_SUBDIRS = YES
+TAB_SIZE = 3
+EXTRACT_ALL = YES
+EXTRACT_PRIVATE = YES
+EXTRACT_PACKAGE = YES
+EXTRACT_STATIC = YES
+EXTRACT_LOCAL_METHODS = YES
+EXTRACT_ANON_NSPACES = YES
+RECURSIVE = YES
+SOURCE_BROWSER = YES
