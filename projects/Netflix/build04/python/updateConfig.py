@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 
-import json, os
+import json, os, sys
 from collections import OrderedDict
+
+playreadyName = "PlayReady"
+if len(sys.argv) > 1:
+   playreadyName = sys.argv[1]
 
 # config.json
 configPath = "staging/etc/WPEFramework/config.json"
@@ -64,8 +68,7 @@ if os.path.isfile(configPath):
    addedMapping["designators"] = ["com.metrological.null2"]
    addedMappings.append(addedMapping)
    addedMapping = {}
-   #addedMapping["name"] = "PlayReady"
-   addedMapping["name"] = "Null2"
+   addedMapping["name"] = playreadyName
    addedMapping["designators"] = ["com.microsoft.playready"]
    addedMappings.append(addedMapping)
 
