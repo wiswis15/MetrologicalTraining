@@ -61,15 +61,17 @@ if os.path.isfile(configPath):
 
    addedMapping = {}
    addedMapping["name"] = "Null2"
-   addedMapping["designators"] = ["com.metrological.null"]
+   addedMapping["designators"] = ["com.metrological.null", "com.metrological.null2"]
    addedMappings.append(addedMapping)
-   addedMapping = {}
-   addedMapping["name"] = "Null2"
-   addedMapping["designators"] = ["com.metrological.null2"]
-   addedMappings.append(addedMapping)
+
+   addedSettings = {}
+   addedSettings["read-dir"] = os.getcwd() + "/build/netflix5/build/src/platform/gibbon/data/dpi/playready"
+   addedSettings["store-location"] = os.getcwd() + "/build/netflix5/build/src/platform/gibbon/data/var/dpi/playready/storage/drmstore"
+
    addedMapping = {}
    addedMapping["name"] = playreadyName
-   addedMapping["designators"] = ["com.microsoft.playready"]
+   addedMapping["designators"] = ["com.microsoft.playready", "com.netflix.playready"]
+   addedMapping["settings"] = addedSettings
    addedMappings.append(addedMapping)
 
    configuration["configuration"]["systems"] = addedMappings
