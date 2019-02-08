@@ -8,15 +8,7 @@ namespace CDMi {
 class MediaKeySession : public IMediaKeySession, public IMediaKeySessionExt
 {
 public:
-    MediaKeySession(const uint8_t *f_pbInitData, uint32_t f_cbInitData);
-
-    // TODO: introduce MediaKeySessionExt?
-    MediaKeySession(uint32_t sessionId,
-            const char contentId[],
-            uint32_t contentIdLength,
-            LicenseTypeExt licenseType,
-            const uint8_t drmHeader[],
-            uint32_t drmHeaderLength);
+    MediaKeySession(const uint8_t drmHeader[], uint32_t drmHeaderLength);
 
     void Run(const IMediaKeySessionCallback *f_piMediaKeySessionCallback) override;
     CDMi_RESULT Load() override;

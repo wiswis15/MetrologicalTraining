@@ -36,11 +36,7 @@ static void * UseCallbackTask(void * data)
 	return nullptr;
 }
 
-MediaKeySession::MediaKeySession(const uint8_t *f_pbInitData, uint32_t f_cbInitData)
-{
-}
-
-MediaKeySession::MediaKeySession(uint32_t sessionId, const char contentId[], uint32_t contentIdLength, LicenseTypeExt licenseType, const uint8_t drmHeader[], uint32_t drmHeaderLength)
+MediaKeySession::MediaKeySession(const uint8_t drmHeader[], uint32_t drmHeaderLength)
 {
 	fprintf(stderr, "%s:%d: create media key session ext in null2\n", __FILE__, __LINE__);
 }
