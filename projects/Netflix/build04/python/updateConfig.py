@@ -71,7 +71,7 @@ if os.path.isfile(configPath):
    addedMapping = {}
    addedMapping["name"] = playreadyName
    addedMapping["designators"] = ["com.microsoft.playready", "com.netflix.playready"]
-   addedMapping["settings"] = addedSettings
+   addedMapping["configuration"] = addedSettings
    addedMappings.append(addedMapping)
 
    configuration["configuration"]["systems"] = addedMappings

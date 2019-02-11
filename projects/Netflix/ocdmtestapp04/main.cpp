@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <inttypes.h>
 
 #include <core/core.h>
 
@@ -39,41 +40,64 @@ public:
    JSON::DecUInt16 m_UncompressedAudio;
 };
 
+void MyProcessChallenge(struct OpenCDMSession* session, const char url[], const uint8_t challenge[], const uint16_t challengeLength)
+{
+   fprintf(stderr, "Callback: %s (%s:%d)\n", __FUNCTION__, __FILE__, __LINE__);
+}
+
+void MyKeyUpdate(struct OpenCDMSession* session, const uint8_t keyId[], const uint8_t length)
+{
+   fprintf(stderr, "Callback: %s (%s:%d)\n", __FUNCTION__, __FILE__, __LINE__);
+}
+
+void MyCallbackMessage(struct OpenCDMSession* userData, const char message[])
+{
+   fprintf(stderr, "Callback: %s (%s:%d)\n", __FUNCTION__, __FILE__, __LINE__);
+}
+
+OpenCDMSessionCallbacks g_callbacks = {
+    .process_challenge = MyProcessChallenge,
+    .key_update = MyKeyUpdate,
+    .message = MyCallbackMessage
+};
+
 int main()
 {
-   struct OpenCDMAccessor* accessor = opencdm_create_system_ext("", "");
-   fprintf(stderr, "Created system: %p\n", accessor);
+   OpenCDMAccessor * accessor = opencdm_create_system();
 
    //const char keySystem[] = "com.metrological.null";
-   const char keySystem[] = "com.microsoft.playready";
-   OpenCDMError isSupported = opencdm_is_type_supported(accessor, keySystem, "");
-   fprintf(stderr, "com.metrological.null is supported (should be 0): %u\n", isSupported);
+   const char keySystem[] = "com.netflix.playready";
+   OpenCDMSystemExt* systemExt = opencdm_create_system_ext(accessor, keySystem);
+   fprintf(stderr, "Created system ext: %p\n", systemExt);
 
-   time_t drmSystemTime;
+   OpenCDMError isSupported = opencdm_is_type_supported(accessor, keySystem, "");
+   fprintf(stderr, "%s is supported (should be 0): %u\n", keySystem, isSupported);
+
+   uint64_t drmSystemTime;
 
    fprintf(stderr, "About to call opencdm_system_get_drm_time\n");
-   opencdm_system_get_drm_time(accessor, &drmSystemTime);
-   fprintf(stderr, "Called opencdm_system_get_drm_time: %lu\n", drmSystemTime);
+   opencdm_system_get_drm_time(accessor, keySystem, &drmSystemTime);
+   fprintf(stderr, "Called opencdm_system_get_drm_time: %" PRIu64 "\n", drmSystemTime);
 
    char versionStr01[65];
    fprintf(stderr, "About to call opencdm_system_get_version\n");
-   opencdm_system_get_version(accessor, versionStr01);
+   opencdm_system_get_version(accessor, keySystem, versionStr01);
    fprintf(stderr, "Called opencdm_system_get_version: %s\n", versionStr01);
 
    uint32_t ldlLimit01;
    fprintf(stderr, "About to call opencdm_system_get_ldl_session_limit\n");
-   opencdm_system_get_ldl_session_limit(accessor, &ldlLimit01);
+   opencdm_system_ext_get_ldl_session_limit(systemExt, &ldlLimit01);
    fprintf(stderr, "Called opencdm_system_get_ldl_session_limit: %u\n", ldlLimit01);
 
    fprintf(stderr, "About to call opencdm_system_enable_secure_stop\n");
-   opencdm_system_enable_secure_stop(accessor, 1);
+   opencdm_system_ext_enable_secure_stop(systemExt, 1);
    fprintf(stderr, "Called opencdm_system_enable_secure_stop\n");
 
    uint8_t sessionId01[] = { 0xa0, 0xa1, 0xa2, 0xa3 };
    unsigned char serverResponse[] = { 0xb0, 0xb1, 0xb2, 0xb3 };
 
    fprintf(stderr, "About to call opencdm_system_commit_secure_stop\n");
-   opencdm_system_commit_secure_stop(accessor, sessionId01, sizeof(sessionId01), serverResponse, sizeof(serverResponse));
+   opencdm_system_ext_commit_secure_stop(systemExt, sessionId01, sizeof(sessionId01), serverResponse, sizeof(serverResponse));
    fprintf(stderr, "Called opencdm_system_commit_secure_stop\n");
 
    struct OpenCDMSession * session = NULL;
@@ -81,7 +105,16 @@ int main()
    uint32_t drmHeaderLength = sizeof(drmHeader);
 
    fprintf(stderr, "About to call opencdm_create_session_ext\n");
-   opencdm_create_session_ext(accessor, &session, drmHeader, drmHeaderLength);
+   //opencdm_create_session(accessor, &session, drmHeader, drmHeaderLength, &g_callbacks);
+    opencdm_create_session(accessor, keySystem,
+                           (LicenseType)0, // License type is ignored
+                           "drmheader", // Init data is a DRM header
+                           drmHeader, drmHeaderLength, // DRM header as init data
+                           NULL, 0, // No CMDData
+                           &g_callbacks, // Callbacks, for example for JSON playlevels string
+                           &session // Returned session
+                           );
+
    fprintf(stderr, "Called opencdm_create_session_ext: %p\n", session);
 
    const std::string testString01 = "{ \"compressed-video\": 42 }";
@@ -90,7 +123,7 @@ int main()
    fprintf(stderr, "Simple playlevel: %u\n", pl01.m_CompressedVideo.Value());
 
    fprintf(stderr, "About to call opencdm_destroy_session_ext\n");
-   opencdm_destroy_session_ext(session);
+   opencdm_destruct_session(session);
    fprintf(stderr, "Called opencdm_destroy_session_ext\n");
 
    const uint32_t secureStoreHashSize = 256;
@@ -98,15 +131,15 @@ int main()
    memset(secureStoreHash, 0, sizeof(secureStoreHash));
 
    fprintf(stderr, "About to call opencdm_get_secure_store_hash\n");
-   opencdm_get_secure_store_hash(accessor, secureStoreHash, secureStoreHashSize);
+   opencdm_get_secure_store_hash_ext(systemExt, secureStoreHash, secureStoreHashSize);
    fprintf(stderr, "Called opencdm_get_secure_store_hash, last entry: 0x%02x\n", secureStoreHash[secureStoreHashSize - 1]);
 
    fprintf(stderr, "About to call opencdm_delete_secure_store\n");
-   opencdm_delete_secure_store(accessor);
+   opencdm_delete_secure_store(systemExt);
    fprintf(stderr, "Called opencdm_delete_secure_store\n");
 
    fprintf(stderr, "About to call opencdm_system_teardown\n");
-   opencdm_system_teardown(accessor);
+   opencdm_destruct_system(accessor);
    fprintf(stderr, "Called opencdm_system_teardown\n");
 
 }

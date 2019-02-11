@@ -6,6 +6,8 @@
 
 #include <stdio.h>
 
+#include <core/core.h>
+
 using namespace std;
 
 namespace CDMi {
@@ -207,6 +209,31 @@ CDMi_RESULT MediaKeySession::GetChallengeDataNetflix(uint8_t * challenge, uint32
 
 class Null2 : public IMediaKeys, public IMediaKeysExt {
 private:
+    class Config : public WPEFramework::Core::JSON::Container {
+    private:
+        Config& operator= (const Config&);
+
+    public:
+        Config () 
+            : ReadDir()
+            , StoreLocation() {
+            Add("read-dir", &ReadDir);
+            Add("store-location", &StoreLocation);
+        }
+        Config (const Config& copy) 
+            : ReadDir(copy.ReadDir)
+            , StoreLocation(copy.StoreLocation) {
+            Add("read-dir", &ReadDir);
+            Add("store-location", &StoreLocation);
+        }
+        virtual ~Config() {
+        }
+
+    public:
+        WPEFramework::Core::JSON::String ReadDir;
+        WPEFramework::Core::JSON::String StoreLocation;
+    };
+
     Null2 (const Null2&) = delete;
     Null2& operator= (const Null2&) = delete;
 
@@ -294,6 +321,10 @@ public:
                 const std::string& readDir,
                 const std::string& storeLocation) override
 	{
+      cerr << "CreateSystemNetflix" << endl;
+      cerr << "readir: " << m_readDir << endl;
+      cerr << "store: " << m_storeLocation << endl;
+
     	return 0;
 	}
 
@@ -320,6 +351,23 @@ public:
     	return 0;
     }
 
+
+    void OnSystemConfigurationAvailable(const std::string& configline)
+    {
+       //cerr << "OnSystemConfigurationAvailable: " << configline << endl;
+
+        Config config; 
+        config.FromString(configline);
+        m_readDir = config.ReadDir.Value();
+        m_storeLocation = config.StoreLocation.Value();
+
+        //cerr << "readir: " << m_readDir << endl;
+        //cerr << "store: " << m_storeLocation << endl;
+    }
+
+private:
+   string m_readDir;
+   string m_storeLocation;
 };
 
 
