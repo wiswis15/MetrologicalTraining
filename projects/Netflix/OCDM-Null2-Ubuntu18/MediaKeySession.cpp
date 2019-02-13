@@ -1,6 +1,7 @@
 #include "MediaKeySession.h"
 
 #include <iostream>
+#include <sstream>
 #include <unistd.h>
 #include <string.h>
 
@@ -17,7 +18,7 @@ struct CallbackInfo
 	IMediaKeySessionCallback * _callback;
 };
 
-static void * UseCallbackTask(void * data)
+static void * KeyStatusUpdateCallback(void * data)
 {
 	CallbackInfo * callbackInfo = static_cast<CallbackInfo *>(data);
 
@@ -38,7 +39,31 @@ static void * UseCallbackTask(void * data)
 	return nullptr;
 }
 
+static void * PlayLevelUpdateCallback(void * data)
+{
+	CallbackInfo * callbackInfo = static_cast<CallbackInfo *>(data);
+	sleep(1);
+
+    stringstream keyMessage;
+    keyMessage << "{";
+    keyMessage << "\"compressed-video\": 141,";
+    keyMessage << "\"uncompressed-video\": 142,";
+    keyMessage << "\"analog-video\": 143,";
+    keyMessage << "\"compressed-audio\": 144,";
+    keyMessage << "\"uncompressed-audio\": 145";
+    keyMessage << "}";
+
+    string keyMessageStr = keyMessage.str();
+    const uint8_t * messageBytes = reinterpret_cast<const uint8_t *>(keyMessageStr.c_str());
+
+    callbackInfo->_callback->OnKeyMessage(messageBytes, keyMessageStr.length() + 1, "properties");
+
+	delete callbackInfo;
+	return nullptr;
+}
+
 MediaKeySession::MediaKeySession(const uint8_t drmHeader[], uint32_t drmHeaderLength)
+   : m_piCallback(nullptr)
 {
 	fprintf(stderr, "%s:%d: create media key session ext in null2\n", __FILE__, __LINE__);
 }
@@ -48,12 +73,13 @@ void MediaKeySession::Run(const IMediaKeySessionCallback *f_piMediaKeySessionCal
 {
 	// TODO: why is this one passed const?
 	IMediaKeySessionCallback * nonConstCallback = const_cast<IMediaKeySessionCallback *>(f_piMediaKeySessionCallback);
+   m_piCallback = nonConstCallback;
 
 	CallbackInfo * callbackInfo = new CallbackInfo;
 	callbackInfo->_callback = nonConstCallback;
 
 	pthread_t threadId;
-	pthread_create(&threadId, nullptr, UseCallbackTask, callbackInfo);
+	pthread_create(&threadId, nullptr, KeyStatusUpdateCallback, callbackInfo);
 }
 
 CDMi_RESULT MediaKeySession::Load()
@@ -199,6 +225,11 @@ CDMi_RESULT MediaKeySession::StoreLicenseData(const uint8_t licenseData[], uint3
 
 CDMi_RESULT MediaKeySession::InitDecryptContextByKid()
 {
+	CallbackInfo * callbackInfo = new CallbackInfo;
+	callbackInfo->_callback = m_piCallback;
+
+	pthread_t threadId;
+	pthread_create(&threadId, nullptr, PlayLevelUpdateCallback, callbackInfo);
 	return 0;
 }
 
@@ -317,9 +348,7 @@ public:
     	return 0;
     }
 
-    CDMi_RESULT CreateSystemNetflix(
-                const std::string& readDir,
-                const std::string& storeLocation) override
+    CDMi_RESULT CreateSystemNetflix() override
 	{
       cerr << "CreateSystemNetflix" << endl;
       cerr << "readir: " << m_readDir << endl;

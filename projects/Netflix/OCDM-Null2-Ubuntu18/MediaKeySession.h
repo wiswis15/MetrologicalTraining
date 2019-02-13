@@ -54,6 +54,7 @@ public:
 private:
     std::string _contentIdExt;
     SessionStateExt mSessionStateExt;
+    IMediaKeySessionCallback *m_piCallback;
 };
 
 } // namespace CDMi
