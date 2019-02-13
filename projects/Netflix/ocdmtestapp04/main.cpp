@@ -42,17 +42,29 @@ public:
 
 void MyProcessChallenge(struct OpenCDMSession* session, const char url[], const uint8_t challenge[], const uint16_t challengeLength)
 {
-   fprintf(stderr, "Callback: %s (%s:%d)\n", __FUNCTION__, __FILE__, __LINE__);
+   fprintf(stderr, "Callback: %s (%s:%d) -- %s\n", __FUNCTION__, __FILE__, __LINE__, challenge);
+
+   if (strcmp(url, "properties") == 0) {
+      std::string challengeString(reinterpret_cast<const char *>(challenge), challengeLength);
+      PlayLevels playLevels;
+      playLevels.FromString(challengeString);
+
+      fprintf(stderr, " - Compressed video: %u\n", playLevels.m_CompressedVideo.Value());
+      fprintf(stderr, " - Uncompressed video: %u\n", playLevels.m_UncompressedVideo.Value());
+      fprintf(stderr, " - Analog video: %u\n", playLevels.m_AnalogVideo.Value());
+      fprintf(stderr, " - Compressed audio: %u\n", playLevels.m_CompressedAudio.Value());
+      fprintf(stderr, " - Uncompressed audio: %u\n", playLevels.m_UncompressedAudio.Value());
+   }
 }
 
 void MyKeyUpdate(struct OpenCDMSession* session, const uint8_t keyId[], const uint8_t length)
 {
-   fprintf(stderr, "Callback: %s (%s:%d)\n", __FUNCTION__, __FILE__, __LINE__);
+   fprintf(stderr, "Callback: %s (%s:%d) -- %s\n", __FUNCTION__, __FILE__, __LINE__, keyId);
 }
 
 void MyCallbackMessage(struct OpenCDMSession* userData, const char message[])
 {
-   fprintf(stderr, "Callback: %s (%s:%d)\n", __FUNCTION__, __FILE__, __LINE__);
+   fprintf(stderr, "Callback: %s (%s:%d), message: %s\n", __FUNCTION__, __FILE__, __LINE__, message);
 }
 
 OpenCDMSessionCallbacks g_callbacks = {
@@ -104,23 +116,27 @@ int main()
    const uint8_t drmHeader[] = { 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63 };
    uint32_t drmHeaderLength = sizeof(drmHeader);
 
-   fprintf(stderr, "About to call opencdm_create_session_ext\n");
-   //opencdm_create_session(accessor, &session, drmHeader, drmHeaderLength, &g_callbacks);
-    opencdm_create_session(accessor, keySystem,
-                           (LicenseType)0, // License type is ignored
-                           "drmheader", // Init data is a DRM header
-                           drmHeader, drmHeaderLength, // DRM header as init data
-                           NULL, 0, // No CMDData
-                           &g_callbacks, // Callbacks, for example for JSON playlevels string
-                           &session // Returned session
-                           );
-
-   fprintf(stderr, "Called opencdm_create_session_ext: %p\n", session);
+   fprintf(stderr, "About to call opencdm_create_session, g_callbacks: %p\n", (&g_callbacks));
+   opencdm_create_session(accessor, keySystem,
+                          (LicenseType)0, // License type is ignored
+                          "drmheader", // Init data is a DRM header
+                          drmHeader, drmHeaderLength, // DRM header as init data
+                          NULL, 0, // No CMDData
+                          &g_callbacks, // Callbacks, for example for JSON playlevels string
+                          &session // Returned session
+                          );
+   fprintf(stderr, "Called opencdm_create_session: %p\n", session);
 
    const std::string testString01 = "{ \"compressed-video\": 42 }";
    PlayLevels pl01;
    pl01.FromString(testString01);
    fprintf(stderr, "Simple playlevel: %u\n", pl01.m_CompressedVideo.Value());
+
+   fprintf(stderr, "About to call opencdm_session_init_decrypt_context_by_kid\n");
+   opencdm_session_init_decrypt_context_by_kid(session);
+   fprintf(stderr, "Called opencdm_session_init_decrypt_context_by_kid, sleeping for two seconds, to deal with levels\n");
+
+   sleep(2);
 
    fprintf(stderr, "About to call opencdm_destroy_session_ext\n");
    opencdm_destruct_session(session);
