@@ -8,4 +8,5 @@ STAGING="$PWD/staging"
 export PATH=$PATH:$STAGING/usr/bin
 export LD_LIBRARY_PATH=$STAGING/usr/lib
 
-$OCDMTESTAPP03_PREFIX $STAGING/usr/bin/ocdmtestapp04
+$OCDMTESTAPP04_PREFIX $STAGING/usr/bin/ocdmtestapp04
+
