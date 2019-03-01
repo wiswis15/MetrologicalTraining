@@ -24,7 +24,7 @@ static void * KeyStatusUpdateCallback(void * data)
 
 	sleep(1);
 
-	uint8_t keyMessage[] = { 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f, 0x40, 0x41 };
+	uint8_t keyMessage[] = { 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f };
 	uint32_t keyMessageSize = sizeof(keyMessage);
 	char URL[256];	// TODO: why isn't this arg const?
 	strcpy(URL, "http://www.a-url.com");
@@ -66,20 +66,39 @@ MediaKeySession::MediaKeySession(const uint8_t drmHeader[], uint32_t drmHeaderLe
    : m_piCallback(nullptr)
 {
 	fprintf(stderr, "%s:%d: create media key session ext in null2\n", __FILE__, __LINE__);
-}
 
+    struct timespec spec;
+    clock_gettime(CLOCK_REALTIME, &spec);
+
+    // TODO: should we worry here about multi-threading?
+    static int sessionId = 2;
+    for (int i = 0; i < (sizeof(m_rgchSessionID) - 1); i++) {
+       m_rgchSessionID[i] = (char)sessionId;
+    }
+    sessionId++;
+}
 
 void MediaKeySession::Run(const IMediaKeySessionCallback *f_piMediaKeySessionCallback)
 {
 	// TODO: why is this one passed const?
 	IMediaKeySessionCallback * nonConstCallback = const_cast<IMediaKeySessionCallback *>(f_piMediaKeySessionCallback);
-   m_piCallback = nonConstCallback;
+    m_piCallback = nonConstCallback;
 
 	CallbackInfo * callbackInfo = new CallbackInfo;
 	callbackInfo->_callback = nonConstCallback;
 
 	pthread_t threadId;
 	pthread_create(&threadId, nullptr, KeyStatusUpdateCallback, callbackInfo);
+    
+	//m_piCallback->OnKeyMessage((const uint8_t *) m_pbChallenge, m_cbChallenge, (char *)m_pchSilentURL);
+	//f_piMediaKeySessionCallback->OnKeyMessage((const uint8_t *) m_pbChallenge, m_cbChallenge, (char *)m_pchSilentURL);
+	//f_piMediaKeySessionCallback->OnKeyMessage(NULL, 0, NULL);
+	//nonConstCallback->OnKeyMessage(NULL, 0, NULL);
+	uint8_t challengeBuffer[32];
+	uint32_t challengeBufferSize = sizeof(challengeBuffer);
+    char urlBuffer[32];
+    urlBuffer[0] = '\0';
+	nonConstCallback->OnKeyMessage(challengeBuffer, challengeBufferSize, urlBuffer);
 }
 
 CDMi_RESULT MediaKeySession::Load()
@@ -108,7 +127,8 @@ CDMi_RESULT MediaKeySession::Close()
 const char *MediaKeySession::GetSessionId() const
 {
    cerr << "MediaKeySession::GetSessionId: " << this << endl;
-   return "ThisIsASessionId";
+   //return "ThisIsASessionId";
+   return m_rgchSessionID;
 }
 
 const char *MediaKeySession::GetKeySystem() const

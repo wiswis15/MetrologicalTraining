@@ -5,7 +5,7 @@ cd zips
 rm -f libprovision libprovision.tgz
 git clone git@github.com:Metrological/libprovision.git
 cd libprovision
-git checkout 5ace4f1c9646afe6621055b5ab2a4936e2c18f42
+git checkout 7e12a81534f797ca62b7590c0572a5ed75e459fb
 rm -rf .git
 cd ..
 tar czf libprovision.tgz libprovision/
