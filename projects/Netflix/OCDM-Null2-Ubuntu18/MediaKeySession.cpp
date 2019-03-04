@@ -104,7 +104,7 @@ void MediaKeySession::Run(const IMediaKeySessionCallback *f_piMediaKeySessionCal
 CDMi_RESULT MediaKeySession::Load()
 {
 	cerr << "OCDM-Null2::Load" << endl;
-   return 0;
+   return (CDMi_RESULT)0;
 }
 
 void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t f_cbKeyMessageResponse)
@@ -115,13 +115,13 @@ void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t f_c
 CDMi_RESULT MediaKeySession::Remove()
 {
    cerr << "OCDM-Null2::Remove" << endl;
-   return 0;
+   return (CDMi_RESULT)0;
 }
 
 CDMi_RESULT MediaKeySession::Close()
 {
    cerr << "OCDM-Null2::Close" << endl;
-   return 0;
+   return (CDMi_RESULT)0;
 }
 
 const char *MediaKeySession::GetSessionId() const
@@ -161,12 +161,12 @@ CDMi_RESULT MediaKeySession::Decrypt(
 		(*f_ppbOpaqueClearContent)[0]++;
 	}
 
-   return 0;
+   return (CDMi_RESULT)0;
 }
 
 CDMi_RESULT MediaKeySession::ReleaseClearContent(const uint8_t *f_pbSessionKey, uint32_t f_cbSessionKey, const uint32_t f_cbClearContentOpaque, uint8_t *f_pbClearContentOpaque)
 {
-   return 0;
+   return (CDMi_RESULT)0;
 }
 
 uint32_t MediaKeySession::GetSessionIdExt() const
@@ -201,46 +201,15 @@ uint16_t MediaKeySession::PlaylevelUncompressedAudio() const
 	return 61;
 }
 
-std::string MediaKeySession::GetContentIdExt() const
-{
-	return _contentIdExt;
-}
-
-void MediaKeySession::SetContentIdExt(const std::string & contentId)
-{
-	cerr << "Null2 received content id ext: " << contentId << endl;
-
-	_contentIdExt = contentId;
-}
-
-LicenseTypeExt MediaKeySession::GetLicenseTypeExt() const
-{
-	return LimitedDuration;
-}
-
-void MediaKeySession::SetLicenseTypeExt(LicenseTypeExt licenseType)
-{
-}
-
-SessionStateExt MediaKeySession::GetSessionStateExt() const
-{
-	return mSessionStateExt;
-}
-
-void MediaKeySession::SetSessionStateExt(SessionStateExt sessionState)
-{
-	mSessionStateExt = sessionState;
-}
-
 CDMi_RESULT MediaKeySession::SetDrmHeader(const uint8_t drmHeader[], uint32_t drmHeaderLength)
 {
-	return 0;
+	return (CDMi_RESULT)0;
 }
 
 CDMi_RESULT MediaKeySession::StoreLicenseData(const uint8_t licenseData[], uint32_t licenseDataSize, unsigned char * secureStopId)
 {
 	secureStopId[15] = 0x42;
-	return 0;
+	return (CDMi_RESULT)0;
 }
 
 CDMi_RESULT MediaKeySession::InitDecryptContextByKid()
@@ -250,12 +219,12 @@ CDMi_RESULT MediaKeySession::InitDecryptContextByKid()
 
 	pthread_t threadId;
 	pthread_create(&threadId, nullptr, PlayLevelUpdateCallback, callbackInfo);
-	return 0;
+	return (CDMi_RESULT)0;
 }
 
 CDMi_RESULT MediaKeySession::GetChallengeDataNetflix(uint8_t * challenge, uint32_t & challengeSize, uint32_t isLDL)
 {
-	return 0;
+	return (CDMi_RESULT)0;
 }
 
 class Null2 : public IMediaKeys, public IMediaKeysExt {
@@ -356,7 +325,7 @@ public:
 
     CDMi_RESULT EnableSecureStop(bool enable) override
     {
-    	return 0;
+    	return (CDMi_RESULT)0;
     }
 
     CDMi_RESULT CommitSecureStop(
@@ -365,7 +334,7 @@ public:
             const unsigned char serverResponse[],
             uint32_t serverResponseLength) override
     {
-    	return 0;
+    	return (CDMi_RESULT)0;
     }
 
     CDMi_RESULT CreateSystemNetflix() override
@@ -374,22 +343,22 @@ public:
       cerr << "readir: " << m_readDir << endl;
       cerr << "store: " << m_storeLocation << endl;
 
-    	return 0;
+    	return (CDMi_RESULT)0;
 	}
 
     CDMi_RESULT InitSystemNetflix() override
     {
-    	return 0;
+    	return (CDMi_RESULT)0;
     }
 
     CDMi_RESULT TeardownSystemNetflix() override
     {
-    	return 0;
+    	return (CDMi_RESULT)0;
     }
 
     CDMi_RESULT DeleteSecureStore() override
     {
-    	return 0;
+    	return (CDMi_RESULT)0;
     }
 
     CDMi_RESULT GetSecureStoreHash(
@@ -397,7 +366,7 @@ public:
             uint32_t secureStoreHashLength) override
     {
     	secureStoreHash[secureStoreHashLength - 1] = 0xed;
-    	return 0;
+    	return (CDMi_RESULT)0;
     }
 
 
@@ -412,6 +381,41 @@ public:
 
         //cerr << "readir: " << m_readDir << endl;
         //cerr << "store: " << m_storeLocation << endl;
+    }
+
+    virtual CDMi_RESULT DestroyMediaKeySessionExt(IMediaKeySession*) override
+    {
+        return (CDMi_RESULT)0;
+    }
+
+    virtual bool IsSecureStopEnabled() override
+    {
+        return true;
+    }
+
+    virtual uint32_t ResetSecureStops() override
+    {
+        return 0;
+    }
+
+    virtual CDMi_RESULT GetSecureStopIds(uint8_t**, uint32_t&) override
+    {
+        return (CDMi_RESULT)0;
+    }
+
+    virtual CDMi_RESULT GetSecureStop(const uint8_t*, uint32_t, uint8_t*, uint16_t&) override
+    {
+        return (CDMi_RESULT)0;
+    }
+
+    virtual CDMi_RESULT DeleteKeyStore() override
+    {
+        return (CDMi_RESULT)0;
+    }
+
+    virtual CDMi_RESULT GetKeyStoreHash(uint8_t*, uint32_t) override
+    {
+        return (CDMi_RESULT)0;
     }
 
 private:
