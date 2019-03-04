@@ -1,0 +1,204 @@
+diff --git a/Source/ocdm/open_cdm.cpp b/Source/ocdm/open_cdm.cpp
+index ef2c1f0..e0a177a 100644
+--- a/Source/ocdm/open_cdm.cpp
++++ b/Source/ocdm/open_cdm.cpp
+@@ -23,6 +23,10 @@
+ 
+ #include "ExtendedOpenCDMSession.h"
+ 
++#define TRACE_FUNC() { \
++    fprintf(stderr, ">> WPE-OCDM >> %s:%d: %s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__); \
++}
++
+ MODULE_NAME_DECLARATION(BUILD_REFERENCE)
+ 
+ using namespace WPEFramework;
+@@ -53,10 +57,10 @@ KeyStatus CDMState(const OCDM::ISession::KeyStatus state) {
+ 
+ namespace media {
+ 
+-OpenCdm::OpenCdm() : _implementation (OpenCDMAccessor::Instance()), _session(nullptr), _keySystem() {
++OpenCdm::OpenCdm() : _implementation (OpenCDMAccessor::Instance()), _session(nullptr), _keySystem() {TRACE_FUNC();
+ }
+ 
+-OpenCdm::OpenCdm(const OpenCdm& copy) : _implementation (OpenCDMAccessor::Instance()), _session(copy._session), _keySystem(copy._keySystem) {
++OpenCdm::OpenCdm(const OpenCdm& copy) : _implementation (OpenCDMAccessor::Instance()), _session(copy._session), _keySystem(copy._keySystem) {TRACE_FUNC();
+     
+     if (_session != nullptr) {
+         TRACE_L1 ("Created a copy of OpenCdm instance: %p", this);
+@@ -64,7 +68,7 @@ OpenCdm::OpenCdm(const OpenCdm& copy) : _implementation (OpenCDMAccessor::Instan
+     }
+ }
+ 
+-OpenCdm::OpenCdm(const std::string& sessionId) : _implementation (OpenCDMAccessor::Instance()), _session(nullptr), _keySystem() {
++OpenCdm::OpenCdm(const std::string& sessionId) : _implementation (OpenCDMAccessor::Instance()), _session(nullptr), _keySystem() {TRACE_FUNC();
+ 
+     if (_implementation != nullptr) {
+ 
+@@ -84,7 +88,7 @@ OpenCdm::OpenCdm(const std::string& sessionId) : _implementation (OpenCDMAccesso
+     }
+ }
+ 
+-OpenCdm::OpenCdm (const uint8_t keyId[], const uint8_t length)  : _implementation (OpenCDMAccessor::Instance()), _session(nullptr), _keySystem() {
++OpenCdm::OpenCdm (const uint8_t keyId[], const uint8_t length)  : _implementation (OpenCDMAccessor::Instance()), _session(nullptr), _keySystem() {TRACE_FUNC();
+ 
+      if (_implementation != nullptr) {
+ 
+@@ -104,7 +108,7 @@ OpenCdm::OpenCdm (const uint8_t keyId[], const uint8_t length)  : _implementatio
+      }
+ }
+ 
+-OpenCdm::~OpenCdm() {
++OpenCdm::~OpenCdm() {TRACE_FUNC();
+     if (_session != nullptr) {
+         _session->Release();
+         TRACE_L1 ("Destructed an OpenCdm instance: %p", this);
+@@ -114,7 +118,7 @@ OpenCdm::~OpenCdm() {
+     }
+ }
+ 
+-/* static */ OpenCdm& OpenCdm::Instance() {
++/* static */ OpenCdm& OpenCdm::Instance() {TRACE_FUNC();
+     return Core::SingletonType<OpenCdm>::Instance();
+ }
+ 
+@@ -123,7 +127,7 @@ OpenCdm::~OpenCdm() {
+ // ---------------------------------------------------------------------------------------------
+ // Before instantiating the ROOT DRM OBJECT, Check if it is capable of decrypting the requested
+ // asset.
+-bool OpenCdm::GetSession (const uint8_t keyId[], const uint8_t length, const uint32_t waitTime) {
++bool OpenCdm::GetSession (const uint8_t keyId[], const uint8_t length, const uint32_t waitTime) {TRACE_FUNC();
+ 
+     if ( (_session == nullptr) && (_implementation != nullptr) &&
+             (_implementation->WaitForKey (length, keyId, waitTime, OCDM::ISession::Usable) == true) ) {
+@@ -133,7 +137,7 @@ bool OpenCdm::GetSession (const uint8_t keyId[], const uint8_t length, const uin
+     return (_session != nullptr);
+ }
+ 
+-bool OpenCdm::IsTypeSupported(const std::string& keySystem, const std::string& mimeType) const {
++bool OpenCdm::IsTypeSupported(const std::string& keySystem, const std::string& mimeType) const {TRACE_FUNC();
+     TRACE_L1("Checking for key system %s", keySystem.c_str());
+     return ( (_implementation != nullptr) && 
+              (_implementation->IsTypeSupported(keySystem, mimeType) == 0) ); 
+@@ -141,7 +145,7 @@ bool OpenCdm::IsTypeSupported(const std::string& keySystem, const std::string& m
+ 
+ // The next call is the startng point of creating a decryption context. It select the DRM system 
+ // to be used within this OpenCDM object.
+-void OpenCdm::SelectKeySystem(const std::string& keySystem) {
++void OpenCdm::SelectKeySystem(const std::string& keySystem) {TRACE_FUNC();
+     if (_implementation != nullptr) {
+         _keySystem = keySystem;
+         TRACE_L1("Creation of key system %s succeeded.", _keySystem.c_str());
+@@ -155,7 +159,7 @@ void OpenCdm::SelectKeySystem(const std::string& keySystem) {
+ // ROOT DRM OBJECT OPERATIONS:
+ // ---------------------------------------------------------------------------------------------
+ // If required, ServerCertificates can be added to this OpenCdm object (DRM Context).
+-int OpenCdm::SetServerCertificate(const uint8_t* data, const uint32_t dataLength) {
++int OpenCdm::SetServerCertificate(const uint8_t* data, const uint32_t dataLength) {TRACE_FUNC();
+ 
+     int result = 1;
+ 
+@@ -175,7 +179,7 @@ int OpenCdm::SetServerCertificate(const uint8_t* data, const uint32_t dataLength
+  
+ // Now for every particular stream a session needs to be created. Create a session for all
+ // encrypted streams that require decryption. (This allows for MultiKey decryption)
+-std::string OpenCdm::CreateSession(const std::string& dataType, const uint8_t* addData, const uint16_t addDataLength, const uint8_t* cdmData, const uint16_t cdmDataLength, const LicenseType license) {
++std::string OpenCdm::CreateSession(const std::string& dataType, const uint8_t* addData, const uint16_t addDataLength, const uint8_t* cdmData, const uint16_t cdmDataLength, const LicenseType license) {TRACE_FUNC();
+ 
+     std::string result;
+ 
+@@ -204,7 +208,7 @@ std::string OpenCdm::CreateSession(const std::string& dataType, const uint8_t* a
+ // The following operations work on a Session. There is no direct access to the session that
+ // requires the operation, so before executing the session operation, first select it with
+ // the SelectSession above.
+-void OpenCdm::GetKeyMessage(std::string& response, uint8_t* data, uint16_t& dataLength) {
++void OpenCdm::GetKeyMessage(std::string& response, uint8_t* data, uint16_t& dataLength) {TRACE_FUNC();
+ 
+     ASSERT ( (_session != nullptr) && (_session->IsExtended() == true) );
+ 
+@@ -212,7 +216,7 @@ void OpenCdm::GetKeyMessage(std::string& response, uint8_t* data, uint16_t& data
+     static_cast<ExtendedOpenCDMSession*>(_session)->GetKeyMessage(response, data, dataLength);
+ }
+ 
+-KeyStatus OpenCdm::Update(const uint8_t* data, const uint16_t dataLength, std::string& response) {
++KeyStatus OpenCdm::Update(const uint8_t* data, const uint16_t dataLength, std::string& response) {TRACE_FUNC();
+ 
+     ASSERT ( (_session != nullptr) && (_session->IsExtended() == true) );
+ 
+@@ -220,7 +224,7 @@ KeyStatus OpenCdm::Update(const uint8_t* data, const uint16_t dataLength, std::s
+     return (static_cast<ExtendedOpenCDMSession*>(_session)->Update(data, dataLength, response));
+ }
+ 
+-int OpenCdm::Load(std::string& response) {
++int OpenCdm::Load(std::string& response) {TRACE_FUNC();
+ 
+     ASSERT ( (_session != nullptr) && (_session->IsExtended() == true) );
+ 
+@@ -228,7 +232,7 @@ int OpenCdm::Load(std::string& response) {
+     return (static_cast<ExtendedOpenCDMSession*>(_session)->Load(response));
+ }
+ 
+-int OpenCdm::Remove(std::string& response) {
++int OpenCdm::Remove(std::string& response) {TRACE_FUNC();
+ 
+     ASSERT ( (_session != nullptr) && (_session->IsExtended() == true) );
+ 
+@@ -236,7 +240,7 @@ int OpenCdm::Remove(std::string& response) {
+     return (static_cast<ExtendedOpenCDMSession*>(_session)->Remove(response));
+ }
+ 
+-KeyStatus OpenCdm::Status() const {
++KeyStatus OpenCdm::Status() const {TRACE_FUNC();
+     KeyStatus result = StatusPending;
+ 
+     if (_session != nullptr) {
+@@ -246,7 +250,7 @@ KeyStatus OpenCdm::Status() const {
+     return (result);
+ }
+ 
+-int OpenCdm::Close() {
++int OpenCdm::Close() {TRACE_FUNC();
+ 
+     ASSERT ( (_session != nullptr) && (_session->IsExtended() == true) );
+ 
+@@ -259,13 +263,13 @@ int OpenCdm::Close() {
+     return (0);
+ }
+ 
+-uint32_t OpenCdm::Decrypt(uint8_t* encrypted, const uint32_t encryptedLength, const uint8_t* IV, const uint16_t IVLength, uint32_t initWithLast15) {
++uint32_t OpenCdm::Decrypt(uint8_t* encrypted, const uint32_t encryptedLength, const uint8_t* IV, const uint16_t IVLength, uint32_t initWithLast15) {TRACE_FUNC();
+     ASSERT (_session != nullptr);
+ 
+     return (_session != nullptr ? _session->Decrypt(encrypted, encryptedLength, IV, IVLength, nullptr, 0, initWithLast15) : 1);
+ }
+ 
+-uint32_t OpenCdm::Decrypt(uint8_t* encrypted, const uint32_t encryptedLength, const uint8_t* IV, const uint16_t IVLength, const uint8_t keyIdLength, const uint8_t keyId[], uint32_t initWithLast15, const uint32_t waitTime) {
++uint32_t OpenCdm::Decrypt(uint8_t* encrypted, const uint32_t encryptedLength, const uint8_t* IV, const uint16_t IVLength, const uint8_t keyIdLength, const uint8_t keyId[], uint32_t initWithLast15, const uint32_t waitTime) {TRACE_FUNC();
+ 
+     if (_implementation->WaitForKey (keyIdLength, keyId, waitTime, OCDM::ISession::Usable) == true) {
+         if (_session == nullptr) {
+diff --git a/Source/ocdm/open_cdm_ext.cpp b/Source/ocdm/open_cdm_ext.cpp
+index e058ea6..48ebae1 100644
+--- a/Source/ocdm/open_cdm_ext.cpp
++++ b/Source/ocdm/open_cdm_ext.cpp
+@@ -118,6 +118,7 @@ public:
+         }
+ 
+         _realSession = realSession;
++        fprintf(stderr, "_realSession = %p\n", _realSession);
+     }
+ 
+     virtual ~ExtendedOpenCDMSessionExt() {
+diff --git a/Source/ocdm/open_cdm_impl.h b/Source/ocdm/open_cdm_impl.h
+index 8fadb2f..9c7ce75 100644
+--- a/Source/ocdm/open_cdm_impl.h
++++ b/Source/ocdm/open_cdm_impl.h
+@@ -211,6 +211,8 @@ public:
+ 
+         do {
+             _adminLock.Lock();
++    	    fprintf(stderr, "_sessionKeys.size(): %u -- 0x%02X\n", _sessionKeys.size(), (int)_sessionKeys.begin()->first[0]);
++            fprintf(stderr, "_sessionKeys.begin()->second.size(): %u -- %s\n", _sessionKeys.begin()->second.size(), _sessionKeys.begin()->second.begin()->ToString().c_str());
+ 
+             KeyMap::const_iterator session (_sessionKeys.begin());
+             const KeyList* container = nullptr;
