@@ -56,20 +56,20 @@ if os.path.isfile(configPath):
    addedMappings = []
 
    addedMapping = {}
-   addedMapping["key"] = "com.metrological.null"
-   addedMapping["system"] = "Null2"
+   addedMapping["name"] = "Null2"
+   addedMapping["designators"] = ["com.metrological.null"]
    addedMappings.append(addedMapping)
    addedMapping = {}
-   addedMapping["key"] = "com.metrological.null2"
-   addedMapping["system"] = "Null2"
+   addedMapping["name"] = "Null2"
+   addedMapping["designators"] = ["com.metrological.null2"]
    addedMappings.append(addedMapping)
    addedMapping = {}
-   addedMapping["key"] = "com.microsoft.playready"
-   #addedMapping["system"] = "PlayReady"
-   addedMapping["system"] = "Null2"
+   #addedMapping["name"] = "PlayReady"
+   addedMapping["name"] = "Null2"
+   addedMapping["designators"] = ["com.microsoft.playready"]
    addedMappings.append(addedMapping)
 
-   configuration["configuration"]["mapping"] = addedMappings
+   configuration["configuration"]["systems"] = addedMappings
 
    configFile = open(configPath, "w")
    json.dump(configuration, configFile, indent=1, separators=(',', ':'))

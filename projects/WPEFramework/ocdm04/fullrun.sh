@@ -18,5 +18,5 @@ rm -rf build staging
 ./ocdm-null2-build.sh
 ./ocdmtestapp03-build.sh
 
-python/updateConfig.py
+#python/updateConfig.py
 
