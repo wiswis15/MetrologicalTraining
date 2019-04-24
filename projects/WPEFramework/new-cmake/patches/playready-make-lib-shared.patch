@@ -1,0 +1,12 @@
+diff -ruNP a/src/CMakeLists.txt b/src/CMakeLists.txt
+--- a/src/CMakeLists.txt	2018-09-03 15:42:03.188876973 +0200
++++ b/src/CMakeLists.txt	2018-09-03 15:41:54.905051605 +0200
+@@ -67,7 +67,7 @@
+ 
+ #libplayready!
+ set (DEST_INC "include/playready")
+-add_library( playready ${CPP_SRCS} )
++add_library( playready SHARED ${CPP_SRCS} )
+ 
+ if (PLAYREADY_USE_PROVISION)
+ 
