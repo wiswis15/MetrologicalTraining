@@ -1,0 +1,77 @@
+From 0f2b3e032a3bd3d84d20993b78c20ce7671614ba Mon Sep 17 00:00:00 2001
+From: Sander van der Maar <sandervandermaar@gmail.com>
+Date: Thu, 24 May 2018 16:57:01 +0200
+Subject: [PATCH 02/10] Removes some unneeded callbacks
+
+---
+ partner/dpi/reference/AudioESPlayerNative.cpp | 15 +++++++--------
+ partner/dpi/reference/AudioRenderer.cpp       |  3 ++-
+ 2 files changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/partner/dpi/reference/AudioESPlayerNative.cpp b/partner/dpi/reference/AudioESPlayerNative.cpp
+index 2905fb76..4f0d61b0 100644
+--- a/partner/dpi/reference/AudioESPlayerNative.cpp
++++ b/partner/dpi/reference/AudioESPlayerNative.cpp
+@@ -360,6 +360,7 @@ void AudioESPlayerNative::decoderTask()
+         fwrite(mSampleWriter->getBuffer(), mSampleWriter->getSampleSize(), 1, dumpFile);
+         fflush(dumpFile);
+ 
++        // Debugging: the following lines are needed to tell the JS App we are rendering
+         if(mAudioDecoder->decode(pSampleAttr,
+                                  mSampleWriter->getBuffer(),
+                                  mSampleWriter->getSampleSize(),
+@@ -376,9 +377,10 @@ void AudioESPlayerNative::decoderTask()
+                         pSampleAttr->getPTS()
+                         );
+             } else {
++                // Debug: This line can't be removed
+                 if(!mAudioRenderer->sendSampleBuffer(decodedAudioBuffer) == true) {
+                     // The frame was dropped by the renderer.  Log it!
+-                    mCallback->updateRenderingStats(0,1,IESPlayerCallback::STAT_NOT_SET);
++                    //mCallback->updateRenderingStats(0,1,IESPlayerCallback::STAT_NOT_SET);
+                 }
+             }
+         }
+@@ -386,11 +388,6 @@ void AudioESPlayerNative::decoderTask()
+         {
+             Log::error(TRACE_MEDIAPLAYBACK, "Error AudioESPlayerNative::decoderTask: decode returns false.");
+ 
+-            /* We don't call mCallback->reportError() here so that an issue
+-             * decoding one audio frame doesn't force the UI to unload the
+-             * movie.  We continue decoding and try recover on the next
+-             * sample.*/
+-
+             if(mAudioDecoder->getFlushState() != FLUSH_OFF){
+                 NTRACE(TRACE_MEDIAPLAYBACK, "[%d] AudioESPlayerNative::%s ignoring decode error while flushing"
+                        , mPipelineId, __func__);
+@@ -403,9 +400,11 @@ void AudioESPlayerNative::decoderTask()
+                 return;
+             }
+         }
+-        reportDecodeOutcome(mAudioDecoder->getStatsCounter());
+-
++        
++        // Debug: Seems like it is ok to remove this line
++        //reportDecodeOutcome(mAudioDecoder->getStatsCounter());
+     }
++
+ }
+ 
+ bool AudioESPlayerNative::readyForPlaybackStart()
+diff --git a/partner/dpi/reference/AudioRenderer.cpp b/partner/dpi/reference/AudioRenderer.cpp
+index b8def9de..9ff6fa4f 100644
+--- a/partner/dpi/reference/AudioRenderer.cpp
++++ b/partner/dpi/reference/AudioRenderer.cpp
+@@ -439,7 +439,8 @@ void AudioRenderer::play(uint32_t bytes, void* context)
+     else if(speed_snapshot == IPlaybackDevice::NORMAL_SPEED)
+     {
+         // Rendering audio samples for playback.
+-        mESPlayer.getCallback()->updateRenderingStats(numSamplesDequeued, 0, 0);
++        // Debug: seems like this line isn't needed for playback
++        //mESPlayer.getCallback()->updateRenderingStats(numSamplesDequeued, 0, 0);
+ 
+         ScopedMutex cs(mutex_);
+         if(rp_next < rp_) { // wrap-around
+-- 
+2.17.1
+

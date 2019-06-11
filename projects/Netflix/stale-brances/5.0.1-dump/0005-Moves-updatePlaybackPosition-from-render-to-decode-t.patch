@@ -1,0 +1,107 @@
+From eeb99155ac400181db13b947a61c99d40abd9742 Mon Sep 17 00:00:00 2001
+From: Sander van der Maar <sandervandermaar@gmail.com>
+Date: Fri, 25 May 2018 11:46:13 +0200
+Subject: [PATCH 05/10] Moves updatePlaybackPosition from render to decode
+ thread
+
+---
+ .../MediaSourcePlaybackDevice.cpp             |  5 ++--
+ partner/dpi/reference/VideoESPlayerNative.cpp | 26 +++++++++++++++++--
+ 2 files changed, 27 insertions(+), 4 deletions(-)
+
+diff --git a/netflix/src/nrd/PlaybackDevice/MediaSourcePlaybackDevice.cpp b/netflix/src/nrd/PlaybackDevice/MediaSourcePlaybackDevice.cpp
+index f55131f4..c858ab8a 100644
+--- a/netflix/src/nrd/PlaybackDevice/MediaSourcePlaybackDevice.cpp
++++ b/netflix/src/nrd/PlaybackDevice/MediaSourcePlaybackDevice.cpp
+@@ -345,8 +345,9 @@ NFErr MediaSourcePlaybackDevice::setSpeed(int32_t speed)
+             // We're about to transition from pause to play. Make sure that the
+             // underflow reported flag in the callback is not set. If it is set,
+             // the callback will prevent the device from reporting underflow.
+-            mPlayerCallback[MEDIA_VIDEO]->resetUnderflowReported();
+-            mPlayerCallback[MEDIA_AUDIO]->resetUnderflowReported();
++            // debug: these lines can be removed, so resetUnderflowReported isn't needed
++            //mPlayerCallback[MEDIA_VIDEO]->resetUnderflowReported();
++            //mPlayerCallback[MEDIA_AUDIO]->resetUnderflowReported();
+         }
+ 
+         if (!mIsFrameReady.load())
+diff --git a/partner/dpi/reference/VideoESPlayerNative.cpp b/partner/dpi/reference/VideoESPlayerNative.cpp
+index f9b6cbf1..0c318b43 100644
+--- a/partner/dpi/reference/VideoESPlayerNative.cpp
++++ b/partner/dpi/reference/VideoESPlayerNative.cpp
+@@ -21,6 +21,8 @@
+ #include <nrd/NrdApplication.h>
+ #include "DeviceLibNative.h"
+ 
++extern volatile bool g_shouldLogCallbacks;
++
+ using namespace netflix;
+ using namespace netflix::device;
+ using namespace netflix::device::esplayer;
+@@ -239,6 +241,9 @@ void VideoESPlayerNative::decoderTask()
+ 
+     while(closeThreadsFlagIsSet() == false)
+     {
++        if (g_shouldLogCallbacks) {
++           fprintf(stderr, "SANDER At beginning of decoder while\n");
++        }
+         if(mVideoDecoder->getFlushState() != FLUSH_OFF)
+         {
+             if(mVideoDecoder->getFlushState() == FLUSH_BEGIN)
+@@ -544,11 +549,23 @@ void VideoESPlayerNative::decoderTask()
+             }
+ 
+             // debug: also can't remove just the following section
++            FILE * testFile = fopen("/tmp/netflix-should-log-callbacks", "rb");
++            if (testFile) {
++               g_shouldLogCallbacks = true;
++               fclose(testFile);
++            }
+             mVideoRenderer->unlockFrameBuffer(frameBuffer, gotPicture);
++            //g_shouldLogCallbacks = false;
+ 
+             // debug: we can remove "mCallback->frameReady(picTimestamp)" from render thread and move it here 
+             llong picTimestamp = 0;
+             if (mVideoRenderer->getNextDisplayTimestamp(picTimestamp)) {
++               // debug: 40 ms appears to be the magic number
++               // todo: understand better
++               //mCallback->updatePlaybackPosition(picTimestamp - 40);
++               // debug: Difference with PTS appears to be 500 ms
++               mCallback->updatePlaybackPosition(pSampleAttr->getPTS() - 500);
++               fprintf(stderr, "SANDER potential pibTimestamp: %lld, media timestamp: %lld\n", picTimestamp, pSampleAttr->getPTS());
+                picTimestamp += ESPlayerConstants::VIDEO_REN_PTS_TWEAK;
+                mCallback->frameReady(picTimestamp);
+             }
+@@ -706,7 +723,8 @@ void VideoESPlayerNative::rendererTask()
+ 
+             mVideoRenderer->displayFrame();
+             NTRACE(TRACE_MEDIAPLAYBACK, "[%d] VideoESPlayerNative::%s: updatePts when PAUSED at %lld", mPipelineId, __func__, picTimestamp);
+-            mCallback->updatePlaybackPosition(picTimestamp);
++            // debug: this line can be removed
++            //mCallback->updatePlaybackPosition(picTimestamp);
+         }
+ 
+         llong refTimestamp = mPlaybackGroup->getReferenceClock()->getCurrPresentationTime();
+@@ -729,7 +747,9 @@ void VideoESPlayerNative::rendererTask()
+                 Thread::sleep(WAIT_FOR_NEXT_FRAME);
+             } else {
+                 mPlaybackGroup->getReferenceClock()->updateVideoPresentationTime(picTimestamp);
+-                mCallback->updatePlaybackPosition(picTimestamp);
++                // debug: this line can't be removed
++                fprintf(stderr, "SANDER actual pibTimestamp: %lld\n", picTimestamp);
++                //mCallback->updatePlaybackPosition(picTimestamp);
+             }
+             continue;
+         }
+@@ -926,6 +946,8 @@ bool VideoESPlayerNative::updateTexture(void * v, int * width, int * height, boo
+ 
+ bool VideoESPlayerNative::setRenderStartPosition(const Ticks& pts, const Ticks& idrPts)
+ {
++    // debug: maybe here straight away say that we are frameReady?
++
+     NTRACE(TRACE_MEDIAPLAYBACK, "[%d] VideoESPlayerNative::%s pts=%lld idrPts=%lld",
+                mPipelineId, __func__, pts.value(Ticks::RES_1KHZ), idrPts.value(Ticks::RES_1KHZ));
+ 
+-- 
+2.17.1
+

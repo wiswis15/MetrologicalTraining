@@ -1,0 +1,225 @@
+From be246b3cadef4bba663b941f520e1fafed9dfcc8 Mon Sep 17 00:00:00 2001
+From: Sander van der Maar <sandervandermaar@gmail.com>
+Date: Fri, 25 May 2018 11:45:02 +0200
+Subject: [PATCH 04/10] Adds controllable tracing to callback object
+
+---
+ .../MediaSourceESPlayerCallback.cpp           | 57 +++++++++++--------
+ 1 file changed, 33 insertions(+), 24 deletions(-)
+
+diff --git a/netflix/src/nrd/PlaybackDevice/MediaSourceESPlayerCallback.cpp b/netflix/src/nrd/PlaybackDevice/MediaSourceESPlayerCallback.cpp
+index af4ec61c..b0dfd1d6 100644
+--- a/netflix/src/nrd/PlaybackDevice/MediaSourceESPlayerCallback.cpp
++++ b/netflix/src/nrd/PlaybackDevice/MediaSourceESPlayerCallback.cpp
+@@ -8,9 +8,18 @@ using namespace netflix;
+ using namespace netflix::device;
+ using namespace netflix::device::esplayer;
+ 
++volatile bool g_shouldLogCallbacks = false;
++
++#define TRACE_CALL() \
++{ \
++  if (g_shouldLogCallbacks) \
++     fprintf(stderr, "SANDER %s:%d: %s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__); \
++}
++
++//#define TRACE_CALL() {}
+ 
+ MediaSourcePlaybackDevice::ESPlayerCallback::~ESPlayerCallback()
+-{
++{TRACE_CALL();
+ }
+ 
+ MediaSourcePlaybackDevice::ESPlayerCallback::ESPlayerCallback(MediaSourcePlaybackDevice& playbackDevice,
+@@ -21,12 +30,12 @@ MediaSourcePlaybackDevice::ESPlayerCallback::ESPlayerCallback(MediaSourcePlaybac
+     mUnderflowReported(false),
+     mPlaybackComplete(false),
+     mMutex(ESP_CALLBACK_MUTEX, "ESPlayer Callback Mutex")
+-{
++{TRACE_CALL();
+ }
+ 
+ esplayer::Status
+ MediaSourcePlaybackDevice::ESPlayerCallback::getNextMediaSample(esplayer::ISampleWriter& writer)
+-{
++{TRACE_CALL();
+     //ScopedMutex cs(mMutex);
+ 
+     std::shared_ptr<mediacontrol::NrdpMediaSource> mediaSource = mMediaSourcePlaybackDevice.getMediaSource().lock();
+@@ -56,7 +65,7 @@ MediaSourcePlaybackDevice::ESPlayerCallback::getNextMediaSample(esplayer::ISampl
+ esplayer::Status
+ MediaSourcePlaybackDevice::ESPlayerCallback::getNextMediaSampleSize(uint32_t& sampleSize,
+                                                                     uint32_t viewNum)
+-{
++{TRACE_CALL();
+     esplayer::Status status = OK;
+ 
+     // Since mDisabled is set by the pumping thread and this is a device thread,
+@@ -86,7 +95,7 @@ MediaSourcePlaybackDevice::ESPlayerCallback::getNextMediaSampleSize(uint32_t& sa
+ esplayer::Status
+ MediaSourcePlaybackDevice::ESPlayerCallback::getNextMediaSampleTimestamps(llong& dts,
+                                                                           llong& pts)
+-{
++{TRACE_CALL();
+     esplayer::Status status = OK;
+ 
+     // Since mDisabled is set by the pumping thread and this is a device thread,
+@@ -112,7 +121,7 @@ MediaSourcePlaybackDevice::ESPlayerCallback::getNextMediaSampleTimestamps(llong&
+ }
+ 
+ void MediaSourcePlaybackDevice::ESPlayerCallback::frameReady(const llong& timestamp)
+-{
++{TRACE_CALL();
+     ScopedMutex cs(mMutex);
+ 
+     if(!mDisabled)
+@@ -130,7 +139,7 @@ void MediaSourcePlaybackDevice::ESPlayerCallback::frameReady(const llong& timest
+ }
+ 
+ void MediaSourcePlaybackDevice::ESPlayerCallback::updatePlaybackPosition(const llong& timestamp)
+-{
++{TRACE_CALL();
+     ScopedMutex cs(mMutex);
+ 
+     if(!mDisabled)
+@@ -148,7 +157,7 @@ void MediaSourcePlaybackDevice::ESPlayerCallback::updatePlaybackPosition(const l
+ }
+ 
+ void MediaSourcePlaybackDevice::ESPlayerCallback::reportUnderflow()
+-{
++{TRACE_CALL();
+     ScopedMutex cs(mMutex);
+ 
+     if(!mDisabled)
+@@ -167,19 +176,19 @@ void MediaSourcePlaybackDevice::ESPlayerCallback::reportUnderflow()
+ }
+ 
+ void MediaSourcePlaybackDevice::ESPlayerCallback::resetUnderflowReported()
+-{
++{TRACE_CALL();
+     ScopedMutex cs(mMutex);
+     mUnderflowReported = false;
+ }
+ 
+ bool MediaSourcePlaybackDevice::ESPlayerCallback::reportUnderflowReceived()
+-{
++{TRACE_CALL();
+     ScopedMutex cs(mMutex);
+     return mUnderflowReported;
+ }
+ 
+ void MediaSourcePlaybackDevice::ESPlayerCallback::playbackCompleted()
+-{
++{TRACE_CALL();
+     ScopedMutex cs(mMutex);
+     if(!mDisabled)
+     {
+@@ -195,13 +204,13 @@ void MediaSourcePlaybackDevice::ESPlayerCallback::playbackCompleted()
+ }
+ 
+ bool MediaSourcePlaybackDevice::ESPlayerCallback::playbackCompletedReceived()
+-{
++{TRACE_CALL();
+     ScopedMutex cs(mMutex);
+     return mPlaybackComplete;
+ }
+ 
+ void MediaSourcePlaybackDevice::ESPlayerCallback::resetPlaybackCompleted()
+-{
++{TRACE_CALL();
+     ScopedMutex cs(mMutex);
+     mPlaybackComplete = false;
+ }
+@@ -209,7 +218,7 @@ void MediaSourcePlaybackDevice::ESPlayerCallback::resetPlaybackCompleted()
+ void MediaSourcePlaybackDevice::ESPlayerCallback::reportError(esplayer::Status errorCategory,
+                                                               ullong errorCode,
+                                                               const std::string& errorMessage)
+-{
++{TRACE_CALL();
+     Log::error(TRACE_MEDIAPLAYBACK, "MediaSourcePlaybackDevice::ESPlayerCallback: Stream player reports "
+                "error. MediaType: %s, category: %d, code: %llx, message: %s",
+                mMediaType == MEDIA_AUDIO ? "audio" : "video",
+@@ -220,14 +229,14 @@ void MediaSourcePlaybackDevice::ESPlayerCallback::reportError(esplayer::Status e
+ }
+ 
+ void MediaSourcePlaybackDevice::ESPlayerCallback::reportError(IDeviceError err)
+-{
++{TRACE_CALL();
+     reportError(err.getCategoryCode(),
+                 err.getDeviceSpecificErrorCode(),
+                 err.getDeviceSpecificErrorInfoStr());
+ }
+ 
+ void MediaSourcePlaybackDevice::ESPlayerCallback::reportError(NFErr err)
+-{
++{TRACE_CALL();
+     std::shared_ptr<const NFError> error = err.find(NFErr_PlaybackDeviceError);
+     if( error.get()){
+         const std::shared_ptr<const IDeviceError> derr = std::static_pointer_cast<const IDeviceError>(error);
+@@ -241,13 +250,13 @@ void MediaSourcePlaybackDevice::ESPlayerCallback::reportError(NFErr err)
+ }
+ 
+ void MediaSourcePlaybackDevice::ESPlayerCallback::beginFlush()
+-{
++{TRACE_CALL();
+     ScopedMutex cs(mMutex);
+     mDisabled = true;
+ }
+ 
+ void MediaSourcePlaybackDevice::ESPlayerCallback::endFlush()
+-{
++{TRACE_CALL();
+     ScopedMutex cs(mMutex);
+     mDisabled = true;
+     assert(mDisabled == true);
+@@ -257,17 +266,17 @@ void MediaSourcePlaybackDevice::ESPlayerCallback::endFlush()
+ }
+ 
+ MediaType MediaSourcePlaybackDevice::ESPlayerCallback::getMediaType()
+-{
++{TRACE_CALL();
+     return mMediaType;
+ }
+ void MediaSourcePlaybackDevice::ESPlayerCallback::disable()
+-{
++{TRACE_CALL();
+     ScopedMutex cs(mMutex);
+     mDisabled = true;
+ }
+ 
+ void MediaSourcePlaybackDevice::ESPlayerCallback::enable()
+-{
++{TRACE_CALL();
+     ScopedMutex cs(mMutex);
+     mDisabled = false;
+ }
+@@ -276,7 +285,7 @@ void MediaSourcePlaybackDevice::ESPlayerCallback::updateDecodingStats(int numDec
+                                                                       int numSkipped,
+                                                                       int numReducedQualityDecodes,
+                                                                       int numErrors)
+-{
++{TRACE_CALL();
+     ScopedMutex cs(mMutex);
+ 
+     if(numDecoded != STAT_NOT_SET) {
+@@ -315,7 +324,7 @@ void MediaSourcePlaybackDevice::ESPlayerCallback::updateDecodingStats(int numDec
+ void MediaSourcePlaybackDevice::ESPlayerCallback::updateRenderingStats(int numRendered,
+                                                                        int numDropped,
+                                                                        int numErrors)
+-{
++{TRACE_CALL();
+     ScopedMutex cs(mMutex);
+ 
+     if(numRendered != STAT_NOT_SET) {
+@@ -344,7 +353,7 @@ void MediaSourcePlaybackDevice::ESPlayerCallback::updateRenderingStats(int numRe
+ }
+ 
+ void MediaSourcePlaybackDevice::ESPlayerCallback::getPlaybackQualityStats(IPlaybackDevice::PlaybackQualityStats& stats)
+-{
++{TRACE_CALL();
+     ScopedMutex cs(mMutex);
+ 
+     stats = mStatTotals;
+-- 
+2.17.1
+

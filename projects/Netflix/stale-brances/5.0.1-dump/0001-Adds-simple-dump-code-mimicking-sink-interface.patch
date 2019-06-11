@@ -1,0 +1,104 @@
+From 844aa6304a0e025f97e98313207df4761bc5b963 Mon Sep 17 00:00:00 2001
+From: Sander van der Maar <sandervandermaar@gmail.com>
+Date: Thu, 24 May 2018 16:05:55 +0200
+Subject: [PATCH 01/10] Adds simple dump code, mimicking sink interface
+
+---
+ partner/dpi/reference/AudioESPlayerNative.cpp | 7 ++++++-
+ partner/dpi/reference/AudioESPlayerNative.h   | 2 ++
+ partner/dpi/reference/VideoESPlayerNative.cpp | 8 +++++++-
+ partner/dpi/reference/VideoESPlayerNative.h   | 2 ++
+ 4 files changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/partner/dpi/reference/AudioESPlayerNative.cpp b/partner/dpi/reference/AudioESPlayerNative.cpp
+index efeee4f5..2905fb76 100644
+--- a/partner/dpi/reference/AudioESPlayerNative.cpp
++++ b/partner/dpi/reference/AudioESPlayerNative.cpp
+@@ -46,6 +46,8 @@ NFErr AudioESPlayerNative::init(const struct StreamPlayerInitData& initData,
+                                 std::shared_ptr<IESPlayerCallback> callback,
+                                 PlaybackGroupNative* playbackGroup)
+ {
++    dumpFile = fopen("/tmp/netflix-dump-audio.bin", "wb");
++
+     NFErr err;
+     ullong deviceSpecificErrorCode = 0;
+     ESPlayerNative::init(initData, callback, playbackGroup);
+@@ -354,6 +356,9 @@ void AudioESPlayerNative::decoderTask()
+                    , mPipelineId, __func__);
+             return;
+         }
++        
++        fwrite(mSampleWriter->getBuffer(), mSampleWriter->getSampleSize(), 1, dumpFile);
++        fflush(dumpFile);
+ 
+         if(mAudioDecoder->decode(pSampleAttr,
+                                  mSampleWriter->getBuffer(),
+@@ -546,4 +551,4 @@ bool AudioESPlayerNative::setRenderStartPosition(const Ticks& pts, const Ticks&)
+     mStartRenderingFromPtsSet = true;
+     mStartRenderingFromPts = pts;
+     return true;
+-}
+\ No newline at end of file
++}
+diff --git a/partner/dpi/reference/AudioESPlayerNative.h b/partner/dpi/reference/AudioESPlayerNative.h
+index 92e1e9b4..971ac587 100644
+--- a/partner/dpi/reference/AudioESPlayerNative.h
++++ b/partner/dpi/reference/AudioESPlayerNative.h
+@@ -117,6 +117,8 @@ private:
+     // Discard any audio frames < this value
+     bool  mStartRenderingFromPtsSet;
+     Ticks mStartRenderingFromPts;
++    
++    FILE * dumpFile;
+ };
+ 
+ } // namespace esplayer
+diff --git a/partner/dpi/reference/VideoESPlayerNative.cpp b/partner/dpi/reference/VideoESPlayerNative.cpp
+index 97c1b65a..664ce9fa 100644
+--- a/partner/dpi/reference/VideoESPlayerNative.cpp
++++ b/partner/dpi/reference/VideoESPlayerNative.cpp
+@@ -77,7 +77,8 @@ VideoESPlayerNative::VideoESPlayerNative() : mCurrent3DFormat(NOT_3D),
+                                              mFileDumping(false),
+                                              mFileDumpingOnlyGop(false),
+                                              mFileDumpingOnlyIdr(false),
+-                                             mFp(NULL)
++                                             mFp(NULL),
++                                             dumpFile(NULL)
+ {
+     if (sConfiguration->videoFileDump == "all") {
+         mFileDumping = true;
+@@ -112,6 +113,8 @@ NFErr VideoESPlayerNative::init(const struct StreamPlayerInitData& initData,
+                                 PlaybackGroupNative *playbackGroup)
+ 
+ {
++    dumpFile = fopen("/tmp/netflix-dump-video.bin", "wb");
++
+     NFErr err;
+     ullong deviceSpecificErrorCode;
+ 
+@@ -403,6 +406,9 @@ void VideoESPlayerNative::decoderTask()
+             Thread::sleep(WAIT_FOR_VIDEO_DATA);
+             continue;
+         }
++        
++        fwrite(mSampleWriter->getBuffer(), mSampleWriter->getSampleSize(), 1, dumpFile);
++        fflush(dumpFile);
+ 
+         // Lock a frame-buffer, decode the access-unit and write the decoded
+         // picture into the frame-buffer. The decoder may or may not output a
+diff --git a/partner/dpi/reference/VideoESPlayerNative.h b/partner/dpi/reference/VideoESPlayerNative.h
+index 2d02b70e..9997b156 100644
+--- a/partner/dpi/reference/VideoESPlayerNative.h
++++ b/partner/dpi/reference/VideoESPlayerNative.h
+@@ -133,6 +133,8 @@ private:
+     bool mFileDumpingOnlyIdr;
+     std::string mFilename;
+     FILE* mFp;
++    
++    FILE * dumpFile;
+ };
+ 
+ } // esplayer
+-- 
+2.17.1
+

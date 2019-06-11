@@ -1,0 +1,85 @@
+From af56ac672f69f8130f6314b411f8baaa095f7679 Mon Sep 17 00:00:00 2001
+From: Sander van der Maar <sandervandermaar@gmail.com>
+Date: Fri, 25 May 2018 16:19:24 +0200
+Subject: [PATCH 10/10] Disables some more code in rendering thread
+
+---
+ partner/dpi/reference/VideoESPlayerNative.cpp | 33 +++----------------
+ 1 file changed, 4 insertions(+), 29 deletions(-)
+
+diff --git a/partner/dpi/reference/VideoESPlayerNative.cpp b/partner/dpi/reference/VideoESPlayerNative.cpp
+index be0499b2..0ccd36cf 100644
+--- a/partner/dpi/reference/VideoESPlayerNative.cpp
++++ b/partner/dpi/reference/VideoESPlayerNative.cpp
+@@ -664,10 +664,6 @@ void VideoESPlayerNative::rendererTask()
+     
+     while(closeThreadsFlagIsSet() == false)
+     {
+-        //mVideoRenderer->completeRender();
+-        //updateTransition();
+-
+-
+         if (mVideoRenderer->getFlushState() != FLUSH_OFF) {
+             if (mVideoRenderer->getFlushState() == FLUSH_BEGIN) {
+                 mVideoRenderer->flushFrameBufferQueue();
+@@ -685,23 +681,15 @@ void VideoESPlayerNative::rendererTask()
+         mVideoRenderer->setInputExhausted(false);
+         picTimestamp += ESPlayerConstants::VIDEO_REN_PTS_TWEAK;
+ 
++/*
+         const bool isFrameReady = mStartRenderingFromPtsSet.load() &&
+                                   (picTimestamp != INVALID_TIMESTAMP) &&
+                                   (picTimestamp >= static_cast<llong>(mStartRenderingFromPts.value(Ticks::RES_1KHZ))) &&
+                                   (mPlaybackGroup->getReferenceClock()->getSpeed() == IPlaybackDevice::PAUSED_SPEED);
+ 
+         const bool doPeekFrame = isFrameReady && mStartRenderingInPause;
+-
+-        // debug: this section can be removed, now we are setting mFrameReady in decoder thread
+-/*
+-        if (isFrameReady) {
+-            // TODO: This should be fired when both AUDIO and VIDEO are ready.
+-            // debug: this line is needed
+-            //mCallback->frameReady(picTimestamp);
+-        }
+-
+-        mFrameReady.store(isFrameReady);
+-*/        
++*/
++        const bool doPeekFrame = true;
+ 
+         if (doPeekFrame) {
+             if (mFirstRenderedPts == INVALID_TIMESTAMP) {
+@@ -711,8 +699,6 @@ void VideoESPlayerNative::rendererTask()
+ 
+             mVideoRenderer->displayFrame();
+             NTRACE(TRACE_MEDIAPLAYBACK, "[%d] VideoESPlayerNative::%s: updatePts when PAUSED at %lld", mPipelineId, __func__, picTimestamp);
+-            // debug: this line can be removed
+-            //mCallback->updatePlaybackPosition(picTimestamp);
+         }
+ 
+         llong refTimestamp = mPlaybackGroup->getReferenceClock()->getCurrPresentationTime();
+@@ -723,20 +709,9 @@ void VideoESPlayerNative::rendererTask()
+         }
+         if ((picTimestamp == INVALID_TIMESTAMP) || (refTimestamp >= picTimestamp)) {
+             mVideoRenderer->removeFrame();
+-            /*
+-            if (mFirstRenderedPts == INVALID_TIMESTAMP) {
+-                mFirstRenderedPts = picTimestamp;
+-                mVideoDecoder->setVideoInformation(mFirstFragmentPts, mStartRenderingFromPts.value(Ticks::RES_1KHZ), mFirstRenderedPts);
+-            }
+-            */
+             mVideoRenderer->displayFrame();
+             handleFrameDropReporting(refTimestamp, picTimestamp);
+-/*
+-            if(picTimestamp == INVALID_TIMESTAMP) {
+-                Thread::sleep(WAIT_FOR_NEXT_FRAME);
+-            } else {*/
+-                mPlaybackGroup->getReferenceClock()->updateVideoPresentationTime(picTimestamp);
+-            //}
++            mPlaybackGroup->getReferenceClock()->updateVideoPresentationTime(picTimestamp);
+             continue;
+         }
+ 
+-- 
+2.17.1
+

@@ -1,0 +1,66 @@
+From 8d3ff5ef770e11e4a90bbd1006bcdf5e4e8487d2 Mon Sep 17 00:00:00 2001
+From: Sander van der Maar <sandervandermaar@gmail.com>
+Date: Fri, 25 May 2018 14:40:06 +0200
+Subject: [PATCH 08/10] Disables some stuff in the video render thread
+
+---
+ partner/dpi/reference/VideoESPlayerNative.cpp | 19 +++++++------------
+ 1 file changed, 7 insertions(+), 12 deletions(-)
+
+diff --git a/partner/dpi/reference/VideoESPlayerNative.cpp b/partner/dpi/reference/VideoESPlayerNative.cpp
+index b1f59d6b..70ae7cf5 100644
+--- a/partner/dpi/reference/VideoESPlayerNative.cpp
++++ b/partner/dpi/reference/VideoESPlayerNative.cpp
+@@ -568,6 +568,7 @@ void VideoESPlayerNative::decoderTask()
+                // debug: Difference with PTS appears to be 500 ms
+                mCallback->updatePlaybackPosition(pSampleAttr->getPTS() - 500);
+                mCallback->frameReady(pSampleAttr->getPTS() - 460);
++               mFrameReady.store(true);
+             //}
+             
+             // debug this line can be removed
+@@ -660,10 +661,12 @@ void VideoESPlayerNative::rendererTask()
+     mPrevPicTimestamp = INVALID_TIMESTAMP;
+     mPrevRefTimestamp = INVALID_TIMESTAMP;
+ 
++    
+     while(closeThreadsFlagIsSet() == false)
+     {
+-        mVideoRenderer->completeRender();
+-        updateTransition();
++        //mVideoRenderer->completeRender();
++        //updateTransition();
++
+ 
+         if (mVideoRenderer->getFlushState() != FLUSH_OFF) {
+             if (mVideoRenderer->getFlushState() == FLUSH_BEGIN) {
+@@ -696,17 +699,8 @@ void VideoESPlayerNative::rendererTask()
+ 
+         const bool doPeekFrame = isFrameReady && mStartRenderingInPause;
+ 
++        // debug: this section can be removed, now we are setting mFrameReady in decoder thread
+ /*
+-        NTRACE(TRACE_MEDIAPLAYBACK, "[%d] VideoESPlayerNative::%s: displayPausedPicture=%d mStartRenderingFromPtsSet=%d mStartRenderingInPause=%d picTimestamp=%lld mStartRenderingFromPts=%lld speed=%d",
+-                 mPipelineId, __func__,
+-                 displayPausedPicture,
+-                 mStartRenderingFromPtsSet.load(),
+-                 mStartRenderingInPause,
+-                 picTimestamp,
+-                 mStartRenderingFromPts.value(Ticks::RES_1KHZ),
+-                 mPlaybackGroup->getReferenceClock()->getSpeed());
+-*/
+-
+         if (isFrameReady) {
+             // TODO: This should be fired when both AUDIO and VIDEO are ready.
+             // debug: this line is needed
+@@ -714,6 +708,7 @@ void VideoESPlayerNative::rendererTask()
+         }
+ 
+         mFrameReady.store(isFrameReady);
++*/        
+ 
+         if (doPeekFrame) {
+             if (mFirstRenderedPts == INVALID_TIMESTAMP) {
+-- 
+2.17.1
+

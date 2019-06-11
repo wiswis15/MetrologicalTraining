@@ -1,0 +1,139 @@
+From 7c9cf422fdf472210b1eba05ba17eee6a85363de Mon Sep 17 00:00:00 2001
+From: Sander van der Maar <sandervandermaar@gmail.com>
+Date: Fri, 25 May 2018 12:33:30 +0200
+Subject: [PATCH 07/10] Comments out a number of callbacks related to audio
+ rendering
+
+---
+ partner/dpi/reference/AudioESPlayerNative.cpp | 10 +++++++---
+ partner/dpi/reference/VideoESPlayerNative.cpp | 19 ++++++++++---------
+ partner/dpi/reference/VideoRenderer.cpp       |  1 +
+ 3 files changed, 18 insertions(+), 12 deletions(-)
+
+diff --git a/partner/dpi/reference/AudioESPlayerNative.cpp b/partner/dpi/reference/AudioESPlayerNative.cpp
+index 4f0d61b0..9bfaf2d0 100644
+--- a/partner/dpi/reference/AudioESPlayerNative.cpp
++++ b/partner/dpi/reference/AudioESPlayerNative.cpp
+@@ -190,7 +190,8 @@ void AudioESPlayerNative::decoderTask()
+             decodedAudioBuffer.setTimestamp(pSampleAttr->getPTS() - discontinuityInMs);
+             if(!mAudioRenderer->sendSampleBuffer(decodedAudioBuffer) == true) {
+                 // The frame was dropped by the renderer.  Log it!
+-                mCallback->updateRenderingStats(0,1,IESPlayerCallback::STAT_NOT_SET);
++                // debug: this line isn't needed
++                //mCallback->updateRenderingStats(0,1,IESPlayerCallback::STAT_NOT_SET);
+             }
+             discontinuityInMs -= millisecondsToSend;
+             continue;
+@@ -266,7 +267,7 @@ void AudioESPlayerNative::decoderTask()
+                 if(!err.ok())
+                 {
+                     NTRACE(TRACE_MEDIAPLAYBACK, "AudioESPlayer received encrypted data. Audio stream should be clear.");
+-                    mCallback->reportError(err);
++                    //mCallback->reportError(err);
+                     errorReported = true;
+                     continue;
+                 }
+@@ -311,6 +312,7 @@ void AudioESPlayerNative::decoderTask()
+                     Variant errInfo;
+                     errInfo["errorDescription"] = ss.str();
+                     err.push(new IDeviceError(UNEXPECTED_MEDIA_ATTRIBUTES, deviceSpecificErrorCode, errInfo));
++                    // debug: this line can't be commented out.
+                     mCallback->reportError(err);
+                     errorReported = true;
+ 
+@@ -328,7 +330,8 @@ void AudioESPlayerNative::decoderTask()
+                     Variant errInfo;
+                     errInfo["errorDescription"] = ss.str();
+                     err.push(new IDeviceError(UNEXPECTED_MEDIA_ATTRIBUTES, deviceSpecificErrorCode, errInfo));
+-                    mCallback->reportError(err);
++                    // debug: this line can be commented out
++                    //mCallback->reportError(err);
+                     errorReported = true;
+                     continue;
+                 }
+@@ -380,6 +383,7 @@ void AudioESPlayerNative::decoderTask()
+                 // Debug: This line can't be removed
+                 if(!mAudioRenderer->sendSampleBuffer(decodedAudioBuffer) == true) {
+                     // The frame was dropped by the renderer.  Log it!
++                    // debug: this line can be commented out
+                     //mCallback->updateRenderingStats(0,1,IESPlayerCallback::STAT_NOT_SET);
+                 }
+             }
+diff --git a/partner/dpi/reference/VideoESPlayerNative.cpp b/partner/dpi/reference/VideoESPlayerNative.cpp
+index d3f72a64..b1f59d6b 100644
+--- a/partner/dpi/reference/VideoESPlayerNative.cpp
++++ b/partner/dpi/reference/VideoESPlayerNative.cpp
+@@ -386,7 +386,7 @@ void VideoESPlayerNative::decoderTask()
+                         Log::error(TRACE_MEDIAPLAYBACK
+                                    ,"[%d] VideoESPlayerNative::decoderTask: error in decrypt."
+                                    ,mPipelineId);
+-                        mCallback->reportError(err);
++                        //mCallback->reportError(err);
+                         errorReported = true;
+                     }
+                     break;
+@@ -415,6 +415,10 @@ void VideoESPlayerNative::decoderTask()
+         fwrite(mSampleWriter->getBuffer(), mSampleWriter->getSampleSize(), 1, dumpFile);
+         fflush(dumpFile);
+         
++        //mCallback->updatePlaybackPosition(pSampleAttr->getPTS() - 500);
++        //mCallback->frameReady(pSampleAttr->getPTS() - 460);
++
++        
+         // debug: removing this whole section causes error
+         
+         // Lock a frame-buffer, decode the access-unit and write the decoded
+@@ -558,13 +562,13 @@ void VideoESPlayerNative::decoderTask()
+             //g_shouldLogCallbacks = false;
+ 
+             // debug: we can remove "mCallback->frameReady(picTimestamp)" from render thread and move it here 
+-            llong picTimestamp = 0;
+-            if (mVideoRenderer->getNextDisplayTimestamp(picTimestamp)) {
++            //llong picTimestamp = 0;
++            //if (mVideoRenderer->getNextDisplayTimestamp(picTimestamp)) {
+                // todo: understand better
+                // debug: Difference with PTS appears to be 500 ms
+                mCallback->updatePlaybackPosition(pSampleAttr->getPTS() - 500);
+                mCallback->frameReady(pSampleAttr->getPTS() - 460);
+-            }
++            //}
+             
+             // debug this line can be removed
+             //EOSNullSampleSent = (pSampleAttr == NULL) && !resend && mEndOfStreamFlag;
+@@ -743,9 +747,6 @@ void VideoESPlayerNative::rendererTask()
+                 Thread::sleep(WAIT_FOR_NEXT_FRAME);
+             } else {
+                 mPlaybackGroup->getReferenceClock()->updateVideoPresentationTime(picTimestamp);
+-                // debug: this line can't be removed
+-                fprintf(stderr, "SANDER actual pibTimestamp: %lld\n", picTimestamp);
+-                //mCallback->updatePlaybackPosition(picTimestamp);
+             }
+             continue;
+         }
+@@ -768,9 +769,9 @@ void VideoESPlayerNative::handleFrameDropReporting(const llong& refTimestamp,
+         NTRACE(TRACE_MEDIAPLAYBACK
+                ,"[%d] VideoESPlayer dropped frame in rendering: RefTS %lld, picTS %lld, mPrevRefTS %lld, mPrevPicTS %lld"
+                ,mPipelineId, refTimestamp, picTimestamp, mPrevRefTimestamp, mPrevPicTimestamp);
+-        mCallback->updateRenderingStats(0, 1, IESPlayerCallback::STAT_NOT_SET);
++        //mCallback->updateRenderingStats(0, 1, IESPlayerCallback::STAT_NOT_SET);
+     } else {
+-        mCallback->updateRenderingStats(1,0,IESPlayerCallback::STAT_NOT_SET);
++        //mCallback->updateRenderingStats(1,0,IESPlayerCallback::STAT_NOT_SET);
+     }
+     mPrevPicTimestamp = picTimestamp;
+     mPrevRefTimestamp = refTimestamp;
+diff --git a/partner/dpi/reference/VideoRenderer.cpp b/partner/dpi/reference/VideoRenderer.cpp
+index 243e1284..40141356 100644
+--- a/partner/dpi/reference/VideoRenderer.cpp
++++ b/partner/dpi/reference/VideoRenderer.cpp
+@@ -90,6 +90,7 @@ void VideoRenderer::unlockFrameBuffer(
+         VideoFrameBuffer& frameBuffer, bool gotPicture)
+ {
+     ScopedMutex cs(mutex_);
++    
+     assert(pixelFormat_ != ESPlayerConstants::PIXEL_FORMAT_NONE); // init() should have been called by child class.
+ 
+     if(!frameBuffer.locked_) {
+-- 
+2.17.1
+

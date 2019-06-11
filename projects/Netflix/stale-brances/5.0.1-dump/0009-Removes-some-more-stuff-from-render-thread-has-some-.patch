@@ -1,0 +1,58 @@
+From 5377fee532a7c93de35fbf9cd1d846f05ae4d2a8 Mon Sep 17 00:00:00 2001
+From: Sander van der Maar <sandervandermaar@gmail.com>
+Date: Fri, 25 May 2018 14:45:49 +0200
+Subject: [PATCH 09/10] Removes some more stuff from render thread, has some
+ choppiness
+
+---
+ partner/dpi/reference/VideoESPlayerNative.cpp | 16 +++++-----------
+ 1 file changed, 5 insertions(+), 11 deletions(-)
+
+diff --git a/partner/dpi/reference/VideoESPlayerNative.cpp b/partner/dpi/reference/VideoESPlayerNative.cpp
+index 70ae7cf5..be0499b2 100644
+--- a/partner/dpi/reference/VideoESPlayerNative.cpp
++++ b/partner/dpi/reference/VideoESPlayerNative.cpp
+@@ -682,13 +682,6 @@ void VideoESPlayerNative::rendererTask()
+             continue;
+         }
+ 
+-        if (!mVideoRenderer->getNextDisplayTimestamp(picTimestamp)) {
+-            mVideoRenderer->setInputExhausted(true);
+-            underflowReporter();
+-            Thread::sleep(WAIT_FOR_NEXT_FRAME);
+-            continue;
+-        }
+-
+         mVideoRenderer->setInputExhausted(false);
+         picTimestamp += ESPlayerConstants::VIDEO_REN_PTS_TWEAK;
+ 
+@@ -728,21 +721,22 @@ void VideoESPlayerNative::rendererTask()
+             Thread::sleep(WAIT_FOR_AVSYNC_MASTER);
+             continue;
+         }
+-
+         if ((picTimestamp == INVALID_TIMESTAMP) || (refTimestamp >= picTimestamp)) {
+             mVideoRenderer->removeFrame();
++            /*
+             if (mFirstRenderedPts == INVALID_TIMESTAMP) {
+                 mFirstRenderedPts = picTimestamp;
+                 mVideoDecoder->setVideoInformation(mFirstFragmentPts, mStartRenderingFromPts.value(Ticks::RES_1KHZ), mFirstRenderedPts);
+             }
++            */
+             mVideoRenderer->displayFrame();
+             handleFrameDropReporting(refTimestamp, picTimestamp);
+-
++/*
+             if(picTimestamp == INVALID_TIMESTAMP) {
+                 Thread::sleep(WAIT_FOR_NEXT_FRAME);
+-            } else {
++            } else {*/
+                 mPlaybackGroup->getReferenceClock()->updateVideoPresentationTime(picTimestamp);
+-            }
++            //}
+             continue;
+         }
+ 
+-- 
+2.17.1
+

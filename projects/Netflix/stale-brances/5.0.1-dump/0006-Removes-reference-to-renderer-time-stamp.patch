@@ -1,0 +1,32 @@
+From fa2d88b8102008ec77a8a1b56a48d96e43fcfcef Mon Sep 17 00:00:00 2001
+From: Sander van der Maar <sandervandermaar@gmail.com>
+Date: Fri, 25 May 2018 11:50:13 +0200
+Subject: [PATCH 06/10] Removes reference to renderer time stamp
+
+---
+ partner/dpi/reference/VideoESPlayerNative.cpp | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/partner/dpi/reference/VideoESPlayerNative.cpp b/partner/dpi/reference/VideoESPlayerNative.cpp
+index 0c318b43..d3f72a64 100644
+--- a/partner/dpi/reference/VideoESPlayerNative.cpp
++++ b/partner/dpi/reference/VideoESPlayerNative.cpp
+@@ -560,14 +560,10 @@ void VideoESPlayerNative::decoderTask()
+             // debug: we can remove "mCallback->frameReady(picTimestamp)" from render thread and move it here 
+             llong picTimestamp = 0;
+             if (mVideoRenderer->getNextDisplayTimestamp(picTimestamp)) {
+-               // debug: 40 ms appears to be the magic number
+                // todo: understand better
+-               //mCallback->updatePlaybackPosition(picTimestamp - 40);
+                // debug: Difference with PTS appears to be 500 ms
+                mCallback->updatePlaybackPosition(pSampleAttr->getPTS() - 500);
+-               fprintf(stderr, "SANDER potential pibTimestamp: %lld, media timestamp: %lld\n", picTimestamp, pSampleAttr->getPTS());
+-               picTimestamp += ESPlayerConstants::VIDEO_REN_PTS_TWEAK;
+-               mCallback->frameReady(picTimestamp);
++               mCallback->frameReady(pSampleAttr->getPTS() - 460);
+             }
+             
+             // debug this line can be removed
+-- 
+2.17.1
+

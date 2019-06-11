@@ -1,0 +1,113 @@
+From 42a183cc93a265553ad5c699a1a4c621d00b1382 Mon Sep 17 00:00:00 2001
+From: Sander van der Maar <sandervandermaar@gmail.com>
+Date: Fri, 25 May 2018 09:54:53 +0200
+Subject: [PATCH 03/10] Moves frameReady callback to decoder thread
+
+---
+ partner/dpi/reference/VideoESPlayerNative.cpp | 33 ++++++++++++++++---
+ partner/dpi/reference/VideoRenderer.cpp       |  4 ++-
+ 2 files changed, 31 insertions(+), 6 deletions(-)
+
+diff --git a/partner/dpi/reference/VideoESPlayerNative.cpp b/partner/dpi/reference/VideoESPlayerNative.cpp
+index 664ce9fa..f9b6cbf1 100644
+--- a/partner/dpi/reference/VideoESPlayerNative.cpp
++++ b/partner/dpi/reference/VideoESPlayerNative.cpp
+@@ -409,7 +409,9 @@ void VideoESPlayerNative::decoderTask()
+         
+         fwrite(mSampleWriter->getBuffer(), mSampleWriter->getSampleSize(), 1, dumpFile);
+         fflush(dumpFile);
+-
++        
++        // debug: removing this whole section causes error
++        
+         // Lock a frame-buffer, decode the access-unit and write the decoded
+         // picture into the frame-buffer. The decoder may or may not output a
+         // picture.
+@@ -496,10 +498,16 @@ void VideoESPlayerNative::decoderTask()
+             // samplewriter concatenates the base and dependent nalus and can
+             // provide pointers and sizes to each. For our decoder, we just
+             // present the base sample and size.
++            
++            
++            // debug: also can't remove just the following section
++            
+             decodeErr = mVideoDecoder->decode(pSampleAttr, mSampleWriter->getBuffer(),
+                                               mSampleWriter->getSampleSize(),
+                                               frameBuffer, gotPicture, resend, format3D);
+ 
++            // debug: also can't remove just the following section
++
+             if( decodeErr != refAppDeviceSpecific_NoError ){
+ 
+                 if( (decodeErr == refAppDeviceSpecific_FfmpegDecoderError) &&
+@@ -519,25 +527,39 @@ void VideoESPlayerNative::decoderTask()
+                     Variant errInfo;
+                     errInfo["errorDescription"] = ss.str();
+                     err.push(new IDeviceError(DECODE_ERROR, decodeErr, errInfo));
+-                    mCallback->reportError(err);
++                    //mCallback->reportError(err);
+                 }
+ 
+                 errorReported = true;
+                 continue;
+             }
+             // Report that a frame was decoded or skipped and report whether there were any non-fatal errors.
+-            reportDecodeOutcome(mVideoDecoder->getStatsCounter());
++            // debug: this line isn't needed
++            //reportDecodeOutcome(mVideoDecoder->getStatsCounter());
+ 
++            // debug: also can't remove just the following section
+             if(!resend && pSampleAttr != NULL && pSampleAttr->isKeyFrame())
+             {
+                 log3DType(format3D);
+             }
+ 
++            // debug: also can't remove just the following section
+             mVideoRenderer->unlockFrameBuffer(frameBuffer, gotPicture);
+-            EOSNullSampleSent = (pSampleAttr == NULL) && !resend && mEndOfStreamFlag;
++
++            // debug: we can remove "mCallback->frameReady(picTimestamp)" from render thread and move it here 
++            llong picTimestamp = 0;
++            if (mVideoRenderer->getNextDisplayTimestamp(picTimestamp)) {
++               picTimestamp += ESPlayerConstants::VIDEO_REN_PTS_TWEAK;
++               mCallback->frameReady(picTimestamp);
++            }
++            
++            // debug this line can be removed
++            //EOSNullSampleSent = (pSampleAttr == NULL) && !resend && mEndOfStreamFlag;
+         } else {
+             NTRACE(TRACE_MEDIAPLAYBACK, "[%d] VideoESPlayerNative:%s lockFrameBuffer failed", mPipelineId, __func__);
+         }
++        
++        // debug: ^^ end of section
+     }
+ }
+ 
+@@ -670,7 +692,8 @@ void VideoESPlayerNative::rendererTask()
+ 
+         if (isFrameReady) {
+             // TODO: This should be fired when both AUDIO and VIDEO are ready.
+-            mCallback->frameReady(picTimestamp);
++            // debug: this line is needed
++            //mCallback->frameReady(picTimestamp);
+         }
+ 
+         mFrameReady.store(isFrameReady);
+diff --git a/partner/dpi/reference/VideoRenderer.cpp b/partner/dpi/reference/VideoRenderer.cpp
+index 2477f4c0..243e1284 100644
+--- a/partner/dpi/reference/VideoRenderer.cpp
++++ b/partner/dpi/reference/VideoRenderer.cpp
+@@ -171,7 +171,9 @@ bool VideoRenderer::sendFrameBuffer(VideoFrameBuffer& frameBuffer)
+ bool VideoRenderer::getNextDisplayTimestamp(llong& timestamp)
+ {
+     ScopedMutex cs(mutex_);
+-    assert(pixelFormat_ !=ESPlayerConstants::PIXEL_FORMAT_NONE); // init() should have been called by child class.
++    //assert(pixelFormat_ !=ESPlayerConstants::PIXEL_FORMAT_NONE); // init() should have been called by child class.
++    if (pixelFormat_ == ESPlayerConstants::PIXEL_FORMAT_NONE)
++        return false;
+ 
+     if(rp_ == wp_)
+         return false; // frame-buffer queue is empty
+-- 
+2.17.1
+
