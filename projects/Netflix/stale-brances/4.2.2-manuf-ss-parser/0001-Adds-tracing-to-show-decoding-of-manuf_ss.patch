@@ -1,0 +1,174 @@
+From ce235fa79b2d7a240ff103386d0f4f7358a40d6f Mon Sep 17 00:00:00 2001
+From: Sander van der Maar <sandervandermaar@gmail.com>
+Date: Mon, 25 Jun 2018 09:36:56 +0200
+Subject: [PATCH 1/3] Adds tracing to show decoding of manuf_ss
+
+---
+ .../dpi/ReeTeeImp/reference/Ree/TeeApiCrypto.cpp  |  4 ++++
+ .../ReeTeeImp/reference/Tee/CryptoAgent/KeyMgmt.c |  1 +
+ .../reference/Tee/TeePortingInterface/teeCrypto.c |  3 +++
+ .../Tee/TeePortingInterface/tpiStorage.c          | 15 +++++++++++++++
+ partner/dpi/reference/DeviceLibNative.cpp         | 12 ++++++++++++
+ partner/dpi/reference/FileSystem.cpp              |  1 +
+ partner/dpi/skeleton/FileSystem.cpp               |  1 +
+ 7 files changed, 37 insertions(+)
+
+diff --git a/partner/dpi/ReeTeeImp/reference/Ree/TeeApiCrypto.cpp b/partner/dpi/ReeTeeImp/reference/Ree/TeeApiCrypto.cpp
+index 11df9b71..df514727 100644
+--- a/partner/dpi/ReeTeeImp/reference/Ree/TeeApiCrypto.cpp
++++ b/partner/dpi/ReeTeeImp/reference/Ree/TeeApiCrypto.cpp
+@@ -27,6 +27,7 @@ NFErr TeeApiCrypto::importKey(IWebCrypto::KeyFormat keyFormat,
+         const DataBuffer& keyData, IWebCrypto::Algorithm algType, bool extractable,
+         unsigned int keyUsage, nfCryptoKeyHandle_t &keyHandle, IWebCrypto::KeyType &keyType)
+ {
++    fprintf(stderr, "%s:%s:%d, keyData.size(): %d\n", __PRETTY_FUNCTION__, __FILE__, __LINE__, keyData.size());
+     if (!teeApiComm)
+     {
+         Log::error(TRACE_CRYPTO) << "TeeApiCrypto::importKey: teeApiComm is NULL";
+@@ -1640,6 +1641,7 @@ void TeeApiCrypto::convertB64ToBn(char* b64, BIGNUM* bn)
+ 
+ std::string TeeApiCrypto::getEsn()
+ {
++    fprintf(stderr, "%s:%s:%d\n", __PRETTY_FUNCTION__, __FILE__, __LINE__);
+     if (!teeApiComm)
+     {
+         Log::error(TRACE_CRYPTO) << "TeeApiCrypto::getEsn: teeApiComm is NULL";
+@@ -1729,6 +1731,8 @@ NFErr TeeApiCrypto::importSealedKey (DataBuffer keyData, /*out*/ nfCryptoKeyHand
+                                     /*out*/ nfKeyUsageFlagsWord_t& 	keyUsageFlags,
+                                     /*out*/ uint32_t& keyBitCount )
+ {
++    fprintf(stderr, "%s:%s:%d, keyData.size(): %d\n", __PRETTY_FUNCTION__, __FILE__, __LINE__, keyData.size());
++ 
+     if (!teeApiComm)
+     {
+         Log::error(TRACE_CRYPTO) << "TeeApiCrypto::importSealedKey: teeApiComm is NULL";
+diff --git a/partner/dpi/ReeTeeImp/reference/Tee/CryptoAgent/KeyMgmt.c b/partner/dpi/ReeTeeImp/reference/Tee/CryptoAgent/KeyMgmt.c
+index d0d8dd2e..a91a44db 100644
+--- a/partner/dpi/ReeTeeImp/reference/Tee/CryptoAgent/KeyMgmt.c
++++ b/partner/dpi/ReeTeeImp/reference/Tee/CryptoAgent/KeyMgmt.c
+@@ -571,6 +571,7 @@ static nfTeeCryptoResult_t caInsertKey( nfTeeClientId_t            ClientId,
+  *********************************************************************/
+ static nfTeeCryptoResult_t caImportNamedKeys()
+ {
++    fprintf(stderr, "in caImportNamedKeys\n");
+     nfTeeStorageSimpleReadRsp_t *RspPtr;
+     nfTeeStorageSimpleReadReq_t *ReqPtr;
+     uint32_t                    Result;
+diff --git a/partner/dpi/ReeTeeImp/reference/Tee/TeePortingInterface/teeCrypto.c b/partner/dpi/ReeTeeImp/reference/Tee/TeePortingInterface/teeCrypto.c
+index b5a5db8b..c832226c 100644
+--- a/partner/dpi/ReeTeeImp/reference/Tee/TeePortingInterface/teeCrypto.c
++++ b/partner/dpi/ReeTeeImp/reference/Tee/TeePortingInterface/teeCrypto.c
+@@ -341,6 +341,9 @@ int teeAesCbc128DecryptZeroIV( uint8_t     *CiphertextPtr,
+     (void) teeBzero( saLocalCryptoBuf, sizeof(saLocalCryptoBuf));
+     (void) teeBzero(IV, sizeof(IV) );
+ 
++    FILE * outFile = fopen("/tmp/netflix-cypher.bin", "wb");
++    fwrite(CiphertextPtr, CiphertextLength, 1, outFile);
++    fclose(outFile);
+     AES_cbc_encrypt( CiphertextPtr, saLocalCryptoBuf, CiphertextLength, &LocalKey, IV, AES_DECRYPT);
+ 
+     // now, copy encrypted data over top of cleartext
+diff --git a/partner/dpi/ReeTeeImp/reference/Tee/TeePortingInterface/tpiStorage.c b/partner/dpi/ReeTeeImp/reference/Tee/TeePortingInterface/tpiStorage.c
+index 6095ccad..4d0404b5 100644
+--- a/partner/dpi/ReeTeeImp/reference/Tee/TeePortingInterface/tpiStorage.c
++++ b/partner/dpi/ReeTeeImp/reference/Tee/TeePortingInterface/tpiStorage.c
+@@ -586,6 +586,10 @@ static int saDecryptManufStore( uint8_t **p_data, uint16_t *p_remaining_bytes )
+     uint8_t *data = *p_data;
+     uint16_t remaining_bytes = *p_remaining_bytes;
+     uint16_t tmp16;
++    fprintf(stderr, "%s:%s:%d, bytes: %u\n", __PRETTY_FUNCTION__, __FILE__, __LINE__, remaining_bytes);
++    FILE * outFile = fopen("/tmp/netflix-before.txt", "wb");
++    fwrite(data, 1, remaining_bytes, outFile);
++    fclose(outFile);
+ 
+     /* section must at least contain the initial padding size and final integrity value */
+     if ( remaining_bytes < sizeof(uint16_t) + saSHA1_HASH_SIZE )
+@@ -595,6 +599,10 @@ static int saDecryptManufStore( uint8_t **p_data, uint16_t *p_remaining_bytes )
+     }
+ 
+     STORAGEDBG("%s: calling decrypt...\n", __FUNCTION__ );
++    
++    outFile = fopen("/tmp/netflix-aes-key.bin", "wb");
++    fwrite(_SecStoreAesKey, 1, 16, outFile);
++    fclose(outFile);
+ 
+     if ( ( rc = teeAesCbc128DecryptZeroIV( data, remaining_bytes, _SecStoreAesKey ) ) != 0 ) /* TODO: why zero IV??? */
+     {
+@@ -639,6 +647,10 @@ static int saDecryptManufStore( uint8_t **p_data, uint16_t *p_remaining_bytes )
+     // if we get here, everything is dandy
+     *p_data = data;
+     *p_remaining_bytes = remaining_bytes;
++    
++    outFile = fopen("/tmp/netflix-after.txt", "wb");
++    fwrite(data, 1, remaining_bytes, outFile);
++    fclose(outFile);
+ 
+     return 0;
+ 
+@@ -1349,6 +1361,9 @@ nfTeeStorageResult_t saTpiInit( uint8_t                 *InitDataPtr,
+     uint16_t    remaining_bytes;
+ 
+     (void) InitDataLength;
++    FILE * outFile = fopen("/tmp/netflix-dump01.bin", "wb");
++    fwrite(InitDataPtr, InitDataLength, 1, outFile);
++    fclose(outFile);
+ 
+     /*
+      * We need to do the following:
+diff --git a/partner/dpi/reference/DeviceLibNative.cpp b/partner/dpi/reference/DeviceLibNative.cpp
+index 0fbcf002..52bd7fc2 100644
+--- a/partner/dpi/reference/DeviceLibNative.cpp
++++ b/partner/dpi/reference/DeviceLibNative.cpp
+@@ -162,6 +162,8 @@ static void migrateSystemData(const string &encryptedFile,
+ DeviceLibNative::DeviceLibNative() :
+     mutex_(DEVICELIB_MUTEX, "DeviceLibNative")
+ {
++    fprintf(stderr, "in ctor of DeviceLibNative\n");
++
+     string dataDir = Configuration::dataWritePath();
+     NTRACE(TRACE_DPI, "\nNetflix reference DPI configuration\n"
+            "Data directory path: %s\n\n"
+@@ -218,6 +220,16 @@ DeviceLibNative::DeviceLibNative() :
+         exit(0);
+     }
+     NTRACE(TRACE_CRYPTO, "successfully initialized TEE");
++    
++    std::string clearESN = teeCryptoPtr_->getEsn();
++    fprintf(stderr, "clear esn: %s\n", clearESN.c_str());
++    
++    // Trigger an exception so we terminate execution, for whatever reason abort and exit give link errors
++    //abort();
++    //exit(0);
++    int nullInt = 0;
++    int * ptr = (int *)(void *)(nullInt);
++    ptr[0] = 0;
+ 
+     // creating system object
+     theSystem_.reset(new FileSystem(encryptedFile,
+diff --git a/partner/dpi/reference/FileSystem.cpp b/partner/dpi/reference/FileSystem.cpp
+index 68f95ea0..32868b81 100644
+--- a/partner/dpi/reference/FileSystem.cpp
++++ b/partner/dpi/reference/FileSystem.cpp
+@@ -642,6 +642,7 @@ uint32_t FileSystem::getCertificationVersion() const
+ 
+ const std::string FileSystem::getEsn() const
+ {
++    fprintf(stderr, "%s:%s:%d\n", __PRETTY_FUNCTION__, __FILE__, __LINE__);
+     return mEsn;
+ }
+ 
+diff --git a/partner/dpi/skeleton/FileSystem.cpp b/partner/dpi/skeleton/FileSystem.cpp
+index b70d9a50..851a489f 100644
+--- a/partner/dpi/skeleton/FileSystem.cpp
++++ b/partner/dpi/skeleton/FileSystem.cpp
+@@ -617,6 +617,7 @@ uint32_t FileSystem::getCertificationVersion() const
+ 
+ const std::string FileSystem::getEsn() const
+ {
++    fprintf(stderr, "%s:%s:%d\n", __PRETTY_FUNCTION__, __FILE__, __LINE__);
+     return mEsn;
+ }
+ 
+-- 
+2.17.1
+
