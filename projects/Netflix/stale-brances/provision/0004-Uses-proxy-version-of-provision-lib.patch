@@ -1,0 +1,25 @@
+From 2050348d1b9020bf86d07eb8d62da17729b46342 Mon Sep 17 00:00:00 2001
+From: Sander van der Maar <s.van.der.maar@metrological.com>
+Date: Mon, 8 Feb 2016 12:02:37 +0100
+Subject: [PATCH 4/4] Uses proxy version of provision lib
+
+---
+ partner/dpi/reference/drm.cmake | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/partner/dpi/reference/drm.cmake b/partner/dpi/reference/drm.cmake
+index 66e0d42b..00a95bf0 100644
+--- a/partner/dpi/reference/drm.cmake
++++ b/partner/dpi/reference/drm.cmake
+@@ -191,7 +191,7 @@ elseif(DPI_REFERENCE_DRM STREQUAL "playready")
+     include_directories(${PLAYREADY_INCLUDE}/oem/common/inc)
+ 
+     link_directories(${PLAYREADY_LIB})
+-    target_link_libraries(nrddpi playready provision)
++    target_link_libraries(nrddpi playready provisionproxy)
+ 
+     add_custom_command(TARGET nrddpi POST_BUILD
+         COMMAND ${CMAKE_COMMAND} -E make_directory ${HAVE_DPI_DIRECTORY}/playready
+-- 
+2.17.1
+

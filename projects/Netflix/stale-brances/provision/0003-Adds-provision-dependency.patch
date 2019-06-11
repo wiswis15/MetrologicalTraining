@@ -1,0 +1,25 @@
+From 74000a144ecd981b73f41cd4e7ca905988342240 Mon Sep 17 00:00:00 2001
+From: Sander van der Maar <s.van.der.maar@metrological.com>
+Date: Mon, 8 Feb 2016 09:48:40 +0100
+Subject: [PATCH 3/4] Adds provision dependency
+
+---
+ partner/dpi/reference/drm.cmake | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/partner/dpi/reference/drm.cmake b/partner/dpi/reference/drm.cmake
+index e95b2ff6..66e0d42b 100644
+--- a/partner/dpi/reference/drm.cmake
++++ b/partner/dpi/reference/drm.cmake
+@@ -191,7 +191,7 @@ elseif(DPI_REFERENCE_DRM STREQUAL "playready")
+     include_directories(${PLAYREADY_INCLUDE}/oem/common/inc)
+ 
+     link_directories(${PLAYREADY_LIB})
+-    target_link_libraries(nrddpi playready)
++    target_link_libraries(nrddpi playready provision)
+ 
+     add_custom_command(TARGET nrddpi POST_BUILD
+         COMMAND ${CMAKE_COMMAND} -E make_directory ${HAVE_DPI_DIRECTORY}/playready
+-- 
+2.17.1
+

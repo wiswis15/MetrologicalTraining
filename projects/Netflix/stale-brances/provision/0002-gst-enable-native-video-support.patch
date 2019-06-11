@@ -1,0 +1,48 @@
+From 7194c6520fa171e60e34def4ed24fe52e480869f Mon Sep 17 00:00:00 2001
+From: Philippe Normand <philn@igalia.com>
+Date: Fri, 5 Feb 2016 17:06:04 +0100
+Subject: [PATCH 2/4] gst: enable native-video support
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index 694e5d37..11aaad11 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -360,12 +360,31 @@ void ESPlayerGst::destroyGstSource()
+ //  GStreamerBin class
+ //////////////////////////////////////////////////////////////////////
+ 
++unsigned getGstPlayFlag(const char* nick)
++{
++  static GFlagsClass* flagsClass = static_cast<GFlagsClass*>(g_type_class_ref(g_type_from_name("GstPlayFlags")));
++
++  GFlagsValue* flag = g_flags_get_value_by_nick(flagsClass, nick);
++  if (!flag)
++    return 0;
++
++  return flag->value;
++}
++
+ ESPlayerGst::GStreamerBin::GStreamerBin(bool isAudio, DecoderType decodeType, SinkType sinkType):
+     mGstBinMutex(ESP_PLAYER_MUTEX, "Gst Bin Mutex")
+ {
+   mBin = gst_element_factory_make("playbin", NULL);
+   g_object_set(mBin, "uri", "appsrc://", NULL);
+ 
++  // unsigned flagText = getGstPlayFlag("text");
++  unsigned flagAudio = getGstPlayFlag("audio");
++  unsigned flagVideo = getGstPlayFlag("video");
++  unsigned flagNativeVideo = getGstPlayFlag("native-video");
++  g_object_set(mBin, "flags", flagAudio | flagVideo | flagNativeVideo, NULL);
++
++
++
+   switch (decodeType){
+   case AAC:
+     mAppsrcCaps = gst_caps_from_string("audio/mpeg, mpegversion=4");
+-- 
+2.17.1
+
