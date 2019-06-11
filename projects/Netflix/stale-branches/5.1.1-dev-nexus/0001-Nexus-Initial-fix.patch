@@ -1,0 +1,54 @@
+From ee6af306cf31ccbc3dc254ecb302fce396207a6f Mon Sep 17 00:00:00 2001
+From: Marcel Fransen <m.fransen@metrological.com>
+Date: Fri, 22 Feb 2019 11:22:57 +0100
+Subject: [PATCH] [Nexus] Initial fix
+
+---
+ netflix/3rdparty/JavaScriptCore/Source/WTF/wtf/MathExtras.h | 4 ++--
+ partner/dpi/gstreamer/CMakeLists.txt                        | 1 +
+ partner/graphics/nexus/gibbon_graphics.cmake                | 2 +-
+ 3 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/netflix/3rdparty/JavaScriptCore/Source/WTF/wtf/MathExtras.h b/netflix/3rdparty/JavaScriptCore/Source/WTF/wtf/MathExtras.h
+index 81adbe23..b6fe1b8f 100644
+--- a/netflix/3rdparty/JavaScriptCore/Source/WTF/wtf/MathExtras.h
++++ b/netflix/3rdparty/JavaScriptCore/Source/WTF/wtf/MathExtras.h
+@@ -283,8 +283,8 @@ inline bool isWithinIntRange(float x)
+ 
+ #if !COMPILER(MSVC) && !COMPILER(RVCT) && !OS(SOLARIS)
+ using std::isfinite;
+-using std::isinf;
+-using std::isnan;
++//using std::isinf;
++//using std::isnan;
+ using std::signbit;
+ #endif
+ 
+diff --git a/partner/dpi/gstreamer/CMakeLists.txt b/partner/dpi/gstreamer/CMakeLists.txt
+index 41aa7e01..90f2397f 100644
+--- a/partner/dpi/gstreamer/CMakeLists.txt
++++ b/partner/dpi/gstreamer/CMakeLists.txt
+@@ -25,6 +25,7 @@ include_directories($ENV{STAGING_DIR}/usr/include/gstreamer-1.0)
+ include_directories($ENV{STAGING_DIR}/usr/include/glib-2.0)
+ include_directories($ENV{STAGING_DIR}/usr/lib/gstreamer-1.0/include)
+ include_directories($ENV{STAGING_DIR}/usr/lib/glib-2.0/include)
++include_directories($ENV{STAGING_DIR}/usr/include/gstreamer-1.0/gst)
+ 
+ add_definitions(-D__STDC_CONSTANT_MACROS)
+ 
+diff --git a/partner/graphics/nexus/gibbon_graphics.cmake b/partner/graphics/nexus/gibbon_graphics.cmake
+index cc28ae52..5859c2e7 100644
+--- a/partner/graphics/nexus/gibbon_graphics.cmake
++++ b/partner/graphics/nexus/gibbon_graphics.cmake
+@@ -13,7 +13,7 @@ add_definitions(-DGIBBON_SCREEN_FULLRENDER
+ )
+ 
+ get_filename_component(CURRENT_DIRECTORY ${CMAKE_CURRENT_LIST_FILE} PATH)
+-include_directories(${CURRENT_DIRECTORY})
++include_directories(${CURRENT_DIRECTORY} $ENV{STAGING_DIR}/usr/include/refsw)
+ 
+ if(NOT GIBBON_IMAGE_KTX)
+     set(GIBBON_IMAGE_KTX ON CACHE STRING "GL")
+-- 
+2.17.1
+
