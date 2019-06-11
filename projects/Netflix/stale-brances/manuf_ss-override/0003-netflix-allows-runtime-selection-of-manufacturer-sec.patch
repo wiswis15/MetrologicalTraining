@@ -1,0 +1,73 @@
+From dd8ff9be67144c2cef51cdb942cd273446a59a5e Mon Sep 17 00:00:00 2001
+From: msieben <github@desiderium.eu>
+Date: Thu, 3 Mar 2016 17:30:44 +0100
+Subject: [PATCH 3/3] netflix: allows runtime selection of manufacturer secure
+ store
+
+If build flag USE_MANUFSS is applied the manufacturer secure store file is only loaded if the command line argument dictates it. Otherwise the backoffice is queried. 'Normal' - prior modification - operation is still available by not applying the build flag.
+---
+ partner/dpi/reference/DeviceLibNative.cpp | 40 +++++++++++------------
+ 1 file changed, 20 insertions(+), 20 deletions(-)
+
+diff --git a/partner/dpi/reference/DeviceLibNative.cpp b/partner/dpi/reference/DeviceLibNative.cpp
+index a4bb24d0..3351873f 100644
+--- a/partner/dpi/reference/DeviceLibNative.cpp
++++ b/partner/dpi/reference/DeviceLibNative.cpp
+@@ -189,34 +189,34 @@ DeviceLibNative::DeviceLibNative() :
+     //If present, read idfile content
+     DataBuffer fileContent;
+ 
+-#ifndef USE_MANUFSS
+     if (sConfiguration->idFile.empty())
+     {
++#ifndef USE_MANUFSS
+         Log::fatal(TRACE_DPI, "No manufacturing secure store specified. Exiting.");
+         Log::warn(TRACE_DPI, "You can generate the \"Manufacturing Secure Store\" file using the executable \"manufss\"");
+         Log::warn(TRACE_DPI, "You can also launch netflix using the script \"netflix_manuss.sh\" which will call \"manufss\" before launching netflix");
+         exit(0);
+-    }
+-#endif
+-
+-#if USE_MANUFSS
+-    // Get manufacturer secure store from back office.
+-    const unsigned short bufferSize = 8192; // 8 kb
+-    char netflixId[bufferSize];
+-
+-    int netflixIdResult = GetDRMId("netflix", bufferSize, netflixId);
+-    if (netflixIdResult < 0) {
+-       // Getting secure store failed, print error message and exit.
+-       fprintf(stderr, "Something went wrong when getting netflix provision id: %d\n", netflixIdResult);
+-       exit(0);
+-    }
+-
+-    // Store retrieved in data buffer.
+-    fileContent = DataBuffer::fromRawData(netflixId, netflixIdResult);
+ #else
+-    // Get secure store from file passed on command line.
+-    fileContent = DataBuffer::fromFile((sConfiguration->idFile).c_str());
++        // Get manufacturer secure store from back office.
++        const unsigned short bufferSize = 8192; // 8 kb
++        char netflixId[bufferSize];
++
++        int netflixIdResult = GetDRMId("netflix", bufferSize, netflixId);
++        if (netflixIdResult < 0) {
++           // Getting secure store failed, print error message and exit.
++           fprintf(stderr, "Something went wrong when getting netflix provision id: %d\n", netflixIdResult);
++           exit(0);
++        }
++
++        // Store retrieved in data buffer.
++        fileContent = DataBuffer::fromRawData(netflixId, netflixIdResult);
+ #endif
++    }
++    else
++    {
++        // Get secure store from file passed on command line.
++        fileContent = DataBuffer::fromFile((sConfiguration->idFile).c_str());
++    }
+ 
+     if (!fileContent.isBinary(-1))
+     {
+-- 
+2.17.1
+
