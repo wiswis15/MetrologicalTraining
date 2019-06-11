@@ -1,0 +1,54 @@
+From 9a2f7844ed524b95b641b95797f3321cd5d8c201 Mon Sep 17 00:00:00 2001
+From: Albert Dahan <a.dahan@metrological.com>
+Date: Fri, 1 Apr 2016 12:06:30 +0200
+Subject: [PATCH 1/4] [IntelCE] Adding scaler support and display resolution
+
+---
+ partner/graphics/intelce/OpenGLContextEGL.cpp | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/partner/graphics/intelce/OpenGLContextEGL.cpp b/partner/graphics/intelce/OpenGLContextEGL.cpp
+index c1ba55d6..992fd2ff 100644
+--- a/partner/graphics/intelce/OpenGLContextEGL.cpp
++++ b/partner/graphics/intelce/OpenGLContextEGL.cpp
+@@ -43,8 +43,10 @@ EGLNativeWindowType CreateNativeWindow ()
+ 
+ // Initializes a plane for the graphics to be rendered to
+ static gdl_ret_t setup_plane(gdl_plane_id_t plane) {
++    gdl_boolean_t useScaler = GDL_FALSE;
+     gdl_pixel_format_t pixelFormat = GDL_PF_ARGB_32;
+     gdl_color_space_t colorSpace = GDL_COLOR_SPACE_RGB;
++    gdl_display_info_t displayInfo;
+     gdl_rectangle_t srcRect;
+     gdl_rectangle_t dstRect;
+     gdl_ret_t rc = GDL_SUCCESS;
+@@ -54,6 +56,15 @@ static gdl_ret_t setup_plane(gdl_plane_id_t plane) {
+     dstRect.width = WIDTH;
+     dstRect.height = HEIGHT;
+ 
++    rc = gdl_get_display_info(GDL_DISPLAY_ID_0, &displayInfo);
++    if (GDL_SUCCESS == rc) {
++        dstRect.width = displayInfo.tvmode.width;
++        dstRect.height = displayInfo.tvmode.height;
++        if (dstRect.height != HEIGHT) {
++            useScaler = GDL_TRUE;
++        }
++    }
++
+     srcRect.origin.x = 0;
+     srcRect.origin.y = 0;
+     srcRect.width = WIDTH;
+@@ -68,6 +79,10 @@ static gdl_ret_t setup_plane(gdl_plane_id_t plane) {
+         rc = gdl_plane_set_attr(GDL_PLANE_SRC_COLOR_SPACE, &colorSpace);
+     }
+ 
++    if (GDL_SUCCESS == rc) {
++        rc = gdl_plane_set_attr(GDL_PLANE_SCALE, &useScaler);
++    }
++
+     if (GDL_SUCCESS == rc) {
+         rc = gdl_plane_set_attr(GDL_PLANE_PIXEL_FORMAT, &pixelFormat);
+     }
+-- 
+2.17.1
+

@@ -1,0 +1,21 @@
+From 327018c36459c4244640eaf91252b19c8a9e4a60 Mon Sep 17 00:00:00 2001
+From: bramoosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Fri, 1 Apr 2016 14:34:49 +0200
+Subject: [PATCH 3/4] Now linking to libvirtualkeyboard\
+
+---
+ partner/input/devinput/gibbon_input.cmake | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/partner/input/devinput/gibbon_input.cmake b/partner/input/devinput/gibbon_input.cmake
+index a3a88e0e..30eb2d0f 100644
+--- a/partner/input/devinput/gibbon_input.cmake
++++ b/partner/input/devinput/gibbon_input.cmake
+@@ -6,3 +6,4 @@
+ 
+ set(GIBBON_INPUT_DEVINPUT TRUE)
+ gibbon_add_sources(InputManagerDevInput.cpp)
++gibbon_add_libraries("virtualkeyboard")
+-- 
+2.17.1
+

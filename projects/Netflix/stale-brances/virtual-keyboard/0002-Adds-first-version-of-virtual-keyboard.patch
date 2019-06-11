@@ -1,0 +1,152 @@
+From c395cc7a363222e16d75555c4b9b872ee74bad19 Mon Sep 17 00:00:00 2001
+From: Sander van der Maar <s.van.der.maar@metrological.com>
+Date: Fri, 1 Apr 2016 12:30:30 +0200
+Subject: [PATCH 2/4] Adds first version of virtual keyboard
+
+---
+ .../input/devinput/InputManagerDevInput.cpp   | 53 +++++++++++++++++++
+ 1 file changed, 53 insertions(+)
+
+diff --git a/partner/input/devinput/InputManagerDevInput.cpp b/partner/input/devinput/InputManagerDevInput.cpp
+index 6f13b313..b0c0eebe 100644
+--- a/partner/input/devinput/InputManagerDevInput.cpp
++++ b/partner/input/devinput/InputManagerDevInput.cpp
+@@ -25,6 +25,9 @@
+ #include <fcntl.h>
+ #include <assert.h>
+ 
++#include <gluelogic/virtualkeyboard/VirtualKeyboard.h>
++#include <iostream>
++
+ using namespace netflix::gibbon;
+ using namespace netflix;
+ 
+@@ -91,6 +94,8 @@ static inline KeyEvent::Key keyCodeToKey(uint16_t c)
+ static const char* ltxt = "\t\t1234567890-=\t\tqwertyuiop[]\t\tasdfghjkl;'`\t\\zxcvbnm,./\t\t\t ";
+ static const char* utxt = "\t\t!@#$%^&*()_+\t\tQWERTYUIOP{}\t\tASDFGHJKL:\"~\t|ZXCVBNM<>?\t\t\t ";
+ 
++static const char * connectorName = "/tmp/keyboardhandler";
++
+ static inline std::string keyCodeToString(uint16_t code, bool shift)
+ {
+     assert(KEY_1 == 2 && KEY_SPACE == 57);
+@@ -99,8 +104,39 @@ static inline std::string keyCodeToString(uint16_t code, bool shift)
+     return std::string();
+ }
+ 
++static void VirtualKeyboardCallback(actiontype type, unsigned int code)
++{
++   GibbonEvent::Type gibbonType;
++
++   switch (type) {
++      case PRESSED:
++         gibbonType = GibbonEvent::Type_KeyPress;
++         break;
++      case RELEASED:
++         gibbonType = GibbonEvent::Type_KeyRelease;
++         break;
++      default:
++         std::cerr << "[netflix virtual-keyboard] Ignoring: " << type << " " << code << std::endl;
++         return;
++   }
++
++   // TODO: do we need to translate key codes here?
++
++   std::cerr << "[netflix virtual-keyboard] About to send key code to gibbon: " << code << std::endl;
++
++   const KeyEvent::Key key = keyCodeToKey(code);
++
++   // TODO: deal with shift.
++   bool shift = false;
++
++   GibbonApplication::instance()->sendEvent(new KeyEvent(gibbonType, key, keyCodeToString(code, shift)));
++}
++
++void * virtualKeyboardHandle = 0;
++
+ void InputManager::init()
+ {
++   /*
+     shift = false;
+ 
+     const int ret = ::pipe(mPipe);
+@@ -108,10 +144,17 @@ void InputManager::init()
+     assert(!ret);
+ 
+     rescan();
++    */
++
++   virtualKeyboardHandle = Construct(connectorName, VirtualKeyboardCallback);
++   if (virtualKeyboardHandle == 0) {
++      std::cerr << "[netflix virtual-keyboard] Failed to construct virtual keyboard" << std::endl;
++   }
+ }
+ 
+ void InputManager::cleanup()
+ {
++   /*
+     close(mPipe[0]);
+     close(mPipe[1]);
+     for (std::vector<int>::const_iterator it = mDevices.begin(), end = mDevices.end();
+@@ -119,10 +162,13 @@ void InputManager::cleanup()
+         close(*it);
+     }
+     mDevices.clear();
++    */
++   Destruct(virtualKeyboardHandle);
+ }
+ 
+ void InputManager::rescan()
+ {
++   /*
+     for (std::vector<int>::const_iterator it = mDevices.begin(), end = mDevices.end();
+          it != end; ++it) {
+         printf("closing %d\n", *it);
+@@ -164,6 +210,7 @@ void InputManager::rescan()
+     }
+     free(buf);
+     closedir(dir);
++    */
+ }
+ 
+ void InputManager::moveMouse(const Point &)
+@@ -172,6 +219,7 @@ void InputManager::moveMouse(const Point &)
+ 
+ bool InputManager::handleInput(int fd)
+ {
++   /*
+     enum { NumEvents = 16 };
+ 
+     input_event ev[NumEvents];
+@@ -199,11 +247,13 @@ bool InputManager::handleInput(int fd)
+         ++cur;
+         rd -= inputSize;
+     }
++    */
+     return true;
+ }
+ 
+ void InputManager::waitForInput(llong mseconds)
+ {
++   /*
+     int waitUntil = mseconds == -1 ? 0 : mseconds;
+ 
+     struct timeval tv;
+@@ -247,11 +297,14 @@ void InputManager::waitForInput(llong mseconds)
+         Log::warn(TRACE_GIBBON_INPUT, "InputManagerDevInput, select failure (%d), rescanning", errno);
+         rescan();
+     }
++    */
+ }
+ 
+ void InputManager::wakeup()
+ {
++   /*
+     write(mPipe[1], " ", 1);
++   */
+ }
+ 
+ bool InputManager::hasEvents() const
+-- 
+2.17.1
+
