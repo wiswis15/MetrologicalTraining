@@ -1,0 +1,26 @@
+From f839254b17e030ec48d5269fe3ceb16a90441a42 Mon Sep 17 00:00:00 2001
+From: Pierre Wielders <pierre@wielders.net>
+Date: Mon, 6 Feb 2017 10:18:40 +0100
+Subject: [PATCH 02/22] [PROVISIONING] Receive encrypted provisioning
+ information and handle it in the Netflix process.
+
+---
+ partner/dpi/reference/DeviceLibNative.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/partner/dpi/reference/DeviceLibNative.cpp b/partner/dpi/reference/DeviceLibNative.cpp
+index a3dd1292..e904b924 100644
+--- a/partner/dpi/reference/DeviceLibNative.cpp
++++ b/partner/dpi/reference/DeviceLibNative.cpp
+@@ -61,7 +61,7 @@ using namespace netflix;
+ using namespace netflix::device;
+ 
+ #if USE_PROVISIONING
+-#include <provision/DRMInfo.h>
++#include <provision/AccesProvision.h>
+ #endif
+ 
+ // Allocated in the extern function getDeviceLibOptions() and freed in
+-- 
+2.17.1
+

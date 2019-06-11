@@ -1,0 +1,90 @@
+From 8634d5f9dec6cc9c4385ee59aa6ef7fc50b542da Mon Sep 17 00:00:00 2001
+From: SKumarMetro <s.kumar@metrological.com>
+Date: Fri, 27 Jan 2017 17:28:57 -0800
+Subject: [PATCH 01/22] [HOMECAST] use nxclient calls conditionally
+
+---
+ partner/graphics/nexus/OpenGLContextEGL.cpp  | 14 ++++++++++++--
+ partner/graphics/nexus/gibbon_graphics.cmake |  7 ++++++-
+ 2 files changed, 18 insertions(+), 3 deletions(-)
+
+diff --git a/partner/graphics/nexus/OpenGLContextEGL.cpp b/partner/graphics/nexus/OpenGLContextEGL.cpp
+index 983b806d..5ffc2b68 100644
+--- a/partner/graphics/nexus/OpenGLContextEGL.cpp
++++ b/partner/graphics/nexus/OpenGLContextEGL.cpp
+@@ -21,7 +21,9 @@
+ #include <refsw/nexus_core_utils.h>
+ #include <refsw/default_nexus.h>
+ 
++#ifndef NO_NXCLIENT
+ #include <refsw/nxclient.h>
++#endif
+ 
+ using namespace netflix;
+ using namespace netflix::gibbon;
+@@ -37,25 +39,31 @@ static NEXUS_DisplayHandle  gs_nexus_display = 0;
+ static NEXUS_SurfaceClient* gs_native_window = 0;
+ static NXPL_PlatformHandle  nxpl_handle = 0;
+ 
++#ifndef NO_NXCLIENT
+ NxClient_AllocResults       gs_allocresults;
++#endif
+ 
+ bool InitPlatform ( void )
+ {
+    bool succeeded = true;
+-   NEXUS_Error err;
++   NEXUS_Error rc;
+ 
++#ifdef NO_NXCLIENT
++   rc= NEXUS_Platform_Join();
++#else
+    NxClient_AllocSettings allocSettings;
+    NxClient_JoinSettings joinSettings;
+    NxClient_GetDefaultJoinSettings( &joinSettings );
+ 
+    strcpy( joinSettings.name, "nrd" );
+ 
+-   NEXUS_Error rc = NxClient_Join( &joinSettings );
++   rc = NxClient_Join( &joinSettings );
+    BDBG_ASSERT(!rc);
+ 
+    NxClient_GetDefaultAllocSettings(&allocSettings);
+    allocSettings.surfaceClient = 1;
+    rc = NxClient_Alloc(&allocSettings, &gs_allocresults);
++#endif
+    BDBG_ASSERT(!rc);
+ 
+    gs_requested_screen_width = 1280;
+@@ -78,8 +86,10 @@ void DeInitPlatform ( void )
+        NXPL_UnregisterNexusDisplayPlatform ( nxpl_handle );
+        NEXUS_SurfaceClient_Release ( gs_native_window );
+ 
++#ifndef NO_NXCLIENT
+        NxClient_Free(&gs_allocresults);
+        NxClient_Uninit();
++#endif
+    }
+ 
+    NEXUS_Platform_Uninit ();
+diff --git a/partner/graphics/nexus/gibbon_graphics.cmake b/partner/graphics/nexus/gibbon_graphics.cmake
+index ab868dea..581c1197 100644
+--- a/partner/graphics/nexus/gibbon_graphics.cmake
++++ b/partner/graphics/nexus/gibbon_graphics.cmake
+@@ -30,7 +30,12 @@ if(GIBBON_GRAPHICS_GL_WSYS STREQUAL "egl")
+     gibbon_add_sources(OpenGLContextEGL.cpp)
+ 
+     set(GIBBON_GRAPHICSENGINE_GLES2_EGL TRUE)
+-    gibbon_add_libraries(GLESv2 EGL nexus nxpl nxclient)
++    if (NO_NXCLIENT)
++        gibbon_add_libraries(GLESv2 EGL nexus nxpl)
++        add_definitions(-DNO_NXCLIENT)
++    else ()
++        gibbon_add_libraries(GLESv2 EGL nexus nxpl nxclient)
++    endif ()
+     add_definitions(-DEGL_EGLEXT_PROTOTYPES=1 -DBROADCOM_PLATFORM=1)
+ else()
+     message(FATAL_ERROR "Unrecognized GL subsystem: ${GIBBON_GRAPHICS_GL_WSYS}")
+-- 
+2.17.1
+

@@ -1,0 +1,25 @@
+From a48ad7e4c6767c625834647da4a9c40a52b3121d Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Fri, 16 Jun 2017 12:56:20 +0200
+Subject: [PATCH 18/22] [cmake] WPEFramework find script now sets the found
+ flag.
+
+---
+ netflix/cmake/FindWPEFramework.cmake | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/netflix/cmake/FindWPEFramework.cmake b/netflix/cmake/FindWPEFramework.cmake
+index cfe1006c..8e3d0fa4 100644
+--- a/netflix/cmake/FindWPEFramework.cmake
++++ b/netflix/cmake/FindWPEFramework.cmake
+@@ -32,6 +32,6 @@ find_package(PkgConfig)
+ pkg_check_modules(WPEFRAMEWORK WPEFramework)
+ 
+ include(FindPackageHandleStandardArgs)
+-FIND_PACKAGE_HANDLE_STANDARD_ARGS(WPEFRAMEWORK DEFAULT_MSG WPEFRAMEWORK_LIBRARIES)
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(WPEFRAMEWORK DEFAULT_MSG WPEFRAMEWORK_FOUND)
+ 
+ mark_as_advanced(WPEFRAMEWORK_INCLUDE_DIRS WPEFRAMEWORK_LIBRARIES)
+-- 
+2.17.1
+

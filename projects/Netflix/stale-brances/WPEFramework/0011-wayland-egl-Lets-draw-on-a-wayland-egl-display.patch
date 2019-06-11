@@ -1,0 +1,281 @@
+From 93c040c349c2ff1fce853ebe0d23edea196c4402 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Mon, 10 Apr 2017 18:47:56 +0200
+Subject: [PATCH 11/22] [wayland-egl] Lets draw on a wayland-egl display
+
+---
+ .../graphics/wayland-egl/OpenGLContextEGL.cpp | 191 ++++++++++--------
+ 1 file changed, 111 insertions(+), 80 deletions(-)
+
+diff --git a/partner/graphics/wayland-egl/OpenGLContextEGL.cpp b/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
+index ab3c4c18..0e1f0124 100644
+--- a/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
++++ b/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
+@@ -6,6 +6,9 @@
+  * purpose without the permission of Netflix, Inc. is strictly
+  * prohibited.
+  */
++
++#define WL_EGL_PLATFORM 1
++
+ #include "OpenGLContext.h"
+ #include "OpenGLState.h"
+ #include "OpenGLContextEGL.h"
+@@ -17,33 +20,43 @@
+ using namespace netflix;
+ using namespace netflix::gibbon;
+ 
+-static void  registry_handle_global(void *data, struct wl_registry *registry,
+-                       uint32_t name, const char *interface, uint32_t version)
++static void handle_ping(void *data, struct wl_shell_surface *shell_surface, uint32_t serial)
++{
++    wl_shell_surface_pong(shell_surface, serial);
++}
++
++static void handle_configure(void *data, struct wl_shell_surface *shell_surface, uint32_t edges, int32_t width, int32_t height)
++{
++    struct Wayland *wayland = static_cast<Wayland *>(data);
++    wl_egl_window_resize(wayland->eglWindow, width, height, 0, 0);
++}
++
++static void handle_popup_done(void *data, struct wl_shell_surface *shell_surface)
++{
++}
++
++static const struct wl_shell_surface_listener g_ShellSurfaceListener = {
++    handle_ping,
++    handle_configure,
++    handle_popup_done
++};
++
++static void registry_handle_global(void *data, struct wl_registry *registry,
++                                    uint32_t name, const char *interface, uint32_t version)
+ {
+     struct Wayland *wayland = static_cast<Wayland *>(data);
+ 
+     if (strcmp(interface, "wl_compositor") == 0) {
+-        wayland->compositor = static_cast<struct wl_compositor *>(wl_registry_bind(registry, name,
+-                                                                                   &wl_compositor_interface, 1));
+-        printf("DEBUG found wl_compositor %p\n" , wayland->compositor);
+-    }
+-    if (strcmp(interface, "wl_seat") == 0) {
+-        wayland->seat = static_cast<struct wl_seat *>(wl_registry_bind(registry, name, &wl_seat_interface, 4));
+-        // wl_seat_add_listener(d->seat, &seat_listener, d);
+-        printf("DEBUG found wl_seat %p\n" , wayland->seat);
++        wayland->compositor = static_cast<struct wl_compositor *>(
++            wl_registry_bind(registry, name, &wl_compositor_interface, 1));
+     }
+     if (strcmp(interface, "wl_shell") == 0) {
+-        wayland->shell = static_cast<struct wl_shell *>(wl_registry_bind(registry, name, &wl_shell_interface, 1));
+-        printf("DEBUG found wl_shell %p\n" , wayland->shell);
+-    }
+-    if (strcmp(interface, "xdg_shell") == 0) {
+-        wayland->xdg = static_cast<struct xdg_shell *>(wl_registry_bind(registry, name, &xdg_shell_interface, 1));
+-        printf("DEBUG found xdg_shell %p\n" , wayland->shell);
++        wayland->shell = static_cast<struct wl_shell *>(
++            wl_registry_bind(registry, name, &wl_shell_interface, 1));
+     }
+ }
+ 
+-static void registry_handle_global_remove(void *data, struct wl_registry *registry,
+-                              uint32_t name)
++static void registry_handle_global_remove(void *data, struct wl_registry *registry, uint32_t name)
+ {
+ }
+ 
+@@ -52,45 +65,72 @@ static const struct wl_registry_listener g_registryListener = {
+     registry_handle_global_remove
+ };
+ 
+-
+-static void xdg_shell_handle_ping (void*, struct xdg_shell* shell, uint32_t serial)
++#ifndef GIBBON_EGL_NO_SWAP
++static inline void gibbonEGLSwap(EGLDisplay display, EGLSurface surface)
+ {
+-    xdg_shell_pong(shell, serial);
++    eglSwapBuffers(display, surface);
+ }
++#else
++extern void gibbonEGLSwap(EGLDisplay display, EGLSurface surface);
++#endif
+ 
+-static const struct xdg_shell_listener g_xdgShellListener = {
+-    xdg_shell_handle_ping
+-};
++void waylandConnect(Wayland* wayland){
++    wayland->display = wl_display_connect(NULL);
+ 
+-static void handle_ping(void *data, struct wl_shell_surface *shell_surface, uint32_t serial)
+-{
+-    wl_shell_surface_pong(shell_surface, serial);
+-}
++    wayland->registry = wl_display_get_registry(wayland->display);
++    wl_registry_add_listener(wayland->registry, &g_registryListener, wayland);
+ 
+-static void handle_configure(void *data, struct wl_shell_surface *shell_surface, uint32_t edges, int32_t width, int32_t height)
+-{
++    wl_display_dispatch(wayland->display);
++    wl_display_roundtrip(wayland->display);
+ }
+ 
+-static void handle_popup_done(void *data, struct wl_shell_surface *shell_surface)
+-{
++void waylandDisconnect(Wayland* wayland){
++    if (wayland->seat)
++        wl_seat_destroy(wayland->seat);
++    if (wayland->shell)
++        wl_shell_destroy(wayland->shell);
++    if (wayland->compositor)
++        wl_compositor_destroy(wayland->compositor);
++    if (wayland->registry)
++        wl_registry_destroy(wayland->registry);
++    if(wayland->display)
++        wl_display_disconnect (wayland->display);
+ }
+ 
+-static const struct wl_shell_surface_listener g_ShellSurfaceListener = {
+-    handle_ping,
+-    handle_configure,
+-    handle_popup_done
+-};
++void waylandCreateEglWindow(Wayland* wayland, const Geometry* geometry){
++    wayland->surface = wl_compositor_create_surface(wayland->compositor);
+ 
++    if (wayland->surface) {
++        wayland->shellSurface = wl_shell_get_shell_surface(wayland->shell, wayland->surface);
+ 
++        if (wayland->shellSurface) {
++            wl_shell_surface_add_listener(wayland->shellSurface, &g_ShellSurfaceListener, wayland);
+ 
+-#ifndef GIBBON_EGL_NO_SWAP
+-static inline void gibbonEGLSwap(EGLDisplay display, EGLSurface surface)
+-{
+-    eglSwapBuffers(display, surface);
++            wl_shell_surface_set_toplevel(wayland->shellSurface);
++            //wl_shell_surface_set_fullscreen(wayland->shellSurface, WL_SHELL_SURFACE_FULLSCREEN_METHOD_SCALE, 0, NULL);
++        }
++    }
++
++    struct wl_region *region;
++    region = wl_compositor_create_region(wayland->compositor);
++
++    wl_region_add(region, 0, 0, geometry->Width, geometry->Height);
++
++    wl_surface_set_opaque_region(wayland->surface, NULL);
++
++    wl_region_destroy(region);
++
++    wayland->eglWindow = wl_egl_window_create(wayland->surface, geometry->Width, geometry->Height);
++}
++
++void waylandDestroyEglWindow(Wayland* wayland){
++    if (wayland->eglWindow)
++        wl_egl_window_destroy (wayland->eglWindow);
++    if (wayland->shellSurface)
++        wl_shell_surface_destroy (wayland->shellSurface);
++    if (wayland->surface)
++        wl_surface_destroy (wayland->surface);
+ }
+-#else
+-extern void gibbonEGLSwap(EGLDisplay display, EGLSurface surface);
+-#endif
+ 
+ bool OpenGLContext::init(OpenGLContext* share)
+ {
+@@ -98,6 +138,25 @@ bool OpenGLContext::init(OpenGLContext* share)
+ 
+     mPrivate = new OpenGLContextPrivate;
+     memset(mPrivate, 0, sizeof(OpenGLContextPrivate));
++
++    char *tmp;
++
++    if (tmp = std::getenv("NF_INIT_VIEW_WIDTH")) {
++        mPrivate->geometry.Width = atoi(tmp);
++    }
++    else {
++        mPrivate->geometry.Width = 1280;
++    }
++
++    if (tmp = std::getenv("NF_INIT_VIEW_HEIGHT")) {
++        mPrivate->geometry.Height = atoi(tmp);
++    }
++    else {
++        mPrivate->geometry.Height = 720;
++    }
++
++    waylandConnect(&mPrivate->wayland);
++
+     if (!share) {
+         mPrivate->type = OpenGLContextPrivate::WindowContext;
+ 
+@@ -105,7 +164,8 @@ bool OpenGLContext::init(OpenGLContext* share)
+         EGLint majorVersion;
+         EGLint minorVersion;
+ 
+-        mPrivate->display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
++        mPrivate->display = eglGetDisplay(mPrivate->wayland.display);
++
+         assert(mPrivate->display != EGL_NO_DISPLAY);
+ 
+         EGLint result;
+@@ -178,41 +238,7 @@ bool OpenGLContext::init(OpenGLContext* share)
+                                          << " D=" << depthSize
+                                          << " S=" << stencilSize;
+ 
+-        mPrivate->geometry.Height = 1080;
+-        mPrivate->geometry.Width = 1920;
+-
+-        mPrivate->wayland.display = wl_display_connect(NULL);
+-
+-        mPrivate->wayland.registry = wl_display_get_registry(mPrivate->wayland.display);
+-        wl_registry_add_listener(mPrivate->wayland.registry, &g_registryListener, &mPrivate->wayland);
+-
+-        wl_display_dispatch(mPrivate->wayland.display);
+-        wl_display_roundtrip(mPrivate->wayland.display);
+-
+-        if (mPrivate->wayland.xdg) {
+-            xdg_shell_add_listener(mPrivate->wayland.xdg, &g_xdgShellListener, NULL);
+-            xdg_shell_use_unstable_version(mPrivate->wayland.xdg, 5);
+-        }
+-
+-        mPrivate->wayland.surface = wl_compositor_create_surface(mPrivate->wayland.compositor);
+-
+-        if (mPrivate->wayland.surface) {
+-            mPrivate->wayland.shellSurface = wl_shell_get_shell_surface(mPrivate->wayland.shell, mPrivate->wayland.surface);
+-
+-            if (mPrivate->wayland.shellSurface) {
+-                wl_shell_surface_add_listener(mPrivate->wayland.shellSurface, &g_ShellSurfaceListener, NULL);
+-                // wl_shell_surface_set_toplevel(mPrivate->wayland.shellSurface);
+-                wl_shell_surface_set_fullscreen(mPrivate->wayland.shellSurface, WL_SHELL_SURFACE_FULLSCREEN_METHOD_DEFAULT, 0, NULL);
+-            }
+-        }
+-
+-        struct wl_region *region;
+-        region = wl_compositor_create_region(mPrivate->wayland.compositor);
+-
+-        wl_region_add(region, 0, 0, mPrivate->geometry.Width, mPrivate->geometry.Height);
+-        wl_surface_set_opaque_region(mPrivate->wayland.surface, region);
+-
+-        mPrivate->wayland.eglWindow = wl_egl_window_create(mPrivate->wayland.surface, mPrivate->geometry.Width, mPrivate->geometry.Height);
++        waylandCreateEglWindow(&mPrivate->wayland, &mPrivate->geometry );
+ 
+         EGLint height(0);
+         EGLint width(0);
+@@ -286,9 +312,14 @@ void OpenGLContext::cleanup()
+     }
+     eglDestroySurface(mPrivate->display, mPrivate->surface);
+     eglDestroyContext(mPrivate->display, mPrivate->context);
++
++    waylandDestroyEglWindow(&mPrivate->wayland);
++
+     if (mPrivate->type == OpenGLContextPrivate::WindowContext)
+         eglTerminate(mPrivate->display);
+ 
++    waylandDisconnect(&mPrivate->wayland);
++
+     delete mPrivate;
+     mPrivate = 0;
+ }
+-- 
+2.17.1
+

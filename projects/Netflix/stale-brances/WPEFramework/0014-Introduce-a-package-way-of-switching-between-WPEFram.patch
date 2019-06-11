@@ -1,0 +1,127 @@
+From 734c3dc13fe5423e24da3d96f3ba6e86662c9908 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Thu, 18 May 2017 15:43:27 +0200
+Subject: [PATCH 14/22] Introduce a package way of switching between
+ WPEFramework and cppsdk
+
+---
+ netflix/cmake/FindCppsdk.cmake       | 38 ++++++++++++++++++++++++++++
+ netflix/cmake/FindWPEFramework.cmake | 37 +++++++++++++++++++++++++++
+ partner/dpi/reference/drm.cmake      | 12 ++++++++-
+ 3 files changed, 86 insertions(+), 1 deletion(-)
+ create mode 100644 netflix/cmake/FindCppsdk.cmake
+ create mode 100644 netflix/cmake/FindWPEFramework.cmake
+
+diff --git a/netflix/cmake/FindCppsdk.cmake b/netflix/cmake/FindCppsdk.cmake
+new file mode 100644
+index 00000000..c856ce61
+--- /dev/null
++++ b/netflix/cmake/FindCppsdk.cmake
+@@ -0,0 +1,38 @@
++# Sets:
++#  - CPPSDK_INCLUDE_DIRS
++#
++# For each component:
++#  - <uppercase component name>_LIBRARIES
++
++# Components need to be written lower-case without "lib" prefix, e.g.: "generics", "rpc", "tracing"
++
++find_package (PkgConfig REQUIRED)
++
++if ((NOT (DEFINED CPPSDK_INCLUDE_DIRS)) OR (CPPSDK_INCLUDE_DIRS STREQUAL ""))
++   set(CPPSDK_INCLUDE_DIRS "" CACHE STRING "CPPSDK include directories.")
++   
++   pkg_check_modules (CPPSDK cppsdk)
++   
++   if (NOT CPPSDK_FOUND)
++      message(FATAL_ERROR "Failed to find cppsdk, please set CPPSDK_INCLUDE_DIRS.")
++   endif ()
++endif ()
++
++foreach (component ${Cppsdk_FIND_COMPONENTS})
++   string (TOUPPER ${component} UPPERCASE_COMPONENT)
++
++   set (COMPONENT_LIBRARY_NAME "LIB${UPPERCASE_COMPONENT}_LIBRARIES")
++   find_library(
++      ${COMPONENT_LIBRARY_NAME}
++      NAMES "${component}" 
++      HINTS "${CPPSDK_LIBDIR}" "${CPPSDK_INCLUDE_DIRS}/../../build/${component}"
++      DOC "Cppsdk component '${component}' shared library."
++   )
++
++   if (${${COMPONENT_LIBRARY_NAME}} STREQUAL "${COMPONENT_LIBRARY_NAME}-NOTFOUND")
++      message(FATAL_ERROR "Couldn't find libraries for cppsdk component '${component}'.")
++   endif()
++endforeach ()
++
++set (CPPSDK_FOUND 1)
++
+diff --git a/netflix/cmake/FindWPEFramework.cmake b/netflix/cmake/FindWPEFramework.cmake
+new file mode 100644
+index 00000000..cfe1006c
+--- /dev/null
++++ b/netflix/cmake/FindWPEFramework.cmake
+@@ -0,0 +1,37 @@
++# - Try to find WPEFramework.
++# Once done, this will define
++#
++#  WPEFRAMEWORK_FOUND - system has Wayland.
++#  WPEFRAMEWORK_INCLUDE_DIRS - the Wayland include directories
++#  WPEFRAMEWORK_LIBRARIES - link these to use Wayland.
++#
++# Copyright (C) 2017 Metrological B.V.
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions
++# are met:
++# 1.  Redistributions of source code must retain the above copyright
++#     notice, this list of conditions and the following disclaimer.
++# 2.  Redistributions in binary form must reproduce the above copyright
++#     notice, this list of conditions and the following disclaimer in the
++#     documentation and/or other materials provided with the distribution.
++#
++# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND ITS CONTRIBUTORS ``AS
++# IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++# PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR ITS
++# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
++# OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
++# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
++# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
++# ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++find_package(PkgConfig)
++pkg_check_modules(WPEFRAMEWORK WPEFramework)
++
++include(FindPackageHandleStandardArgs)
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(WPEFRAMEWORK DEFAULT_MSG WPEFRAMEWORK_LIBRARIES)
++
++mark_as_advanced(WPEFRAMEWORK_INCLUDE_DIRS WPEFRAMEWORK_LIBRARIES)
+diff --git a/partner/dpi/reference/drm.cmake b/partner/dpi/reference/drm.cmake
+index 97731b45..511029d3 100644
+--- a/partner/dpi/reference/drm.cmake
++++ b/partner/dpi/reference/drm.cmake
+@@ -195,7 +195,17 @@ elseif(DPI_REFERENCE_DRM STREQUAL "playready")
+ 
+ if(NETFLIX_USE_PROVISION)
+     add_definitions( -DUSE_PROVISIONING )
+-    target_link_libraries(nrddpi playready provisionproxy WPEFrameworkCore)
++    target_link_libraries(nrddpi playready provisionproxy )
++
++    find_package(WPEFramework)
++    if (WPEFRAMEWORK_FOUND)
++        message(" -- Build with WPEFramework support")
++        target_link_libraries(nrddpi ${WPEFRAMEWORK_LIBRARIES})
++    else(WPEFRAMEWORK_FOUND)
++        message(" -- Build with CPPSDK support")
++        find_package(Cppsdk REQUIRED COMPONENTS generics)
++        target_link_libraries(nrddpi ${GENERICS_LIBRARIES})
++    endif(WPEFRAMEWORK_FOUND)
+ else()
+     target_link_libraries(nrddpi playready)
+ endif(NETFLIX_USE_PROVISION)
+-- 
+2.17.1
+

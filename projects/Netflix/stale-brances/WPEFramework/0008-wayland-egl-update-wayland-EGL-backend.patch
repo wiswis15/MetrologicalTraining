@@ -1,0 +1,257 @@
+From b1f192c2f911190723aa72cfcfda64237c321efb Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Wed, 29 Mar 2017 16:18:54 +0200
+Subject: [PATCH 08/22] [wayland-egl] update wayland EGL backend
+
+---
+ .../graphics/wayland-egl/OpenGLContextEGL.cpp | 128 ++++++++++++------
+ .../graphics/wayland-egl/OpenGLContextEGL.h   |  23 ++++
+ .../wayland-egl/gibbon_graphics.cmake         |   3 +-
+ 3 files changed, 114 insertions(+), 40 deletions(-)
+
+diff --git a/partner/graphics/wayland-egl/OpenGLContextEGL.cpp b/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
+index 91bf0b30..ab3c4c18 100644
+--- a/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
++++ b/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
+@@ -14,29 +14,73 @@
+ #include <nrd/AppLog.h>
+ #include <string.h>
+ 
+-#include <wayland-egl.h>
+-#include <wayland-client-protocol.h>
+-
+ using namespace netflix;
+ using namespace netflix::gibbon;
+ 
+-static struct wl_display* _display = NULL;
+-static struct wl_compositor* _compositor = NULL;
++static void  registry_handle_global(void *data, struct wl_registry *registry,
++                       uint32_t name, const char *interface, uint32_t version)
++{
++    struct Wayland *wayland = static_cast<Wayland *>(data);
+ 
+-struct wl_surface* _surface = NULL;
+-struct wl_egl_window* _window = NULL;
++    if (strcmp(interface, "wl_compositor") == 0) {
++        wayland->compositor = static_cast<struct wl_compositor *>(wl_registry_bind(registry, name,
++                                                                                   &wl_compositor_interface, 1));
++        printf("DEBUG found wl_compositor %p\n" , wayland->compositor);
++    }
++    if (strcmp(interface, "wl_seat") == 0) {
++        wayland->seat = static_cast<struct wl_seat *>(wl_registry_bind(registry, name, &wl_seat_interface, 4));
++        // wl_seat_add_listener(d->seat, &seat_listener, d);
++        printf("DEBUG found wl_seat %p\n" , wayland->seat);
++    }
++    if (strcmp(interface, "wl_shell") == 0) {
++        wayland->shell = static_cast<struct wl_shell *>(wl_registry_bind(registry, name, &wl_shell_interface, 1));
++        printf("DEBUG found wl_shell %p\n" , wayland->shell);
++    }
++    if (strcmp(interface, "xdg_shell") == 0) {
++        wayland->xdg = static_cast<struct xdg_shell *>(wl_registry_bind(registry, name, &xdg_shell_interface, 1));
++        printf("DEBUG found xdg_shell %p\n" , wayland->shell);
++    }
++}
+ 
++static void registry_handle_global_remove(void *data, struct wl_registry *registry,
++                              uint32_t name)
++{
++}
+ 
+-// listeners
+-static void registry_add_object (void *data, struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version) {
+-    if (!strcmp(interface,"wl_compositor")) {
+-        _compositor = static_cast<wl_compositor*>(wl_registry_bind (registry, name, &wl_compositor_interface, 0));
+-    }
++static const struct wl_registry_listener g_registryListener = {
++    registry_handle_global,
++    registry_handle_global_remove
++};
++
++
++static void xdg_shell_handle_ping (void*, struct xdg_shell* shell, uint32_t serial)
++{
++    xdg_shell_pong(shell, serial);
+ }
+-static void registry_remove_object (void *data, struct wl_registry *registry, uint32_t name) {
+ 
++static const struct xdg_shell_listener g_xdgShellListener = {
++    xdg_shell_handle_ping
++};
++
++static void handle_ping(void *data, struct wl_shell_surface *shell_surface, uint32_t serial)
++{
++    wl_shell_surface_pong(shell_surface, serial);
+ }
+-static struct wl_registry_listener registry_listener = {&registry_add_object, &registry_remove_object};
++
++static void handle_configure(void *data, struct wl_shell_surface *shell_surface, uint32_t edges, int32_t width, int32_t height)
++{
++}
++
++static void handle_popup_done(void *data, struct wl_shell_surface *shell_surface)
++{
++}
++
++static const struct wl_shell_surface_listener g_ShellSurfaceListener = {
++    handle_ping,
++    handle_configure,
++    handle_popup_done
++};
++
+ 
+ 
+ #ifndef GIBBON_EGL_NO_SWAP
+@@ -53,7 +97,7 @@ bool OpenGLContext::init(OpenGLContext* share)
+     EGLint contextAttributes[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
+ 
+     mPrivate = new OpenGLContextPrivate;
+-    memset(mPrivate, '\0', sizeof(OpenGLContextPrivate));
++    memset(mPrivate, 0, sizeof(OpenGLContextPrivate));
+     if (!share) {
+         mPrivate->type = OpenGLContextPrivate::WindowContext;
+ 
+@@ -134,42 +178,46 @@ bool OpenGLContext::init(OpenGLContext* share)
+                                          << " D=" << depthSize
+                                          << " S=" << stencilSize;
+ 
+-        // Full HD
+-        EGLint height(1080);
+-        EGLint width(1920);
++        mPrivate->geometry.Height = 1080;
++        mPrivate->geometry.Width = 1920;
+ 
+-        _display = wl_display_connect(NULL);
++        mPrivate->wayland.display = wl_display_connect(NULL);
+ 
+-        struct wl_registry *registry = wl_display_get_registry(_display);
+-        wl_registry_add_listener(registry, &registry_listener, NULL);
++        mPrivate->wayland.registry = wl_display_get_registry(mPrivate->wayland.display);
++        wl_registry_add_listener(mPrivate->wayland.registry, &g_registryListener, &mPrivate->wayland);
+ 
+-        wl_display_dispatch(_display);
+-        wl_display_roundtrip(_display);
++        wl_display_dispatch(mPrivate->wayland.display);
++        wl_display_roundtrip(mPrivate->wayland.display);
+ 
+-        if (_compositor == NULL) {
+-            fprintf(stderr, "Can't find compositor\n");
+-        } else {
+-            fprintf(stderr, "Found compositor\n");
++        if (mPrivate->wayland.xdg) {
++            xdg_shell_add_listener(mPrivate->wayland.xdg, &g_xdgShellListener, NULL);
++            xdg_shell_use_unstable_version(mPrivate->wayland.xdg, 5);
+         }
+ 
+-        _surface = wl_compositor_create_surface(_compositor);
+-        if (_surface == NULL) {
+-            fprintf(stderr, "Can't create surface\n");
+-        } else {
+-            fprintf(stderr, "Created surface\n");
++        mPrivate->wayland.surface = wl_compositor_create_surface(mPrivate->wayland.compositor);
++
++        if (mPrivate->wayland.surface) {
++            mPrivate->wayland.shellSurface = wl_shell_get_shell_surface(mPrivate->wayland.shell, mPrivate->wayland.surface);
++
++            if (mPrivate->wayland.shellSurface) {
++                wl_shell_surface_add_listener(mPrivate->wayland.shellSurface, &g_ShellSurfaceListener, NULL);
++                // wl_shell_surface_set_toplevel(mPrivate->wayland.shellSurface);
++                wl_shell_surface_set_fullscreen(mPrivate->wayland.shellSurface, WL_SHELL_SURFACE_FULLSCREEN_METHOD_DEFAULT, 0, NULL);
++            }
+         }
+ 
+         struct wl_region *region;
+-        region = wl_compositor_create_region(_compositor);
+-        wl_region_add(region, 0, 0,
+-                      width,
+-                      height);
++        region = wl_compositor_create_region(mPrivate->wayland.compositor);
+ 
+-        wl_surface_set_opaque_region(_surface, region);
++        wl_region_add(region, 0, 0, mPrivate->geometry.Width, mPrivate->geometry.Height);
++        wl_surface_set_opaque_region(mPrivate->wayland.surface, region);
+ 
+-        _window = wl_egl_window_create(_surface, width, height);
++        mPrivate->wayland.eglWindow = wl_egl_window_create(mPrivate->wayland.surface, mPrivate->geometry.Width, mPrivate->geometry.Height);
+ 
+-        mPrivate->surface = eglCreateWindowSurface(mPrivate->display, mPrivate->config, _window, 0);
++        EGLint height(0);
++        EGLint width(0);
++
++        mPrivate->surface = eglCreateWindowSurface(mPrivate->display, mPrivate->config, mPrivate->wayland.eglWindow, 0);
+ 
+         assert(EGL_NO_SURFACE != mPrivate->surface);
+ 
+@@ -195,6 +243,8 @@ bool OpenGLContext::init(OpenGLContext* share)
+         std::string ext(reinterpret_cast< const char * >(eglQueryString(mPrivate->display, EGL_EXTENSIONS)));
+         std::replace(ext.begin(), ext.end(), ' ', '\n' );
+         Log::info(TRACE_GIBBON_GRAPHICS) << "EGL EXTENSIONS : " << "\n" << ext;
++
++
+     } else {
+         mPrivate->type = OpenGLContextPrivate::PbContext;
+         mPrivate->display = share->mPrivate->display;
+diff --git a/partner/graphics/wayland-egl/OpenGLContextEGL.h b/partner/graphics/wayland-egl/OpenGLContextEGL.h
+index 9ad46915..0f5e2bd8 100644
+--- a/partner/graphics/wayland-egl/OpenGLContextEGL.h
++++ b/partner/graphics/wayland-egl/OpenGLContextEGL.h
+@@ -14,6 +14,27 @@
+ #include <EGL/egl.h>
+ #include <EGL/eglext.h>
+ 
++
++#include <wayland-egl.h>
++#include <wayland-client-protocol.h>
++#include <xdg-shell-client-protocol.h>
++
++struct Geometry {
++  int Width, Height;
++};
++
++struct Wayland {
++  struct wl_egl_window *eglWindow;
++  struct wl_surface *surface;
++  struct wl_shell_surface *shellSurface;
++  struct wl_display *display;
++  struct wl_registry *registry;
++  struct wl_compositor *compositor;
++  struct wl_seat *seat;
++  struct wl_shell *shell;
++  struct xdg_shell *xdg;
++};
++
+ namespace netflix {
+ namespace gibbon {
+ 
+@@ -31,6 +52,8 @@ public:
+     EGLSurface surface;
+     GLuint videoTexture;
+     EGLImageKHR videoImage;
++    Wayland wayland;
++    Geometry geometry;
+ };
+ 
+ }}
+diff --git a/partner/graphics/wayland-egl/gibbon_graphics.cmake b/partner/graphics/wayland-egl/gibbon_graphics.cmake
+index 9cac702d..6ec535f2 100644
+--- a/partner/graphics/wayland-egl/gibbon_graphics.cmake
++++ b/partner/graphics/wayland-egl/gibbon_graphics.cmake
+@@ -10,7 +10,7 @@ add_definitions(-DGIBBON_SCREEN_FULLRENDER -DGIBBON_COORDINATE_FLOAT -DGIBBON_SU
+ 
+ get_filename_component(CURRENT_DIRECTORY ${CMAKE_CURRENT_LIST_FILE} PATH)
+ include_directories(${CURRENT_DIRECTORY})
+-
++include_directories(${CURRENT_DIRECTORY}/protocols)
+ gibbon_add_sources(
+     GraphicsEngineGLES2.cpp
+     ScreenGLES2.cpp
+@@ -18,6 +18,7 @@ gibbon_add_sources(
+     EffectsGLES2.cpp
+     OpenGLContext.cpp
+     OpenGLFBO.cpp
++    protocols/xdg-shell-protocol.c
+ )
+ 
+ set(GIBBON_GRAPHICS_GL_WSYS "auto")
+-- 
+2.17.1
+

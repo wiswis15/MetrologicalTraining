@@ -1,0 +1,314 @@
+From 4b1521eb264a1b9a5fb6b7ba37902392a3636620 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Fri, 16 Jun 2017 12:47:12 +0200
+Subject: [PATCH 16/22] [cmake] Initial input handling via compositor.
+
+---
+ .../input/wayland/InputManagerWaylandEGL.cpp  | 271 ++++++++++++++++++
+ partner/input/wayland/gibbon_input.cmake      |  15 +
+ 2 files changed, 286 insertions(+)
+ create mode 100644 partner/input/wayland/InputManagerWaylandEGL.cpp
+ create mode 100644 partner/input/wayland/gibbon_input.cmake
+
+diff --git a/partner/input/wayland/InputManagerWaylandEGL.cpp b/partner/input/wayland/InputManagerWaylandEGL.cpp
+new file mode 100644
+index 00000000..7a86d2d4
+--- /dev/null
++++ b/partner/input/wayland/InputManagerWaylandEGL.cpp
+@@ -0,0 +1,271 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#define GIBBON_KEY(x) GIBBON_##x
++
++#include <Screen.h>
++#include <InputManager.h>
++#include <GibbonApplication.h>
++
++#include <nrdbase/ScopedMutex.h>
++#include <nrdbase/Log.h>
++#include <nrdbase/Time.h>
++
++#include <assert.h>
++
++#include <Client.h>
++#include <linux/input.h>
++#include <wayland-client-protocol.h>
++#include <pthread.h>
++
++using namespace netflix::gibbon;
++using namespace netflix;
++
++static WPEFramework::Wayland::Display& display(WPEFramework::Wayland::Display::Instance());
++
++static inline KeyEvent::Key keyCodeToKey(uint16_t c)
++{
++    KeyEvent::Key code = KeyEvent::GIBBON_KEY_UNKNOWN;
++    switch (c) {
++    case KEY_ENTER:
++        code = KeyEvent::GIBBON_KEY_RETURN;
++        break;
++    case KEY_END:
++        code = KeyEvent::GIBBON_KEY_END;
++        break;
++    case KEY_HOME:
++        code = KeyEvent::GIBBON_KEY_HOME;
++        break;
++    case KEY_F1:
++        code = KeyEvent::GIBBON_KEY_F1;
++        break;
++    case KEY_F2:
++        code = KeyEvent::GIBBON_KEY_F2;
++        break;
++    case KEY_F3:
++        code = KeyEvent::GIBBON_KEY_F3;
++        break;
++    case KEY_F4:
++        code = KeyEvent::GIBBON_KEY_F4;
++        break;
++    case KEY_F5:
++        code = KeyEvent::GIBBON_KEY_DELETE;
++        break;
++    case KEY_F6:
++        code = KeyEvent::GIBBON_KEY_F6;
++        break;
++    case KEY_F7:
++        code = KeyEvent::GIBBON_KEY_F7;
++        break;
++    case KEY_F8:
++        code = KeyEvent::GIBBON_KEY_F8;
++        break;
++    case KEY_F9:
++        code = KeyEvent::GIBBON_KEY_F9;
++        break;
++    case KEY_F10:
++        code = KeyEvent::GIBBON_KEY_F10;
++        break;
++    case KEY_F11:
++        code = KeyEvent::GIBBON_KEY_F11;
++        break;
++    case KEY_F12:
++        code = KeyEvent::GIBBON_KEY_F12;
++        break;
++    case KEY_F13:
++        code = KeyEvent::GIBBON_KEY_F13;
++        break;
++    case KEY_F14:
++        code = KeyEvent::GIBBON_KEY_F14;
++        break;
++    case KEY_F15:
++        code = KeyEvent::GIBBON_KEY_F15;
++        break;
++    case KEY_F16:
++        code = KeyEvent::GIBBON_KEY_F16;
++        break;
++    case KEY_F17:
++        code = KeyEvent::GIBBON_KEY_F17;
++        break;
++    case KEY_F18:
++        code = KeyEvent::GIBBON_KEY_F18;
++        break;
++    case KEY_F19:
++        code = KeyEvent::GIBBON_KEY_F19;
++        break;
++    case KEY_F20:
++        code = KeyEvent::GIBBON_KEY_F20;
++        break;
++    case KEY_F21:
++        code = KeyEvent::GIBBON_KEY_F21;
++        break;
++    case KEY_F22:
++        code = KeyEvent::GIBBON_KEY_F22;
++        break;
++    case KEY_F23:
++        code = KeyEvent::GIBBON_KEY_F23;
++        break;
++    case KEY_F24:
++        code = KeyEvent::GIBBON_KEY_F24;
++        break;
++    case KEY_LEFT:
++        code = KeyEvent::GIBBON_KEY_LEFT;
++        break;
++    case KEY_UP:
++        code = KeyEvent::GIBBON_KEY_UP;
++        break;
++    case KEY_RIGHT:
++        code = KeyEvent::GIBBON_KEY_RIGHT;
++        break;
++    case KEY_DOWN:
++        code = KeyEvent::GIBBON_KEY_DOWN;
++        break;
++    case KEY_BACKSPACE:
++        code = KeyEvent::GIBBON_KEY_BACKSPACE;
++        break;
++    case KEY_LEFTSHIFT:
++    case KEY_RIGHTSHIFT:
++        code = KeyEvent::GIBBON_KEY_SHIFT;
++        break;
++    case KEY_LEFTCTRL:
++    case KEY_RIGHTCTRL:
++        code = KeyEvent::GIBBON_KEY_CONTROL;
++        break;
++    case KEY_LEFTALT:
++    case KEY_RIGHTALT:
++        code = KeyEvent::GIBBON_KEY_ALT;
++        break;
++    case KEY_LEFTMETA:
++    case KEY_RIGHTMETA:
++        code = KeyEvent::GIBBON_KEY_META;
++        break;
++    case KEY_CAPSLOCK:
++        code = KeyEvent::GIBBON_KEY_CAPSLOCK;
++        break;
++    case KEY_NUMLOCK:
++        code = KeyEvent::GIBBON_KEY_NUMLOCK;
++        break;
++    case KEY_SCROLLLOCK:
++        code = KeyEvent::GIBBON_KEY_SCROLLLOCK;
++        break;
++    case KEY_ESC:
++        code = KeyEvent::GIBBON_KEY_ESCAPE;
++        break;
++    case KEY_TAB:
++        code = KeyEvent::GIBBON_KEY_TAB;
++        break;
++    case KEY_INSERT:
++        code = KeyEvent::GIBBON_KEY_INSERT;
++        break;
++    case KEY_DELETE:
++        code = KeyEvent::GIBBON_KEY_DELETE;
++        break;
++    default:
++        break;
++    }
++    return code;
++}
++
++// let's hope the keys in input.h don't change
++static const char* ltxt = "\t\t1234567890-=\t\tqwertyuiop[]\t\tasdfghjkl;'`\t\\zxcvbnm,./\t\t\t ";
++static const char* utxt = "\t\t!@#$%^&*()_+\t\tQWERTYUIOP{}\t\tASDFGHJKL:\"~\t|ZXCVBNM<>?\t\t\t ";
++static inline std::string keyCodeToString(uint16_t code, bool shift)
++{
++    assert(KEY_1 == 2 && KEY_SPACE == 57);
++    if (code >= KEY_1 && code <= KEY_SPACE && *(utxt + code) != '\t')
++        return std::string(shift ? (utxt + code) : (ltxt + code), 1);
++    return std::string();
++}
++
++static bool shiftPressed = false;
++
++class Process : public WPEFramework::Wayland::Display::IProcess {
++public:
++    virtual bool Dispatch()
++    {
++        return true;
++    };
++};
++
++static Process process;
++
++// this is called from the compositor client lib
++static bool handleKey(const uint32_t state, const uint32_t code, const uint32_t modifiers)
++{
++    printf("[Wayland Input] Received key,  0X%02X was %s\n", code, state == 0 ? "released" : "pressed");
++
++    const KeyEvent::Key key = keyCodeToKey(code);
++
++    switch (state) {
++    case WL_KEYBOARD_KEY_STATE_PRESSED:
++        shiftPressed = (key == KeyEvent::GIBBON_KEY_SHIFT ? true : shiftPressed);
++        printf("[Wayland Input] Sending key pressed [%d] -> [%d] to Netflix.\n", code, key);
++        GibbonApplication::instance()->sendEvent(new KeyEvent(GibbonEvent::Type_KeyPress, key, keyCodeToString(code, shiftPressed)));
++        GibbonApplication::instance()->getInputManager()->startAutoRepeat(key, keyCodeToString(code, shiftPressed));
++        break;
++    case WL_KEYBOARD_KEY_STATE_RELEASED:
++        GibbonApplication::instance()->getInputManager()->endAutoRepeat();
++        shiftPressed = (key == KeyEvent::GIBBON_KEY_SHIFT ? false : shiftPressed);
++        printf("[Wayland Input] Sending key released [%d] -> [%d] to Netflix.\n", code, key);
++        GibbonApplication::instance()->sendEvent(new KeyEvent(GibbonEvent::Type_KeyRelease, key, keyCodeToString(code, shiftPressed)));
++        break;
++    default:;
++    }
++
++    return true;
++}
++
++void* processor(void *arg)
++{
++    printf("[Wayland Input] Spin-up the wayland hamster.\n");
++    display.Process(SIGINT, &process);
++    printf("[Wayland Input] The wayland hamster left the wheel.\n");
++}
++
++void InputManager::init()
++{
++    pthread_t tid;
++    display.Callback(handleKey);
++    if (pthread_create(&tid, NULL, processor, NULL) != 0) {
++        printf("[Wayland Input] Error creating processor thread\n");
++    }
++}
++
++void InputManager::cleanup()
++{
++    display.Callback(NULL);
++    display.Signal();
++}
++
++void InputManager::moveMouse(const Point&)
++{
++}
++
++void InputManager::waitForInput(llong waitMS)
++{
++    ScopedMutex lock(mMutex);
++    Time wait(waitMS);
++    while(!mWakeup) {
++        if(mCondition.wait(&mMutex, &wait) == NFErr_TimedOut)
++            break;
++    }
++    mWakeup = false;
++}
++
++void InputManager::wakeup()
++{
++    ScopedMutex lock(mMutex);
++    mWakeup = true;
++    mCondition.signal();
++}
++
++bool InputManager::hasEvents() const
++{
++    return false;
++}
+diff --git a/partner/input/wayland/gibbon_input.cmake b/partner/input/wayland/gibbon_input.cmake
+new file mode 100644
+index 00000000..87e22cc6
+--- /dev/null
++++ b/partner/input/wayland/gibbon_input.cmake
+@@ -0,0 +1,15 @@
++# U.S. copyright and other applicable intellectual property laws and
++# may not be copied without the express permission of Netflix, Inc.,
++# which reserves all rights.  Reuse of any of this content for any
++# purpose without the permission of Netflix, Inc. is strictly
++# prohibited.
++
++set(GIBBON_INPUT_NULL TRUE)
++
++find_package(Wayland REQUIRED)
++find_package(CompositorClient REQUIRED)
++
++gibbon_add_libraries(${WAYLAND_LIBRARIES} ${COMPOSITOR_CLIENT_LIBRARIES})
++gibbon_add_includes(${WAYLAND_INCLUDE_DIRS} ${COMPOSITOR_CLIENT_INCLUDE_DIRS})
++
++gibbon_add_sources(InputManagerWaylandEGL.cpp)
+\ No newline at end of file
+-- 
+2.17.1
+

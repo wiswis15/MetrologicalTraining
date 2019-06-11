@@ -1,0 +1,174 @@
+From f9baf7709b159fa17dd6925eba39a929ae8decbd Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Thu, 22 Jun 2017 15:08:33 +0200
+Subject: [PATCH 22/22] [compositor-client] Moved the wayland loop to graphics.
+
+---
+ .../compositor-client/OpenGLContextEGL.cpp    | 33 ++++++++++++++-
+ .../InputManagerWaylandEGL.cpp                | 40 +++++--------------
+ 2 files changed, 40 insertions(+), 33 deletions(-)
+
+diff --git a/partner/graphics/compositor-client/OpenGLContextEGL.cpp b/partner/graphics/compositor-client/OpenGLContextEGL.cpp
+index d2b94a9b..d1534fbf 100644
+--- a/partner/graphics/compositor-client/OpenGLContextEGL.cpp
++++ b/partner/graphics/compositor-client/OpenGLContextEGL.cpp
+@@ -16,10 +16,12 @@
+ #include <gibbon/config.h>
+ #include <nrd/AppLog.h>
+ #include <string.h>
++#include <pthread.h>
+ 
+ using namespace netflix;
+ using namespace netflix::gibbon;
+ 
++/*
+ #ifndef GIBBON_EGL_NO_SWAP
+ static inline void gibbonEGLSwap(WPEFramework::Wayland::Display::Surface client)
+ {
+@@ -28,6 +30,24 @@ static inline void gibbonEGLSwap(WPEFramework::Wayland::Display::Surface client)
+ #else
+ extern void gibbonEGLSwap(gibbonEGLSwap(WPEFramework::Wayland::Surface client);
+ #endif
++ */
++
++class Process : public WPEFramework::Wayland::Display::IProcess {
++ public:
++  virtual bool Dispatch()
++  {
++      return true;
++  };
++};
++
++static Process process;
++
++static void* Processor(void* arg)
++{
++    printf("[%s:%d] Spin-up the wayland hamster.\n", __FILE__, __LINE__);
++    WPEFramework::Wayland::Display::Instance().Process(SIGINT, &process);
++    printf("[%s:%d] The wayland hamster left the wheel.\n", __FILE__, __LINE__);
++}
+ 
+ bool OpenGLContext::init(OpenGLContext* share)
+ {
+@@ -38,11 +58,16 @@ bool OpenGLContext::init(OpenGLContext* share)
+     mWidth = mPrivate->display.Physical().Width;
+     mHeight = mPrivate->display.Physical().Height;
+ 
+-    if (share){
++    if (share) {
+         mWidth = share->mWidth;
+         mHeight = share->mHeight;
+     }
+ 
++    pthread_t tid;
++    if (pthread_create(&tid, NULL, Processor, NULL) != 0) {
++        printf("[Wayland Input] Error creating processor thread\n");
++    }
++
+     return mPrivate->display.IsOperational();
+ }
+ 
+@@ -53,13 +78,17 @@ void OpenGLContext::cleanup()
+         glDeleteTextures(1, &mPrivate->videoTexture);
+     }
+ 
++    if (mPrivate->display.IsOperational()) {
++        mPrivate->display.Signal();
++    }
++
+     delete mPrivate;
+     mPrivate = NULL;
+ }
+ 
+ void OpenGLContext::flip()
+ {
+-    gibbonEGLSwap(mPrivate->client);
++    // gibbonEGLSwap(mPrivate->client);
+ }
+ 
+ void* OpenGLContext::display()
+diff --git a/partner/input/compositor-client/InputManagerWaylandEGL.cpp b/partner/input/compositor-client/InputManagerWaylandEGL.cpp
+index 7a86d2d4..7acc4d0b 100644
+--- a/partner/input/compositor-client/InputManagerWaylandEGL.cpp
++++ b/partner/input/compositor-client/InputManagerWaylandEGL.cpp
+@@ -22,13 +22,10 @@
+ #include <Client.h>
+ #include <linux/input.h>
+ #include <wayland-client-protocol.h>
+-#include <pthread.h>
+ 
+ using namespace netflix::gibbon;
+ using namespace netflix;
+ 
+-static WPEFramework::Wayland::Display& display(WPEFramework::Wayland::Display::Instance());
+-
+ static inline KeyEvent::Key keyCodeToKey(uint16_t c)
+ {
+     KeyEvent::Key code = KeyEvent::GIBBON_KEY_UNKNOWN;
+@@ -185,18 +182,7 @@ static inline std::string keyCodeToString(uint16_t code, bool shift)
+ 
+ static bool shiftPressed = false;
+ 
+-class Process : public WPEFramework::Wayland::Display::IProcess {
+-public:
+-    virtual bool Dispatch()
+-    {
+-        return true;
+-    };
+-};
+-
+-static Process process;
+-
+-// this is called from the compositor client lib
+-static bool handleKey(const uint32_t state, const uint32_t code, const uint32_t modifiers)
++static bool inputHandler(const uint32_t state, const uint32_t code, const uint32_t modifiers)
+ {
+     printf("[Wayland Input] Received key,  0X%02X was %s\n", code, state == 0 ? "released" : "pressed");
+ 
+@@ -221,26 +207,18 @@ static bool handleKey(const uint32_t state, const uint32_t code, const uint32_t
+     return true;
+ }
+ 
+-void* processor(void *arg)
+-{
+-    printf("[Wayland Input] Spin-up the wayland hamster.\n");
+-    display.Process(SIGINT, &process);
+-    printf("[Wayland Input] The wayland hamster left the wheel.\n");
+-}
+-
+ void InputManager::init()
+ {
+-    pthread_t tid;
+-    display.Callback(handleKey);
+-    if (pthread_create(&tid, NULL, processor, NULL) != 0) {
+-        printf("[Wayland Input] Error creating processor thread\n");
+-    }
++    WPEFramework::Wayland::Display::Instance().Callback(inputHandler);
+ }
+ 
+ void InputManager::cleanup()
+ {
+-    display.Callback(NULL);
+-    display.Signal();
++    /*
++    if (WPEFramework::Wayland::Display::Instance().IsOperational()) {
++        WPEFramework::Wayland::Display::Instance().Callback(NULL);
++    }
++    */
+ }
+ 
+ void InputManager::moveMouse(const Point&)
+@@ -251,8 +229,8 @@ void InputManager::waitForInput(llong waitMS)
+ {
+     ScopedMutex lock(mMutex);
+     Time wait(waitMS);
+-    while(!mWakeup) {
+-        if(mCondition.wait(&mMutex, &wait) == NFErr_TimedOut)
++    while (!mWakeup) {
++        if (mCondition.wait(&mMutex, &wait) == NFErr_TimedOut)
+             break;
+     }
+     mWakeup = false;
+-- 
+2.17.1
+

@@ -1,0 +1,52 @@
+From 166ed44f85bc709fbac75d0aae61c3531d4eb82a Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Fri, 16 Jun 2017 17:37:42 +0200
+Subject: [PATCH 21/22] [graphics] switched back to eglGetDisplay and
+ eglCreateWindowSurface
+
+---
+ partner/graphics/wayland-egl/OpenGLContextEGL.cpp | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/partner/graphics/wayland-egl/OpenGLContextEGL.cpp b/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
+index f21457cd..865fe27f 100644
+--- a/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
++++ b/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
+@@ -164,6 +164,8 @@ bool OpenGLContext::init(OpenGLContext* share)
+         EGLint majorVersion;
+         EGLint minorVersion;
+ 
++        mPrivate->display = eglGetDisplay(mPrivate->wayland.display);
++/*
+         if (PFNEGLGETPLATFORMDISPLAYEXTPROC getPlatformDisplay =
+             reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(eglGetProcAddress("eglGetPlatformDisplay"))){
+                 mPrivate->display = getPlatformDisplay(EGL_PLATFORM_WAYLAND_KHR, mPrivate->wayland.display, NULL);
+@@ -173,6 +175,7 @@ bool OpenGLContext::init(OpenGLContext* share)
+                 mPrivate->display = getPlatformDisplay(EGL_PLATFORM_WAYLAND_KHR, mPrivate->wayland.display, NULL);
+                 Log::info(TRACE_GIBBON_GRAPHICS) << "EGL EXTENSIONS PFNEGLGETPLATFORMDISPLAYEXTPROC";
+         }
++*/
+ 
+         assert(mPrivate->display != EGL_NO_DISPLAY);
+ 
+@@ -251,14 +254,14 @@ bool OpenGLContext::init(OpenGLContext* share)
+         EGLint height(0);
+         EGLint width(0);
+ 
+-       // mPrivate->surface = eglCreateWindowSurface(mPrivate->display, mPrivate->config, mPrivate->wayland.eglWindow, NULL);
+-
++        mPrivate->surface = eglCreateWindowSurface(mPrivate->display, mPrivate->config, mPrivate->wayland.eglWindow, NULL);
++/*
+         if (PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC createPlatformWindowSurface =
+             reinterpret_cast<PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC>(eglGetProcAddress("eglCreatePlatformWindowSurfaceEXT"))){
+             mPrivate->surface = createPlatformWindowSurface(mPrivate->display, mPrivate->config, mPrivate->wayland.eglWindow, NULL);
+             Log::info(TRACE_GIBBON_GRAPHICS) << "EGL EXTENSIONS PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC";
+         }
+-
++*/
+         assert(EGL_NO_SURFACE != mPrivate->surface);
+ 
+         eglQuerySurface(mPrivate->display, mPrivate->surface, EGL_WIDTH, &width);
+-- 
+2.17.1
+

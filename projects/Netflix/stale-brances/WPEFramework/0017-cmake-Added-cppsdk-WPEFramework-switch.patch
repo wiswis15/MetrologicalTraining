@@ -1,0 +1,30 @@
+From 25e4ad342637a55f76bbab443ca60821812af920 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Fri, 16 Jun 2017 12:47:59 +0200
+Subject: [PATCH 17/22] [cmake] Added cppsdk/WPEFramework switch
+
+---
+ partner/dpi/reference/drm.cmake | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/partner/dpi/reference/drm.cmake b/partner/dpi/reference/drm.cmake
+index 511029d3..49d7b196 100644
+--- a/partner/dpi/reference/drm.cmake
++++ b/partner/dpi/reference/drm.cmake
+@@ -200,11 +200,10 @@ if(NETFLIX_USE_PROVISION)
+     find_package(WPEFramework)
+     if (WPEFRAMEWORK_FOUND)
+         message(" -- Build with WPEFramework support")
+-        target_link_libraries(nrddpi ${WPEFRAMEWORK_LIBRARIES})
++        target_link_libraries(nrddpi WPEFrameworkCore)
+     else(WPEFRAMEWORK_FOUND)
+         message(" -- Build with CPPSDK support")
+-        find_package(Cppsdk REQUIRED COMPONENTS generics)
+-        target_link_libraries(nrddpi ${GENERICS_LIBRARIES})
++        target_link_libraries(nrddpi generics)
+     endif(WPEFRAMEWORK_FOUND)
+ else()
+     target_link_libraries(nrddpi playready)
+-- 
+2.17.1
+

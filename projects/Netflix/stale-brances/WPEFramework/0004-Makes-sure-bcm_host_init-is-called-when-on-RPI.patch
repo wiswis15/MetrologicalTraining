@@ -1,0 +1,25 @@
+From 897452ee217da64e8fdd1aa78e9e4f45c76da106 Mon Sep 17 00:00:00 2001
+From: Sander van der Maar <sandervandermaar@gmail.com>
+Date: Wed, 29 Mar 2017 15:08:59 +0200
+Subject: [PATCH 04/22] Makes sure bcm_host_init is called when on RPI
+
+---
+ partner/graphics/rpi/OpenGLContextEGL.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/partner/graphics/rpi/OpenGLContextEGL.cpp b/partner/graphics/rpi/OpenGLContextEGL.cpp
+index 5f1e67be..5c24c220 100644
+--- a/partner/graphics/rpi/OpenGLContextEGL.cpp
++++ b/partner/graphics/rpi/OpenGLContextEGL.cpp
+@@ -30,6 +30,8 @@ extern void gibbonEGLSwap(EGLDisplay display, EGLSurface surface);
+ 
+ bool OpenGLContext::init(OpenGLContext* share)
+ {
++    bcm_host_init();
++
+     EGLint contextAttributes[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
+ 
+     mPrivate = new OpenGLContextPrivate;
+-- 
+2.17.1
+
