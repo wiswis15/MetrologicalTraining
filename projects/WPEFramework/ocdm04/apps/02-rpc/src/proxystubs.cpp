@@ -1,6 +1,6 @@
 #include "interfaces.h"
 
-#include <WPEFramework/com/IUnknown.h> // MethodHandler, UnknownProxyType
+#include <WPEFramework/com/IUnknown.h>
 #include <WPEFramework/com/com.h>
 
 namespace WPEFramework {
@@ -33,12 +33,9 @@ namespace WPEFramework {
           },
     };
 
-    typedef ProxyStub::StubType<Exchange::IAdder, AdderStubMethods, ProxyStub::UnknownStub> AdderStub;
-
-    class AdderProxy : public ProxyStub::UnknownProxyType<Exchange::IAdder> {
+    class AdderProxy final : public ProxyStub::UnknownProxyType<Exchange::IAdder> {
     public:
-        AdderProxy(Core::ProxyType<Core::IPCChannel>& channel, void* implementation,
-            const bool otherSideInformed)
+        AdderProxy(const Core::ProxyType<Core::IPCChannel>& channel, void* implementation, const bool otherSideInformed)
             : BaseClass(channel, implementation, otherSideInformed)
         {
         }
@@ -80,17 +77,14 @@ namespace WPEFramework {
     };
 
     namespace {
-        class Instantiation {
+        typedef ProxyStub::UnknownStubType<Exchange::IAdder, AdderStubMethods> AdderStub;
+
+        static class Instantiation {
         public:
             Instantiation()
             {
                 RPC::Administrator::Instance().Announce<Exchange::IAdder, AdderProxy, AdderStub>();
             }
-
-            ~Instantiation()
-            {
-            }
-
         } instantiation;
     }
 }
