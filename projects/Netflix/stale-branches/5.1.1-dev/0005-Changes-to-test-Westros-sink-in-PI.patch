@@ -1,0 +1,100 @@
+From 893c125d8568cbc4d66bf9e9ac14aa4f68f4341b Mon Sep 17 00:00:00 2001
+From: HaseenaSainul <h.sainul@metrological.com>
+Date: Mon, 31 Dec 2018 22:13:32 +0530
+Subject: [PATCH 05/10] Changes to test Westros-sink in PI
+
+---
+ partner/dpi/gstreamer/CMakeLists.txt          |  5 ++-
+ partner/dpi/gstreamer/PlaybackGroupNative.cpp | 41 -------------------
+ 2 files changed, 3 insertions(+), 43 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/CMakeLists.txt b/partner/dpi/gstreamer/CMakeLists.txt
+index b81fcd9a..0582552f 100644
+--- a/partner/dpi/gstreamer/CMakeLists.txt
++++ b/partner/dpi/gstreamer/CMakeLists.txt
+@@ -38,7 +38,8 @@ elseif (GST_VIDEO_RENDERING STREQUAL "horizon-fusion")
+   add_definitions(-DHORIZON_FUSION)
+ elseif (GST_VIDEO_RENDERING STREQUAL "gl")
+   add_definitions(-DGST_GL)
+-  add_definitions(-DUSE_GST_PLAYBIN)
++elseif (GST_VIDEO_RENDERING STREQUAL "westeros")
++  add_definitions(-DWESTEROS_SINK)
+ endif()
+ 
+ if (NOT ${USE_COMCAST_VERSION} STREQUAL "")
+@@ -63,7 +64,7 @@ if (NOT ${USE_COMCAST_VERSION} STREQUAL "")
+ endif()
+ 
+ if(GIBBON_GST_PLATFORM STREQUAL "rpi")
+-    add_definitions(-DRASPBERRY_PI)
++  add_definitions(-DUSE_GST_PLAYBIN)
+ endif()
+ 
+ set(HAVE_DPI_DIRECTORY "${NRDP_BINARY_ROOT_DIR}/lib/dpi")
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.cpp b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+index a14020fe..eb720cbd 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.cpp
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+@@ -1,5 +1,4 @@
+ /* (c) 2011 Netflix, Inc. Do not copy or use without prior written permission from Netflix, Inc. */
+-//#define WESTEROS_SINK 1
+ #include "PlaybackGroupNative.h"
+ #include "ESPlayerConstants.h"
+ #include "ESManagerNative.h"
+@@ -56,15 +55,6 @@ extern void ApplicationManagerContentStopped(void);
+ #endif
+ #define AUDIO_SINK_NAME "ismd_audio_sink"
+ #define AUDIO_VOLUME_SCALE_FACTOR   1.0
+-#elif defined(RASPBERRY_PI)
+-#define AUDIO_SINK_NAME "omxhdmiaudiosink"
+-#else
+-#define AUDIO_SINK_NAME "autoaudiosink"
+-#endif
+-#if defined(WESTEROS_SINK)
+-#define VIDEO_SINK_NAME "westerossink"
+-#else
+-#define VIDEO_SINK_NAME "autovideosink"
+ #endif
+ 
+ #define TOO_FAR_AHEAD_THRESHOLD_SECONDS 20
+@@ -404,37 +394,6 @@ void PlaybackGroupNative::buildStaticPipeline()
+   gst_bin_add_many (GST_BIN (mGstPipeline), mSource, pAtypefind, pVtypefind, pVQueue, pAParse, pASink, pVDecoder, pVSink, NULL);
+   gst_element_link_many (pAtypefind, pASink, NULL);
+   gst_element_link_many (pVtypefind, pVQueue, pVDecoder, pVSink, NULL);
+-#elif defined(RASPBERRY_PI)
+-  GstElement* pAQueue         = gst_element_factory_make ("queue", NULL);
+-  GstElement* pAtypefind      = gst_element_factory_make ("typefind", "atypefind");
+-  GstElement* pVParse         = gst_element_factory_make ("h264parse", "h264parse");
+-  GstElement* pAParse         = gst_element_factory_make ("aacparse", "aacparse");
+-  GstElement* pAConvert       = gst_element_factory_make ("audioconvert", "audioconvert");
+-  GstElement* pVtypefind      = gst_element_factory_make ("typefind", "vtypefind");
+-  GstElement* pVQueue         = gst_element_factory_make ("queue", NULL);
+-
+-
+-  mADecoder = gst_element_factory_make("decodebin", "audio-decoder");
+-  g_signal_connect(mADecoder, "pad-added", G_CALLBACK(OnAudioDecoderPadAdded), this);
+-  mASink = gst_element_factory_make(AUDIO_SINK_NAME, "audio-sink");
+-
+-#if defined(WESTEROS_SINK)
+-  GstElement* pVSink = createWesterosSink();
+-#else
+-  GstElement* pVSink       = gst_element_factory_make (VIDEO_SINK_NAME, "video-sink");
+-#endif
+-  g_object_set(G_OBJECT(pVSink), "async",1, NULL);
+-
+-  mFirstVideoElement = pVtypefind;
+-  mFirstAudioElement = pAtypefind;
+-
+-  gst_bin_add_many (GST_BIN (mGstPipeline), mSource, pVtypefind, pVQueue, pVParse, pVSink, NULL);
+-  gst_bin_add_many(GST_BIN(mGstPipeline), mSource, mADecoder, mASink, nullptr);
+-  gst_element_link_many (mSource, mADecoder, nullptr);
+-  mAudioConvert       = gst_element_factory_make ("audioconvert", "audioconvert");
+-  gst_bin_add(GST_BIN(mGstPipeline), mAudioConvert);
+-  gst_element_link_many(mAudioConvert, mASink, nullptr);
+-  gst_element_link_many (pVtypefind, pVParse, pVQueue, pVSink, NULL);
+ #endif
+ }
+ 
+-- 
+2.17.1
+

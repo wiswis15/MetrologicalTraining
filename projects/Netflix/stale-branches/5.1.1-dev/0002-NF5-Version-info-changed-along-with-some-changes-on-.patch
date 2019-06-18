@@ -1,0 +1,138 @@
+From 8da13faa295dd9d82e1e3076b0cca92b6597a30a Mon Sep 17 00:00:00 2001
+From: HaseenaSainul <h.sainul@metrological.com>
+Date: Fri, 21 Dec 2018 09:48:38 +0530
+Subject: [PATCH 02/10] [NF5] Version info changed along with some changes on
+ GStreamer
+
+---
+ partner/dpi/gstreamer/FileSystem.cpp          |  5 ++-
+ partner/dpi/gstreamer/PlaybackGroupNative.cpp | 42 +++++++++++++++----
+ partner/dpi/gstreamer/PlaybackGroupNative.h   |  4 ++
+ 3 files changed, 42 insertions(+), 9 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/FileSystem.cpp b/partner/dpi/gstreamer/FileSystem.cpp
+index f8f1329a..d5195beb 100644
+--- a/partner/dpi/gstreamer/FileSystem.cpp
++++ b/partner/dpi/gstreamer/FileSystem.cpp
+@@ -1252,7 +1252,8 @@ const std::string FileSystem::getFriendlyName() const
+ 
+ const std::string FileSystem::getSoftwareVersion() const
+ {
+-  return mVersion;
++  static const std::string version("Netflix Reference DPI Implementation");
++  return version;
+ }
+ 
+ ISystem::EntityAuthenticationType FileSystem::getEntityAuthenticationType() const
+@@ -1278,8 +1279,8 @@ void FileSystem::setKeyExchangeType(ISystem::KeyExchangeType kexType)
+ std::string FileSystem::appbootKey() const {
+     std::string appbootKey;
+ #ifndef USE_COMCAST_VERSION //COMCAST_PROVISIONING
+-        // Load the Appboot public key
+     appbootKey = "ECDSA:MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAELn5TGw619DfHUxPNPjO5i+X9Tybqm11dpZarekbL4TJI7IHeh+5gPWc7uQ/b76wfcGZZs6IAY8aAriu/gOH5cA==";
++        // Load the Appboot public key
+     std::string appbootKeyPath = sConfiguration->appbootKeyPath;
+ 
+     // TODO: figure out what goes wrong with sConfiguration
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.cpp b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+index 68b5d38c..c1a3ffd9 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.cpp
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+@@ -1,4 +1,5 @@
+ /* (c) 2011 Netflix, Inc. Do not copy or use without prior written permission from Netflix, Inc. */
++#define WESTEROS_SINK 1
+ #include "PlaybackGroupNative.h"
+ #include "ESPlayerConstants.h"
+ #include "ESManagerNative.h"
+@@ -319,6 +320,28 @@ PlaybackGroupNative::~PlaybackGroupNative()
+     Log::warn(TRACE_MEDIACONTROL, "Finished tear down of gstreamer player");
+ }
+ 
++/* static */ void PlaybackGroupNative::OnAudioDecoderPadAdded(GstElement *decodebin, GstPad *pad, gpointer data)
++{
++    // We know already we are reacting to the audio decoder bin.
++    NRDP_UNUSED(decodebin);
++
++    // Audio decoder got a new pad: output (src) pad.
++    PlaybackGroupNative *sink = reinterpret_cast<PlaybackGroupNative*>(data);
++
++    fprintf(stderr, "new audio pad\n");
++
++    GstPad * sinkpad = gst_element_get_static_pad(sink->mAudioConvert, "sink");
++
++    fprintf(stderr, "audio sinkpad: %p\n", sinkpad);
++    GstPadLinkReturn linkReturn = gst_pad_link(pad, sinkpad);
++
++    if (linkReturn != GST_PAD_LINK_OK) {
++        fprintf(stderr, "audio link wasn't ok\n");
++    }
++
++    GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(sink->mGstPipeline), GST_DEBUG_GRAPH_SHOW_ALL, "after-add-audio-decoder-pad");
++}
++
+ #ifndef USE_GST_PLAYBIN
+ void PlaybackGroupNative::buildStaticPipeline()
+ {
+@@ -387,25 +410,30 @@ void PlaybackGroupNative::buildStaticPipeline()
+   GstElement* pVParse         = gst_element_factory_make ("h264parse", "h264parse");
+   GstElement* pAParse         = gst_element_factory_make ("aacparse", "aacparse");
+   GstElement* pAConvert       = gst_element_factory_make ("audioconvert", "audioconvert");
+-  GstElement* pADecoder       = gst_element_factory_make ("avdec_aac", "avdec_aac");
+   GstElement* pVtypefind      = gst_element_factory_make ("typefind", "vtypefind");
+   GstElement* pVQueue         = gst_element_factory_make ("queue", NULL);
+ 
+-  // buffer up to 10 seconds of video data in the queue
+-  g_object_set(pVQueue, "max-size-buffers", (guint) 0, "max-size-time", (guint64) 10 * GST_SECOND, NULL);
+-  GstElement* pASink       = gst_element_factory_make (AUDIO_SINK_NAME, AUDIO_SINK_NAME);
++
++  mADecoder = gst_element_factory_make("decodebin", "audio-decoder");
++  g_signal_connect(mADecoder, "pad-added", G_CALLBACK(OnAudioDecoderPadAdded), this);
++  mASink = gst_element_factory_make(AUDIO_SINK_NAME, "audio-sink");
++
+ #if defined(WESTEROS_SINK)
+   GstElement* pVSink = createWesterosSink();
+ #else
+-  GstElement* pVSink       = gst_element_factory_make (VIDEO_SINK_NAME, NULL);
++  GstElement* pVSink       = gst_element_factory_make (VIDEO_SINK_NAME, "video-sink");
+ #endif
+   g_object_set(G_OBJECT(pVSink), "async",1, NULL);
+ 
+   mFirstVideoElement = pVtypefind;
+   mFirstAudioElement = pAtypefind;
+ 
+-  gst_bin_add_many (GST_BIN (mGstPipeline), mSource, pAQueue, pAtypefind, pADecoder, pVtypefind, pVQueue, pVParse, pAParse, pASink, pVSink, pAConvert, NULL);
+-  gst_element_link_many (pAtypefind, pAParse, pAQueue, pADecoder, pAConvert, pASink, NULL);
++  gst_bin_add_many (GST_BIN (mGstPipeline), mSource, pVtypefind, pVQueue, pVParse, pVSink, NULL);
++  gst_bin_add_many(GST_BIN(mGstPipeline), mSource, mADecoder, mASink, nullptr);
++  gst_element_link_many (mSource, mADecoder, nullptr);
++  mAudioConvert       = gst_element_factory_make ("audioconvert", "audioconvert");
++  gst_bin_add(GST_BIN(mGstPipeline), mAudioConvert);
++  gst_element_link_many(mAudioConvert, mASink, nullptr);
+   gst_element_link_many (pVtypefind, pVParse, pVQueue, pVSink, NULL);
+ #endif
+ }
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.h b/partner/dpi/gstreamer/PlaybackGroupNative.h
+index e284683b..bb92d623 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.h
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.h
+@@ -175,6 +175,7 @@ private:
+     void ConfigureNetflixSrc();
+     void SetFirstFrameDrawn();
+ 
++    static void OnAudioDecoderPadAdded(GstElement *decodebin, GstPad *pad, gpointer data);  
+ 
+     // The video audio rendering threads access mPlaybackState. The state is
+     // set in and SDK thread. The mPlaybackStateMutex should be held when
+@@ -228,6 +229,9 @@ private:
+     GstElement *mGstPipeline;
+     guint mGstPipelineWatchId;
+     GstElement *mSource;
++    GstElement* mADecoder;
++    GstElement* mASink;
++    GstElement * mAudioConvert;
+ 
+ #ifndef USE_GST_PLAYBIN
+     void buildStaticPipeline();
+-- 
+2.17.1
+

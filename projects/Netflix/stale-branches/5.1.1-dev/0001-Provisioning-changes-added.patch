@@ -1,0 +1,359 @@
+From 13e3ccf5b04c91bb6118d4ef52c30ded26319b76 Mon Sep 17 00:00:00 2001
+From: HaseenaSainul <h.sainul@metrological.com>
+Date: Tue, 18 Dec 2018 22:41:11 +0530
+Subject: [PATCH 01/10] Provisioning changes added
+
+---
+ netflix/cmake/FindProvisionProxy.cmake        | 39 +++++++++++++++++++
+ netflix/src/platform/gibbon/CMakeLists.txt    | 11 ++++++
+ .../src/platform/gibbon/GibbonApplication.cpp |  6 +--
+ partner/dpi/gstreamer/CMakeLists.txt          | 14 +++++++
+ partner/dpi/gstreamer/DeviceLibNative.cpp     |  7 ++++
+ partner/dpi/gstreamer/FileSystem.cpp          |  6 +--
+ partner/dpi/gstreamer/drm.cmake               | 13 +++++++
+ partner/graphics/wpeframework/Compositor.h    |  5 +--
+ .../graphics/wpeframework/OpenGLContext.cpp   |  9 ++---
+ .../wpeframework/OpenGLContextEGL.cpp         |  6 +++
+ partner/graphics/wpeframework/ScreenGLES2.cpp |  5 ---
+ 11 files changed, 101 insertions(+), 20 deletions(-)
+ create mode 100644 netflix/cmake/FindProvisionProxy.cmake
+
+diff --git a/netflix/cmake/FindProvisionProxy.cmake b/netflix/cmake/FindProvisionProxy.cmake
+new file mode 100644
+index 00000000..59aa53a2
+--- /dev/null
++++ b/netflix/cmake/FindProvisionProxy.cmake
+@@ -0,0 +1,39 @@
++# - Try to find Metrological ProvisionProxy.
++# Once done, this will define
++#
++#  PROVISIONPROXY_FOUND - system has Metrological ProvisionProxy.
++#  PROVISIONPROXY_INCLUDE_DIRS - the Metrological ProvisionProxy include directories
++#  PROVISIONPROXY_LIBRARIES - link these to use Metrological ProvisionProxy.
++#  PROVISIONPROXY_CFLAGS - add these to yor cflags use Metrological ProvisionProxy.
++#
++# Copyright (C) 2017 Metrological B.V.
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions
++# are met:
++# 1.  Redistributions of source code must retain the above copyright
++#     notice, this list of conditions and the following disclaimer.
++# 2.  Redistributions in binary form must reproduce the above copyright
++#     notice, this list of conditions and the following disclaimer in the
++#     documentation and/or other materials provided with the distribution.
++#
++# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND ITS CONTRIBUTORS ``AS
++# IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++# PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR ITS
++# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
++# OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
++# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
++# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
++# ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++find_package(PkgConfig)
++
++pkg_check_modules(PROVISIONPROXY REQUIRED provisionproxy)
++
++include(FindPackageHandleStandardArgs)
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(WAYLAND_EGL DEFAULT_MSG PROVISIONPROXY_FOUND)
++
++mark_as_advanced(PROVISIONPROXY_INCLUDE_DIRS PROVISIONPROXY_LIBRARIES)
+\ No newline at end of file
+diff --git a/netflix/src/platform/gibbon/CMakeLists.txt b/netflix/src/platform/gibbon/CMakeLists.txt
+index 175a3620..e30dcb01 100644
+--- a/netflix/src/platform/gibbon/CMakeLists.txt
++++ b/netflix/src/platform/gibbon/CMakeLists.txt
+@@ -3,6 +3,17 @@
+ cmake_minimum_required(VERSION 3.6)
+ 
+ include(gibbon.cmake)
++
++if(NETFLIX_USE_PROVISION)
++    message("Yes netflix NETFLIX_USE_PROVISION")
++    find_package(ProvisionProxy REQUIRED)
++    gibbon_add_libraries(${PROVISIONPROXY_LIBRARIES})
++    gibbon_add_includes(${PROVISIONPROXY_INCLUDE_DIRS})
++
++    # TODO: currently "-u" args are exposed as cflags, they are going to need to be linker flags.
++    gibbon_add_libraries("-u OpenSSLModule")
++endif(NETFLIX_USE_PROVISION)
++
+ include(CheckCSourceCompiles)
+ include(CheckCXXSourceCompiles)
+ include(CMakeParseArguments)
+diff --git a/netflix/src/platform/gibbon/GibbonApplication.cpp b/netflix/src/platform/gibbon/GibbonApplication.cpp
+index d2374f6e..09e2b073 100644
+--- a/netflix/src/platform/gibbon/GibbonApplication.cpp
++++ b/netflix/src/platform/gibbon/GibbonApplication.cpp
+@@ -383,13 +383,13 @@ void GibbonApplication::eventFired(const Event::SharedPtr &event)
+     case GibbonEvent::Type_KeyRelease: {
+ #ifdef BUILD_DEBUG
+         const std::shared_ptr<KeyEvent> keyEvent = std::static_pointer_cast<KeyEvent>(event);
+-        if((keyEvent->mModifiers & KeyEvent::MODIFIER_CTRL) && keyEvent->mKey == GIBBON_KEY(KeyEvent::KEY_HOME)) {
++        if((keyEvent->mModifiers & KeyEvent::MODIFIER_CTRL) && keyEvent->mKey == GIBBON_KEY(KeyEvent::NETFLIX51_KEY_HOME)) {
+             GibbonApplication::instance()->reloadCaches();
+             GibbonApplication::instance()->reload(GibbonApplication::Location_Current);
+-        } else if((keyEvent->mModifiers & KeyEvent::MODIFIER_ALT) && keyEvent->mKey == GIBBON_KEY(KeyEvent::KEY_HOME)) {
++        } else if((keyEvent->mModifiers & KeyEvent::MODIFIER_ALT) && keyEvent->mKey == GIBBON_KEY(KeyEvent::NETFLIX51_KEY_HOME)) {
+             GibbonApplication::instance()->reloadCaches();
+             GibbonApplication::instance()->reload(GibbonApplication::Location_Base);
+-        } else if((keyEvent->mModifiers & KeyEvent::MODIFIER_CTRL) && keyEvent->mKey == GIBBON_KEY(KeyEvent::KEY_END)) {
++        } else if((keyEvent->mModifiers & KeyEvent::MODIFIER_CTRL) && keyEvent->mKey == GIBBON_KEY(KeyEvent::NETFLIX51_KEY_END)) {
+             nrdApp()->scheduleQuit();
+         }
+ #endif
+diff --git a/partner/dpi/gstreamer/CMakeLists.txt b/partner/dpi/gstreamer/CMakeLists.txt
+index fc323c68..f10c7156 100644
+--- a/partner/dpi/gstreamer/CMakeLists.txt
++++ b/partner/dpi/gstreamer/CMakeLists.txt
+@@ -296,6 +296,20 @@ if (DPI_REFERENCE_TTS STREQUAL "comcast")
+ endif()
+ 
+ add_library(nrddpi ${SOURCES})
++
++if (DPI_DRM STREQUAL "ocdm" OR NETFLIX_USE_PROVISION)
++    message("Yes NETFLIX_USE_PROVISION")
++    set(LIBRARIES "WPEFrameworkCore;${LIBRARIES}")
++    if (NETFLIX_USE_PROVISION)
++        set(LIBRARIES "provision;${LIBRARIES}")
++        set(LIBRARIES "provisionproxy;${LIBRARIES}")
++        add_definitions(-DUSE_PROVISIONING)
++    endif()
++    if (DPI_DRM STREQUAL "ocdm")
++        set(LIBRARIES "ocdm;${LIBRARIES}")
++    endif()
++endif()
++
+ target_link_libraries(nrddpi nrdbase z ${LIBRARIES} nrdree ${SST_LIBRARIES})
+ 
+ if(DEFINED DEPENDENCIES AND NOT DEPENDENCIES STREQUAL "")
+diff --git a/partner/dpi/gstreamer/DeviceLibNative.cpp b/partner/dpi/gstreamer/DeviceLibNative.cpp
+index 57ef0979..6a22f6ad 100644
+--- a/partner/dpi/gstreamer/DeviceLibNative.cpp
++++ b/partner/dpi/gstreamer/DeviceLibNative.cpp
+@@ -83,6 +83,8 @@ using namespace netflix::device;
+ #if USE_PROVISIONING
+ #ifdef USE_COMCAST_VERSION //COMCAST_PROVISIONING
+ #include <provision/DRMInfo.h>
++#else
++#include <provision/AccesProvision.h>
+ #endif
+ #endif
+ 
+@@ -250,6 +252,11 @@ bool DeviceLibNative::init()
+         return false;
+     }
+ 
++#ifndef USE_COMCAST_VERSION
++    theSystem_->setEntityAuthenticationType(ISystem::EA_MODEL_GROUP_KEYS);
++    theSystem_->setKeyExchangeType(ISystem::KX_AUTHENTICATED_DIFFIE_HELLMAN);
++#endif
++
+ #else
+     //    TODO: COMCAST ADD ERROR HANDLING and GetNetflixESNString() handling
+ 
+diff --git a/partner/dpi/gstreamer/FileSystem.cpp b/partner/dpi/gstreamer/FileSystem.cpp
+index 3a00c2c1..f8f1329a 100644
+--- a/partner/dpi/gstreamer/FileSystem.cpp
++++ b/partner/dpi/gstreamer/FileSystem.cpp
+@@ -1279,6 +1279,7 @@ std::string FileSystem::appbootKey() const {
+     std::string appbootKey;
+ #ifndef USE_COMCAST_VERSION //COMCAST_PROVISIONING
+         // Load the Appboot public key
++    appbootKey = "ECDSA:MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAELn5TGw619DfHUxPNPjO5i+X9Tybqm11dpZarekbL4TJI7IHeh+5gPWc7uQ/b76wfcGZZs6IAY8aAriu/gOH5cA==";
+     std::string appbootKeyPath = sConfiguration->appbootKeyPath;
+ 
+     // TODO: figure out what goes wrong with sConfiguration
+@@ -1295,18 +1296,17 @@ std::string FileSystem::appbootKey() const {
+     ASSERT(!appbootKeyPath.empty(), "No appboot public key data file specified.");
+ 
+     DataBuffer pubkeyData = Configuration::resourceContent(appbootKeyPath);
+-    if (pubkeyData.empty()) {
++    if (!pubkeyData.empty()) {
+         appbootKey = DataBuffer::fromFile(appbootKeyPath).toString();
+     }
+ #else
+-
+     appbootKey = "ECDSA:MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAELn5TGw619DfHUxPNPjO5i+X9Tybqm11dpZarekbL4TJI7IHeh+5gPWc7uQ/b76wfcGZZs6IAY8aAriu/gOH5cA==";
+ 
+     if (!sConfiguration->appbootKeyPath.empty()) {
+         appbootKey = DataBuffer::fromFile(sConfiguration->appbootKeyPath).toString();
+     }
+-#endif
+ 
++#endif
+ 
+     return appbootKey;
+ }
+diff --git a/partner/dpi/gstreamer/drm.cmake b/partner/dpi/gstreamer/drm.cmake
+index ee2316d7..97ba132b 100644
+--- a/partner/dpi/gstreamer/drm.cmake
++++ b/partner/dpi/gstreamer/drm.cmake
+@@ -34,6 +34,15 @@ if(DPI_DRM STREQUAL "playready2.5-ss-tee")
+         COMMAND ${CMAKE_COMMAND} -E make_directory ${HAVE_DPI_DIRECTORY}/playready/storage
+         COMMAND ${CMAKE_COMMAND} -E copy_directory ${PLAYREADY_DIRECTORY}/etc/playready ${HAVE_DPI_DIRECTORY}/playready
+     )
++elseif(DPI_REFERENCE_DRM STREQUAL "ocdm")
++    set(PLAYREADY_INCLUDE "${CMAKE_INSTALL_PREFIX}/include/playready")
++
++    set(CMAKE_REQUIRED_INCLUDES_SAVED "${CMAKE_REQUIRED_INCLUDES}")
++    set(CMAKE_REQUIRED_DEFINITIONS_SAVED "${CMAKE_REQUIRED_DEFINITIONS}")
++    set(CMAKE_REQUIRED_INCLUDES "${PLAYREADY_INCLUDE};${PLAYREADY_INCLUDE}/oem/inc;${PLAYREADY_INCLUDE}/oem/ansi/inc;${PLAYREADY_INCLUDE}/oem/common/inc")
++
++    add_definitions( -DOCDM )
++
+ 
+ elseif(DPI_DRM STREQUAL "playready2.5")
+     # Copied from 4.2
+@@ -233,3 +242,7 @@ else()
+     message(FATAL_ERROR "Invalid DRM implementation '${DPI_DRM}'. Possible values are 'playready2.5-ss-tee', 'playready3.0', 'playready3.2', 'none'")
+ #endif
+ endif()
++
++if(NETFLIX_USE_PROVISION)
++    add_definitions( -DUSE_PROVISIONING )
++endif(NETFLIX_USE_PROVISION)
+diff --git a/partner/graphics/wpeframework/Compositor.h b/partner/graphics/wpeframework/Compositor.h
+index fc576c52..64942512 100644
+--- a/partner/graphics/wpeframework/Compositor.h
++++ b/partner/graphics/wpeframework/Compositor.h
+@@ -120,11 +120,9 @@ public:
+         const char* height_str(std::getenv("SCREEN_HEIGHT"));
+         uint32_t height = (height_str == nullptr ? 720 : atoi(height_str));
+ 
+-            //printf("%s:%d:%d\n", __FILE__, __func__, __LINE__); 
+         _graphicsSurface = _display->Create(_display_name, width, height);
+-            //printf("%s:%d:%d\n", __FILE__, __func__, __LINE__); 
++        printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+         _graphicsSurface->Keyboard(&_keyboardHandle);
+-            //printf("%s:%d:%d\n", __FILE__, __func__, __LINE__); 
+     }
+ 
+     ~Display() {
+@@ -136,6 +134,7 @@ public:
+         static Display myDisplay;
+         myDisplay.AddRef();
+         myDisplay._displayStatus = DisplayStatus::Attached;
++        printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+         return (&myDisplay);
+     }
+     void ReleaseDisplayClient() {
+diff --git a/partner/graphics/wpeframework/OpenGLContext.cpp b/partner/graphics/wpeframework/OpenGLContext.cpp
+index 81d39180..4e03bb1b 100644
+--- a/partner/graphics/wpeframework/OpenGLContext.cpp
++++ b/partner/graphics/wpeframework/OpenGLContext.cpp
+@@ -207,13 +207,10 @@ OpenGLContext::OpenGLContext(OpenGLContext* share)
+         assert(!sShutdown);
+     }
+ 
+-    printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+     // coverity[ctor_dtor_leak]
+-    if(!init(share)) {
+-    printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
++    if(!init(share))
+         return;
+-}
+-    printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
++
+     glDisable(GL_BLEND);
+     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+     glPixelStorei(GL_PACK_ALIGNMENT, 1);
+@@ -256,7 +253,7 @@ bool OpenGLContext::init(OpenGLContext* share)
+ {
+     printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+     if(init_sys(share)) {
+-    printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
++        printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+         initGLLimits();
+         initGLFormats();
+         initGLExtensions();
+diff --git a/partner/graphics/wpeframework/OpenGLContextEGL.cpp b/partner/graphics/wpeframework/OpenGLContextEGL.cpp
+index 415871cb..f1f29925 100644
+--- a/partner/graphics/wpeframework/OpenGLContextEGL.cpp
++++ b/partner/graphics/wpeframework/OpenGLContextEGL.cpp
+@@ -37,11 +37,13 @@ bool OpenGLContext::init_sys(OpenGLContext* share)
+ {
+     EGLint contextAttributes[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
+ 
++    printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+     mPrivate = new OpenGLContextPrivate;
+     memset(mPrivate, '\0', sizeof(OpenGLContextPrivate));
+     if (!share) {
+         mPrivate->type = OpenGLContextPrivate::WindowContext;
+ 
++        printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+         EGLint numConfigs = 0;
+         EGLint majorVersion;
+         EGLint minorVersion;
+@@ -111,6 +113,7 @@ bool OpenGLContext::init_sys(OpenGLContext* share)
+         eglGetConfigAttrib(dpy, mPrivate->display->config, EGL_DEPTH_SIZE, &depthSize);
+         eglGetConfigAttrib(dpy, mPrivate->display->config, EGL_STENCIL_SIZE, &stencilSize);
+ 
++        printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+         Log::info(TRACE_GIBBON_GRAPHICS) << "EGL CONFIG HAS"
+                                          << " U=" << bufferSize
+                                          << " R=" << redSize
+@@ -177,6 +180,7 @@ bool OpenGLContext::init_sys(OpenGLContext* share)
+         result = eglSwapInterval(mPrivate->display->dpy, 1);
+         assert(EGL_FALSE != result);
+     }
++    printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+     return true;
+ }
+ 
+@@ -187,6 +191,7 @@ OpenGLDisplayEGL::~OpenGLDisplayEGL()
+ 
+ void OpenGLContext::cleanup_sys()
+ {
++    printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+     nrdApp()->getSystem()->resourceReleased("graphics");
+     eglMakeCurrent(mPrivate->display->dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+     eglDestroySurface(mPrivate->display->dpy, mPrivate->surface);
+@@ -197,6 +202,7 @@ void OpenGLContext::cleanup_sys()
+     delete mPrivate;
+     mPrivate = 0;
+     wpeDisplay->Release();
++    printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+ }
+ 
+ void OpenGLContext::focus_sys()
+diff --git a/partner/graphics/wpeframework/ScreenGLES2.cpp b/partner/graphics/wpeframework/ScreenGLES2.cpp
+index 49382caf..3b96422a 100644
+--- a/partner/graphics/wpeframework/ScreenGLES2.cpp
++++ b/partner/graphics/wpeframework/ScreenGLES2.cpp
+@@ -357,27 +357,22 @@ void Screen::init()
+ 
+ void Screen::start_sys()
+ {
+-    printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+     if (!GibbonConfiguration::takeFocus()) {
+-    printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+         ScopedMutex _lock(&lock());
+         mIgnoreNextFocus = true;
+     }
+-    printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+     if (sConfiguration.targetSamples == -1)
+         sConfiguration.targetSamples = GibbonConfiguration::multisampleBuffers();
+ 
+     // Grab a GL context so we have one for the current thread
+     const Size size = getSize();
+     OpenGLContext::setScreenSize(size.width, size.height);
+-    printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+ 
+     OpenGLContext *context = OpenGLContext::context();
+     assert(context);
+     if(GibbonDebug::TestGLSurfaceYUV)
+         setSupportedTextureFormat(CustomFormat_YUV);
+     {
+-    printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+         const std::vector<int> formats = context->formats();
+         for(std::vector<int>::const_iterator it = formats.begin(); it != formats.end(); ++it)
+             setSupportedTextureFormat(*it);
+-- 
+2.17.1
+

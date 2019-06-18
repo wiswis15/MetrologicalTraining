@@ -1,0 +1,1008 @@
+From eba819f05be69c10e7087ec7f7f9572f7063e5fe Mon Sep 17 00:00:00 2001
+From: Neeraj Deshpande <neeraj.deshpande@valuelabs.com>
+Date: Wed, 26 Dec 2018 11:30:21 +0530
+Subject: [PATCH 04/10] Added support for GST_GL based video sink.
+
+---
+ partner/dpi/gstreamer/CMakeLists.txt          |   1 +
+ partner/dpi/gstreamer/PlaybackGroupNative.cpp |   2 +-
+ partner/dpi/gstreamer/PlaybackGroupNative.h   |   3 +-
+ partner/dpi/gstreamer/VideoSinkGStreamer.cpp  | 844 ++++++++++++++++++
+ partner/dpi/gstreamer/VideoSinkGStreamer.h    |  90 ++
+ 5 files changed, 937 insertions(+), 3 deletions(-)
+ create mode 100644 partner/dpi/gstreamer/VideoSinkGStreamer.cpp
+ create mode 100644 partner/dpi/gstreamer/VideoSinkGStreamer.h
+
+diff --git a/partner/dpi/gstreamer/CMakeLists.txt b/partner/dpi/gstreamer/CMakeLists.txt
+index f10c7156..b81fcd9a 100644
+--- a/partner/dpi/gstreamer/CMakeLists.txt
++++ b/partner/dpi/gstreamer/CMakeLists.txt
+@@ -38,6 +38,7 @@ elseif (GST_VIDEO_RENDERING STREQUAL "horizon-fusion")
+   add_definitions(-DHORIZON_FUSION)
+ elseif (GST_VIDEO_RENDERING STREQUAL "gl")
+   add_definitions(-DGST_GL)
++  add_definitions(-DUSE_GST_PLAYBIN)
+ endif()
+ 
+ if (NOT ${USE_COMCAST_VERSION} STREQUAL "")
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.cpp b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+index c1a3ffd9..a14020fe 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.cpp
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+@@ -1,5 +1,5 @@
+ /* (c) 2011 Netflix, Inc. Do not copy or use without prior written permission from Netflix, Inc. */
+-#define WESTEROS_SINK 1
++//#define WESTEROS_SINK 1
+ #include "PlaybackGroupNative.h"
+ #include "ESPlayerConstants.h"
+ #include "ESManagerNative.h"
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.h b/partner/dpi/gstreamer/PlaybackGroupNative.h
+index bb92d623..7b7c3781 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.h
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.h
+@@ -34,7 +34,6 @@ namespace netflix {
+ namespace device {
+ namespace esplayer {
+ 
+-
+ class ESManagerNative;
+ class ESPlayerGst;
+ 
+@@ -253,7 +252,7 @@ private:
+     bool mNewVideoWindow;
+ 
+ #if defined(GST_GL)
+-    shared_ptr<VideoSinkGStreamer> mVideoSinkGst;
++    std::shared_ptr<VideoSinkGStreamer> mVideoSinkGst;
+ #endif
+ 
+     uint32_t mVirtualDisplayHeight;
+diff --git a/partner/dpi/gstreamer/VideoSinkGStreamer.cpp b/partner/dpi/gstreamer/VideoSinkGStreamer.cpp
+new file mode 100644
+index 00000000..3473bc61
+--- /dev/null
++++ b/partner/dpi/gstreamer/VideoSinkGStreamer.cpp
+@@ -0,0 +1,844 @@
++#include "VideoSinkGStreamer.h"
++#include <gst/app/gstappsink.h>
++#include <nrdbase/Log.h>
++#include <nrdbase/ScopedMutex.h>
++
++using namespace netflix;
++using namespace netflix::device::esplayer;
++using namespace netflix::device;
++using namespace std;
++
++#define GLAREA_ERROR (glarea_error_quark ())
++
++#define GLCOMMAND(command) command;
++//#define GLCOMMAND(command) command; _print_OpenGL_error(__FILE__, __LINE__)
++
++#define print_OpenGL_Error() _print_OpenGL_error(__FILE__, __LINE__)
++
++static int _print_OpenGL_error(const char *file, int line)
++{
++  GLenum glErr;
++  int    retCode = 0;
++
++  glErr = glGetError();
++  if (glErr != GL_NO_ERROR)
++  {
++    Log::error(TRACE_MEDIAPLAYBACK, "VideoSinkGStreamer::GLCOMMAND glError line:%d code:%x", line, glErr);
++    retCode = 1;
++  }
++  return retCode;
++}
++
++typedef enum {
++  GLAREA_ERROR_SHADER_COMPILATION,
++  GLAREA_ERROR_SHADER_LINK
++} GlareaError;
++
++G_DEFINE_QUARK (glarea-error, glarea_error)
++
++static char const *vertex_shader_str =
++      "attribute vec3 aVertexPosition;   \n"
++      "attribute vec2 aTextureCoord;   \n"
++      "varying vec2 vTexureCoord;     \n"
++      "void main()                  \n"
++      "{                            \n"
++      "   gl_Position = vec4(aVertexPosition, 1.0); \n"
++      "   vTexureCoord = aTextureCoord;  \n"
++      "}                            \n";
++
++static char const *fragment_shader_str =
++      "#ifdef GL_ES                                        \n"
++      "precision mediump float;                            \n"
++      "#endif                                              \n"
++      "varying vec2 vTexureCoord;                            \n"
++      "uniform sampler2D tex;                              \n"
++      "void main()                                         \n"
++      "{                                                   \n"
++      "  gl_FragColor = texture2D( tex, vTexureCoord );      \n"
++      "}                                                   \n";
++
++struct vertex_info {
++  float position[3];
++  float texture_coord[2];
++};
++
++static const struct vertex_info vertex_data[] = {
++  { { -1.0f,  1.0f,  0.0f }, { 0.0f, 0.0f } },
++  { { -1.0f, -1.0f,  0.0f }, { 0.0f, 1.0f } },
++  { {  1.0f, -1.0f,  0.0f }, { 1.0f, 1.0f } },
++  { {  1.0f,  1.0f,  0.0f }, { 1.0f, 0.0f } },
++};
++
++static GLushort const vertex_indice[] = {
++ 0, 1, 2, 0, 2, 3,
++};
++
++static void initBuffers (guint  vertex_pos_attrib,
++                         guint  texture_coord_attrib,
++                         guint *indice_buffer_out,
++                         guint *vertex_buffer_out)
++{
++    guint vertex_buffer, indice_buffer;
++
++    GLCOMMAND(glGenBuffers (1, &vertex_buffer));
++    GLCOMMAND(glBindBuffer (GL_ARRAY_BUFFER, vertex_buffer));
++    GLCOMMAND(glBufferData (GL_ARRAY_BUFFER, sizeof (vertex_data), vertex_data, GL_STATIC_DRAW));
++
++    GLCOMMAND(glEnableVertexAttribArray (vertex_pos_attrib));
++    GLCOMMAND(glVertexAttribPointer (vertex_pos_attrib, 3, GL_FLOAT, GL_FALSE, sizeof (struct vertex_info), (GLvoid *) (G_STRUCT_OFFSET (struct vertex_info, position))));
++
++    GLCOMMAND(glEnableVertexAttribArray (texture_coord_attrib));
++    GLCOMMAND(glVertexAttribPointer (texture_coord_attrib, 2, GL_FLOAT, GL_FALSE, sizeof (struct vertex_info), (GLvoid *) (G_STRUCT_OFFSET (struct vertex_info, texture_coord))));
++
++    GLCOMMAND(glGenBuffers (1, &indice_buffer));
++    GLCOMMAND(glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, indice_buffer));
++    GLCOMMAND(glBufferData (GL_ELEMENT_ARRAY_BUFFER, sizeof (vertex_indice), vertex_indice, GL_STATIC_DRAW));
++
++    GLCOMMAND(glBindBuffer (GL_ARRAY_BUFFER, 0));
++    GLCOMMAND(glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0));
++
++    if (vertex_buffer_out != NULL)
++        *vertex_buffer_out = vertex_buffer;
++    if (indice_buffer_out != NULL)
++        *indice_buffer_out = indice_buffer;
++}
++
++static guint createShader (int          shader_type,
++                            const char  *source,
++                            guint       *shader_out)
++{
++    guint shader = glCreateShader (shader_type);
++    GLCOMMAND(glShaderSource (shader, 1, &source, NULL));
++    GLCOMMAND(glCompileShader (shader));
++
++    int status;
++    glGetShaderiv (shader, GL_COMPILE_STATUS, &status);
++    if (status == GL_FALSE) {
++        int log_len;
++        glGetShaderiv (shader, GL_INFO_LOG_LENGTH, &log_len);
++
++        char *buffer = static_cast<char*>(g_malloc (log_len + 1));
++        glGetShaderInfoLog (shader, log_len, NULL, buffer);
++
++        Log::error(TRACE_MEDIAPLAYBACK, "VideoSinkGStreamer Compilation failure in %s shader: %s",
++                   shader_type == GL_VERTEX_SHADER ? "vertex" : "fragment", buffer);
++
++        g_free (buffer);
++
++        glDeleteShader (shader);
++        shader = 0;
++    }
++
++    if (shader_out != NULL)
++        *shader_out = shader;
++
++      return shader != 0;
++}
++
++static void cleanupShaders(guint vertex, guint fragment)
++{
++    if (vertex != 0)
++        glDeleteShader(vertex);
++    if (fragment != 0)
++        glDeleteShader(fragment);
++}
++
++static gboolean initShaders (guint   *program_out,
++                             guint   *vertex_pos_attrib_out,
++                             guint   *texture_coord_attrib_out,
++                             guint   *texture_attrib_out)
++{
++    guint program = 0;
++    guint vertex_pos_attrib = 0;
++    guint texture_coord_attrib = 0;
++    guint texture_attrib = 0;
++    guint vertex = 0, fragment = 0;
++
++    createShader(GL_VERTEX_SHADER, vertex_shader_str, &vertex);
++    if (vertex == 0) {
++        cleanupShaders(vertex, fragment);
++        return FALSE;
++    }
++
++    createShader(GL_FRAGMENT_SHADER, fragment_shader_str, &fragment);
++    if (fragment == 0) {
++        cleanupShaders(vertex, fragment);
++        return FALSE;
++    }
++
++    program = glCreateProgram();
++    GLCOMMAND(glAttachShader(program, vertex));
++    GLCOMMAND(glAttachShader(program, fragment));
++    GLCOMMAND(glLinkProgram(program));
++
++    int status = 0;
++    GLCOMMAND(glGetProgramiv (program, GL_LINK_STATUS, &status));
++    if (status == GL_FALSE) {
++        int log_len = 0;
++        glGetProgramiv (program, GL_INFO_LOG_LENGTH, &log_len);
++
++        char *buffer = static_cast<char*>(g_malloc (log_len + 1));
++        glGetProgramInfoLog (program, log_len, NULL, buffer);
++
++        Log::error(TRACE_MEDIAPLAYBACK, "VideoSinkGStreamer Linking failure in program: %s", buffer);
++
++        g_free (buffer);
++
++        glDeleteProgram (program);
++        program = 0;
++
++        cleanupShaders(vertex, fragment);
++        return FALSE;
++    }
++
++    vertex_pos_attrib = glGetAttribLocation (program, "aVertexPosition");
++    texture_coord_attrib = glGetAttribLocation (program, "aTextureCoord");
++    texture_attrib = glGetUniformLocation (program, "tex");
++
++    GLCOMMAND(glDetachShader(program, vertex));
++    GLCOMMAND(glDetachShader(program, fragment));
++
++    cleanupShaders(vertex, fragment);
++
++    if (program_out != NULL)
++        *program_out = program;
++    if (vertex_pos_attrib_out != NULL)
++        *vertex_pos_attrib_out = vertex_pos_attrib;
++    if (texture_coord_attrib_out != NULL)
++        *texture_coord_attrib_out = texture_coord_attrib;
++    if (texture_attrib_out != NULL)
++        *texture_attrib_out = texture_attrib;
++
++  return program != 0;
++}
++
++class GstGLData {
++public:
++    static GstGLData& singleton();
++
++    void makeGLContextCurrent();
++    void renderTexture(guint);
++
++    bool initializeGLContextIfNeeded(GstGLWindowCB, VideoSinkGStreamer*);
++    void releaseGLContext(VideoSinkGStreamer*);
++
++    bool didInitializeGLContext() {
++        ScopedMutex locker(&m_dataMutex);
++        return m_didInitializeGLContext;
++    };
++
++    GstGLContext* context() {
++        ScopedMutex locker(&m_dataMutex);
++        return m_context;
++    }
++
++    GstGLDisplay* display() {
++        ScopedMutex locker(&m_dataMutex);
++        return m_display;
++    }
++
++    guint copyFbo() {
++        ScopedMutex locker(&m_dataMutex);
++        return m_copyFbo;
++    }
++private:
++    GstGLData();
++    ~GstGLData();
++
++    void initializeGLProgramIfNeeded();
++
++    static void invalidateGLResourcesOnWindowThread(GstGLData*);
++
++    GstGLData(GstGLData const&);
++    GstGLData& operator=(GstGLData const&);
++    static Mutex m_dataMutex;
++
++    GstGLContext* m_context;
++    GstGLDisplay* m_display;
++    GstGLContext* m_sharedContext;
++
++    guint m_vertexBuffer;
++    guint m_indiceBuffer;
++    guint m_program;
++    guint m_vertexPosAttrib;
++    guint m_textureCoordAttrib;
++    guint m_textureAttrib;
++    guint m_copyFbo;
++
++    VideoSinkGStreamer* m_connectedVideoSink;
++
++    bool m_didInitializeGLContext;
++    bool m_didInitializeGLProgram;
++};
++
++Mutex GstGLData::m_dataMutex(ESP_RENDERER_MUTEX, "GstGLData Mutex");
++
++GstGLData& GstGLData::singleton()
++{
++    ScopedMutex locker (&m_dataMutex);
++    static GstGLData s_data;
++    return s_data;
++}
++
++GstGLData::GstGLData()
++    : m_context(NULL)
++    , m_display(NULL)
++    , m_sharedContext(NULL)
++    , m_vertexBuffer(0)
++    , m_indiceBuffer(0)
++    , m_program(0)
++    , m_vertexPosAttrib(0)
++    , m_textureCoordAttrib(0)
++    , m_textureAttrib(0)
++    , m_connectedVideoSink(NULL)
++    , m_didInitializeGLContext(false)
++    , m_didInitializeGLProgram(false)
++{
++}
++
++GstGLData::~GstGLData()
++{
++    if (didInitializeGLContext())
++        return;
++
++    GstGLWindow* window = gst_gl_context_get_window(m_context);
++    gst_gl_window_send_message(window, (GstGLWindowCB)invalidateGLResourcesOnWindowThread, this);
++    gst_object_unref(window);
++
++    gst_object_unref(m_context);
++    if (m_sharedContext)
++        gst_object_unref(m_sharedContext);
++
++    gst_object_unref(m_display);
++}
++
++void GstGLData::invalidateGLResourcesOnWindowThread(GstGLData* self)
++{
++    self->makeGLContextCurrent();
++    /* destroy all the resources we created */
++    if (self->m_vertexBuffer != 0)
++        GLCOMMAND(glDeleteBuffers (1, &self->m_vertexBuffer));
++    if (self->m_indiceBuffer != 0)
++        GLCOMMAND(glDeleteBuffers (1, &self->m_indiceBuffer));
++    if (self->m_program != 0)
++        GLCOMMAND(glDeleteProgram (self->m_program));
++    if (self->m_copyFbo != 0)
++        GLCOMMAND(glDeleteFramebuffers(1, &self->m_copyFbo));
++}
++
++void GstGLData::makeGLContextCurrent()
++{
++    if (!m_didInitializeGLContext)
++        return;
++
++    if (!GST_IS_GL_CONTEXT(m_context)) {
++        Log::error(TRACE_MEDIAPLAYBACK, "GstGLData::makeGLContextCurrent GLContext is not valid");
++        return;
++    }
++
++    gst_gl_context_activate(m_context, TRUE);
++}
++
++void GstGLData::releaseGLContext(VideoSinkGStreamer* videoSink)
++{
++    if (!m_didInitializeGLContext)
++        return;
++
++    if (!GST_IS_GL_CONTEXT(m_context)) {
++        Log::error(TRACE_MEDIAPLAYBACK, "GstGLData::releaseGLContext GLContext is not valid");
++        return;
++    }
++
++    if (m_connectedVideoSink != videoSink) {
++        Log::error(TRACE_MEDIAPLAYBACK, "GstGLData::releaseGLContext GivenVideoSink was not connected");
++        m_connectedVideoSink = NULL;
++        GstGLWindow* window = gst_gl_context_get_window(m_context);
++        gst_gl_window_set_draw_callback(window, NULL, NULL, NULL);
++        gst_object_unref(window);
++    }
++    gst_gl_context_activate(m_context, FALSE);
++}
++
++void GstGLData::renderTexture(guint textureID)
++{
++    makeGLContextCurrent();
++    initializeGLProgramIfNeeded();
++
++    GLCOMMAND(glUseProgram (m_program));
++
++    GLCOMMAND(glBindBuffer (GL_ARRAY_BUFFER, m_vertexBuffer));
++    GLCOMMAND(glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, m_indiceBuffer));
++
++    GLCOMMAND(glActiveTexture(GL_TEXTURE0));
++    GLCOMMAND(glBindTexture(GL_TEXTURE_2D, textureID));
++    GLCOMMAND(glUniform1i (m_textureAttrib, 0));
++
++    GLCOMMAND(glDrawElements (GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0));
++
++    GLCOMMAND(glBindBuffer (GL_ARRAY_BUFFER, 0));
++    GLCOMMAND(glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0));
++    GLCOMMAND(glUseProgram (0));
++}
++
++void GstGLData::initializeGLProgramIfNeeded()
++{
++    if (m_didInitializeGLProgram)
++        return;
++
++    /* initialize the shaders and retrieve the program data */
++    if (!initShaders (&m_program,
++                      &m_vertexPosAttrib,
++                      &m_textureCoordAttrib,
++                      &m_textureAttrib)) {
++
++        Log::error(TRACE_MEDIAPLAYBACK, "GstGLData::initializeGLProgram failed");
++        return;
++    }
++
++    /* initialize the vertex buffers */
++    initBuffers (m_vertexPosAttrib, m_textureCoordAttrib,
++                &m_indiceBuffer, &m_vertexBuffer);
++
++    GLCOMMAND(glGenFramebuffers(1, &m_copyFbo));
++
++    Log::info(TRACE_MEDIAPLAYBACK, "GstGLData::initializeGLProgram %s", "Initialization finished");
++    m_didInitializeGLProgram = true;
++}
++
++bool GstGLData::initializeGLContextIfNeeded(GstGLWindowCB drawCB, VideoSinkGStreamer* videoSink)
++{
++    if (GST_IS_GL_CONTEXT(m_context) && m_didInitializeGLContext) {
++
++        if (m_connectedVideoSink != videoSink) {
++            m_connectedVideoSink = videoSink;
++            GstGLWindow* window = gst_gl_context_get_window(m_context);
++            gst_gl_window_set_draw_callback(window, drawCB, m_connectedVideoSink, NULL);
++            gst_object_unref(window);
++        }
++
++        return true;
++    }
++
++    Log::info(TRACE_MEDIAPLAYBACK, "GstGLData::ensureGLContext: %s", "creating GstGL context");
++    GError *error = NULL;
++    m_display = gst_gl_display_new();
++    m_sharedContext = gst_gl_display_get_gl_context_for_thread(m_display, NULL);
++    if (!gst_gl_display_create_context (m_display, m_sharedContext, &m_context, &error)) {
++        Log::error(TRACE_MEDIAPLAYBACK, "GstGLData::ensureGLContext: %s", error->message);
++        return false;
++    }
++
++    gst_gl_display_add_context(m_display, m_context);
++
++    GstGLWindow* window = gst_gl_context_get_window(m_context);
++    gst_gl_window_set_draw_callback(window, drawCB, videoSink, NULL);
++    gst_object_unref(window);
++
++    m_didInitializeGLContext = true;
++    return true;
++}
++
++#define GST_WEBKIT_VIDEO_FORMATS "{ RGBA }" \
++
++#define GST_WEBKIT_VIDEO_CAPS \
++    "video/x-raw(" GST_CAPS_FEATURE_MEMORY_GL_MEMORY "), "              \
++    "format = (string) " GST_WEBKIT_VIDEO_FORMATS ", "                  \
++    "width = " GST_VIDEO_SIZE_RANGE ", "                                \
++    "height = " GST_VIDEO_SIZE_RANGE ", "                               \
++    "framerate = " GST_VIDEO_FPS_RANGE
++
++bool getSampleVideoInfo(GstSample* sample, GstVideoInfo& videoInfo)
++{
++    if (!GST_IS_SAMPLE(sample))
++        return false;
++
++    GstCaps* caps = gst_sample_get_caps(sample);
++    if (!caps)
++        return false;
++
++    gst_video_info_init(&videoInfo);
++    if (!gst_video_info_from_caps(&videoInfo, caps))
++        return false;
++
++    return true;
++}
++
++GstVideoFrameHolder::GstVideoFrameHolder(GstSample* sample)
++    : m_sample(sample)
++    , m_isCloned(false)
++{
++    GstVideoInfo videoInfo;
++    if (!getSampleVideoInfo(m_sample, videoInfo)) {
++        Log::error(TRACE_MEDIAPLAYBACK, "GstVideoFrameHolder::getSampleVideoInfo failed");
++        return;
++    }
++
++    m_width = GST_VIDEO_INFO_WIDTH(&videoInfo);
++    m_height = GST_VIDEO_INFO_HEIGHT(&videoInfo);
++
++    GstBuffer* buffer = gst_sample_get_buffer(m_sample);
++
++    if (!gst_video_frame_map(&m_videoFrame, &videoInfo, buffer, static_cast<GstMapFlags>(GST_MAP_READ | GST_MAP_GL))) {
++        Log::error(TRACE_MEDIAPLAYBACK, "GstVideoFrameHolder::GstVideoFrameHolder frame mapping failed");
++        return;
++    }
++
++    m_textureID = *reinterpret_cast<guint*>(m_videoFrame.data[0]);
++}
++
++GstVideoFrameHolder::~GstVideoFrameHolder()
++{
++    if (m_isCloned) {
++        GLCOMMAND(glDeleteTextures(1, &m_textureID));
++        return;
++    }
++
++    gst_video_frame_unmap(&m_videoFrame);
++    gst_sample_unref(m_sample);
++}
++
++GstVideoFrameHolder::GstVideoFrameHolder(guint textureID, guint width, guint height)
++    : m_sample(NULL)
++    , m_textureID(textureID)
++    , m_width(width)
++    , m_height(height)
++    , m_isCloned(true)
++{
++}
++
++GstVideoFrameHolder* GstVideoFrameHolder::clone(GstVideoFrameHolder& srcHolder)
++{
++    GstGLData::singleton().makeGLContextCurrent();
++
++    GLint boundTexture = 0;
++    GLint boundFramebuffer = 0;
++    GLint boundActiveTexture = 0;
++
++    GLCOMMAND(glGetIntegerv(GL_TEXTURE_BINDING_2D, &boundTexture));
++    GLCOMMAND(glGetIntegerv(GL_FRAMEBUFFER_BINDING, &boundFramebuffer));
++    GLCOMMAND(glGetIntegerv(GL_ACTIVE_TEXTURE, &boundActiveTexture));
++
++    GLCOMMAND(glBindTexture(GL_TEXTURE_2D, srcHolder.textureID()));
++
++    GLCOMMAND(glBindFramebuffer(GL_FRAMEBUFFER, GstGLData::singleton().copyFbo()));
++    GLCOMMAND(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, srcHolder.textureID(), 0));
++
++    GLCOMMAND(glActiveTexture(GL_TEXTURE0));
++
++    GLuint destTexture = 0;
++    GLCOMMAND(glGenTextures(1, &destTexture));
++    GLCOMMAND(glBindTexture(GL_TEXTURE_2D, destTexture));
++    GLCOMMAND(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
++    GLCOMMAND(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
++    GLCOMMAND(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE));
++    GLCOMMAND(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE));
++
++    GLCOMMAND(glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 0, 0, srcHolder.width(), srcHolder.height(), 0));
++
++    GLCOMMAND(glBindTexture(GL_TEXTURE_2D, boundTexture));
++    GLCOMMAND(glBindFramebuffer(GL_FRAMEBUFFER, boundFramebuffer));
++    GLCOMMAND(glBindTexture(GL_TEXTURE_2D, boundTexture));
++    GLCOMMAND(glActiveTexture(boundActiveTexture));
++
++    return new GstVideoFrameHolder(destTexture, srcHolder.width(), srcHolder.height());
++}
++
++VideoSinkGStreamer::VideoSinkGStreamer()
++    : m_appsink(NULL)
++    , m_newSampleHandler(0)
++    , m_prerollHandler(0)
++    , m_flushHandler(0)
++    , m_drawMutex(ESP_PLAYER_MUTEX, "Video Rendering Mutex")
++    , m_windowMutex(ESP_PLAYER_MUTEX, "Video Window Mutex")
++{
++}
++
++VideoSinkGStreamer::~VideoSinkGStreamer()
++{
++    if (m_newSampleHandler)
++        g_signal_handler_disconnect(m_appsink, m_newSampleHandler);
++
++    if (m_prerollHandler)
++        g_signal_handler_disconnect(m_appsink, m_prerollHandler);
++
++    g_object_set_data(G_OBJECT(m_appsink), "video-sink", NULL);
++
++    ScopedMutex locker(&m_drawMutex);
++    if (m_currentFrameHolder)
++        m_currentFrameHolder.reset();
++
++    GstGLData::singleton().releaseGLContext(this);
++}
++
++void VideoSinkGStreamer::renderFrame()
++{
++    glViewport(0, 0, m_windowRect.width, m_windowRect.height);
++
++    ScopedMutex locker(&m_drawMutex);
++
++    if (!m_currentFrameHolder)
++        return;
++
++    GstGLData::singleton().makeGLContextCurrent();
++    GLCOMMAND(glClearColor (0, 0, 0, 0));
++    GLCOMMAND(glClear (GL_COLOR_BUFFER_BIT));
++
++    GstGLData::singleton().renderTexture(m_currentFrameHolder->textureID());
++}
++
++
++bool VideoSinkGStreamer::ensureGLContext()
++{
++    ScopedMutex locker(&m_drawMutex);
++
++    if (!GstGLData::singleton().initializeGLContextIfNeeded((GstGLWindowCB)drawOnWindowThread, this))
++        return false;
++
++    if (m_isWindowRectDirty) {
++        GstGLWindow* window = gst_gl_context_get_window(GstGLData::singleton().context());
++        gst_gl_window_send_message(window, (GstGLWindowCB)setWindowGeometryOnWindowThread, this);
++        gst_object_unref(window);
++    }
++    return true;
++}
++
++void VideoSinkGStreamer::handleNeedContextMessage(GstMessage* message)
++{
++    const gchar* context_type;
++
++    if (GST_MESSAGE_TYPE (message) != GST_MESSAGE_NEED_CONTEXT)
++        return;
++
++    gst_message_parse_context_type(message, &context_type);
++
++    if (!ensureGLContext())
++        return;
++
++    if (!g_strcmp0(context_type, GST_GL_DISPLAY_CONTEXT_TYPE)) {
++        GstContext* display_context = gst_context_new(GST_GL_DISPLAY_CONTEXT_TYPE, TRUE);
++        gst_context_set_gl_display(display_context, GstGLData::singleton().display());
++        gst_element_set_context(GST_ELEMENT(message->src), display_context);
++        gst_context_unref(display_context);
++        return;
++    }
++
++    if (!g_strcmp0(context_type, "gst.gl.app_context")) {
++        GstContext* app_context = gst_context_new("gst.gl.app_context", TRUE);
++        GstStructure* structure = gst_context_writable_structure(app_context);
++        gst_structure_set(structure, "context", GST_GL_TYPE_CONTEXT, GstGLData::singleton().context(), NULL);
++        gst_element_set_context(GST_ELEMENT(message->src), app_context);
++        gst_context_unref(app_context);
++    }
++}
++
++void VideoSinkGStreamer::drawOnWindowThread(VideoSinkGStreamer* self)
++{
++    self->renderFrame();
++}
++
++void VideoSinkGStreamer::setWindowGeometryOnWindowThread(VideoSinkGStreamer* self)
++{
++    {
++        ScopedMutex locker(&self->m_windowMutex);
++
++        if (!self->m_isWindowRectDirty)
++            return;
++        self->m_isWindowRectDirty = false;
++    }
++    GstGLWindow* window = gst_gl_context_get_window(GstGLData::singleton().context());
++    g_return_if_fail (GST_IS_GL_WINDOW (window));
++    gst_gl_window_set_render_rectangle(window, self->m_windowRect.x, self->m_windowRect.y, self->m_windowRect.width, self->m_windowRect.height);
++    gst_gl_window_set_preferred_size(window, self->m_windowRect.width, self->m_windowRect.height);
++    gst_gl_window_queue_resize(window);
++
++    gst_gl_window_show(window);
++    gst_object_unref(window);
++}
++
++void VideoSinkGStreamer::setWindowGeometry(const Rect& newRect)
++{
++    {
++        ScopedMutex locker(&m_windowMutex);
++        m_windowRect = newRect;
++        m_isWindowRectDirty = true;
++    }
++    if (!GstGLData::singleton().didInitializeGLContext())
++        return;
++
++    GstGLWindow* window = gst_gl_context_get_window(GstGLData::singleton().context());
++    g_return_if_fail (GST_IS_GL_WINDOW (window));
++    gst_gl_window_send_message(window, (GstGLWindowCB)setWindowGeometryOnWindowThread, this);
++
++    gst_object_unref(window);
++}
++
++GstFlowReturn VideoSinkGStreamer::newSampleCallback(GstElement* sink, gpointer userData)
++{
++  VideoSinkGStreamer* self = (VideoSinkGStreamer*) userData;
++  GstSample* sample = gst_app_sink_pull_sample(GST_APP_SINK(sink));
++
++  return self->handleSample(sample);
++}
++
++GstFlowReturn VideoSinkGStreamer::newPrerollCallback(GstElement* sink, gpointer userData)
++{
++  VideoSinkGStreamer* self = (VideoSinkGStreamer*) userData;
++  GstSample* sample = gst_app_sink_pull_preroll(GST_APP_SINK(sink));
++
++  return self->handleSample(sample);
++}
++
++GstFlowReturn VideoSinkGStreamer::handleSample(GstSample* sample)
++{
++  if (!sample)
++    return GST_FLOW_ERROR;
++
++  shared_ptr<GstVideoFrameHolder> pendingFrameHolder;
++  {
++    ScopedMutex locker(&m_drawMutex);
++    m_currentFrameHolder.swap(pendingFrameHolder);
++    m_currentFrameHolder.reset(new GstVideoFrameHolder(sample));
++  }
++
++  GstGLWindow* window = gst_gl_context_get_window(GstGLData::singleton().context());
++  g_return_val_if_fail(GST_IS_GL_WINDOW(window), GST_FLOW_ERROR);
++  gst_gl_window_draw(window);
++  gst_object_unref(window);
++  return GST_FLOW_OK;
++}
++
++GstPadProbeReturn VideoSinkGStreamer::flushCallback(GstPad* pad, GstPadProbeInfo* info, VideoSinkGStreamer* self)
++{
++    if (GST_EVENT_TYPE (GST_PAD_PROBE_INFO_EVENT (info)) == GST_EVENT_FLUSH_START) {
++        Log::info(TRACE_MEDIAPLAYBACK, "Flush event, clearing window");
++        self->clearWindow();
++    }
++    return GST_PAD_PROBE_OK;
++}
++
++gboolean appsinkSinkQuery(GstPad* pad, GstObject* parent, GstQuery* query)
++{
++  gboolean res = FALSE;
++
++  switch (GST_QUERY_TYPE (query)) {
++  case GST_QUERY_DRAIN:
++    {
++      GstElement* appsink = GST_ELEMENT_CAST(parent);
++      VideoSinkGStreamer* self = (VideoSinkGStreamer*) g_object_get_data(G_OBJECT(appsink), "video-sink");
++      Log::info(TRACE_MEDIAPLAYBACK, "Drain query received, clearing window");
++      self->dropCurrentSample();
++      res = TRUE;
++      break;
++    }
++  default:
++    res = gst_pad_query_default(pad, parent, query);
++    break;
++  }
++
++  return res;
++}
++
++GstElement* VideoSinkGStreamer::createVideoSink()
++{
++    gboolean result = TRUE;
++    GstElement* videoSink = gst_bin_new("gstglsinkbin");
++    GstElement* upload = gst_element_factory_make("glupload", NULL);
++    GstElement* colorconvert = gst_element_factory_make("glcolorconvert", NULL);
++
++    if (!upload || !colorconvert) {
++        Log::error(TRACE_MEDIAPLAYBACK, "VideoSinkGStreamer::createVideoSink: %s", "Failed to create GstGL elements");
++        gst_object_unref(videoSink);
++
++        if (upload)
++            gst_object_unref(upload);
++        if (colorconvert)
++            gst_object_unref(colorconvert);
++
++        return NULL;
++    }
++
++    GstElement* appsink = gst_element_factory_make("appsink", NULL);
++    g_object_set_data(G_OBJECT(appsink), "video-sink", (gpointer) this);
++
++    gst_bin_add_many(GST_BIN(videoSink), upload, colorconvert, appsink, NULL);
++
++    GstCaps* caps = gst_caps_from_string(GST_WEBKIT_VIDEO_CAPS);
++
++    result &= gst_element_link_pads(upload, "src", colorconvert, "sink");
++    result &= gst_element_link_pads_filtered(colorconvert, "src", appsink, "sink", caps);
++    gst_caps_unref(caps);
++
++    GstPad* pad = gst_element_get_static_pad(upload, "sink");
++    gst_element_add_pad(videoSink, gst_ghost_pad_new("sink", pad));
++    gst_object_unref(pad);
++
++    pad = gst_element_get_static_pad(appsink, "sink");
++    gst_pad_add_probe (pad, GST_PAD_PROBE_TYPE_EVENT_FLUSH, GstPadProbeCallback(flushCallback), this, NULL);
++    gst_pad_set_query_function(pad, appsinkSinkQuery);
++    gst_object_unref(pad);
++
++    g_object_set(appsink, "enable-last-sample", FALSE, "emit-signals", TRUE, "max-buffers", 1, NULL);
++
++    if (result) {
++      m_newSampleHandler = g_signal_connect(appsink, "new-sample", G_CALLBACK(newSampleCallback), this);
++      m_prerollHandler = g_signal_connect(appsink, "new-preroll", G_CALLBACK(newPrerollCallback), this);
++    } else {
++        Log::error(TRACE_MEDIAPLAYBACK, "VideoSinkGStreamer::createVideoSink: %s", "Failed to link GstGL elements");
++        gst_object_unref(videoSink);
++        videoSink = NULL;
++    }
++    m_appsink = appsink;
++    return videoSink;
++}
++
++void VideoSinkGStreamer::clearWindow()
++{
++    if (!GstGLData::singleton().didInitializeGLContext())
++        return;
++
++    GstGLWindow* window = gst_gl_context_get_window(GstGLData::singleton().context());
++    gst_gl_window_send_message(window, (GstGLWindowCB)clearWindowOnWindowThread, this);
++    gst_object_unref(window);
++
++    {
++        ScopedMutex locker(&m_drawMutex);
++        if (m_currentFrameHolder) {
++            m_currentFrameHolder.reset();
++        }
++    }
++}
++
++void VideoSinkGStreamer::clearWindowOnWindowThread(VideoSinkGStreamer* self)
++{
++    GstGLData::singleton().makeGLContextCurrent();
++    GLCOMMAND(glClearColor(0, 0, 0, 0));
++    GLCOMMAND(glClear(GL_COLOR_BUFFER_BIT));
++    GstGLContextClass *context_class = GST_GL_CONTEXT_GET_CLASS (GstGLData::singleton().context());
++    context_class->swap_buffers (GstGLData::singleton().context());
++}
++
++void VideoSinkGStreamer::dropCurrentSample()
++{
++    if (!GstGLData::singleton().didInitializeGLContext())
++        return;
++
++    GstGLWindow* window = gst_gl_context_get_window(GstGLData::singleton().context());
++    gst_gl_window_send_message(window, (GstGLWindowCB)dropCurrentSampleOnWindowThread, this);
++    gst_object_unref(window);
++}
++
++
++void VideoSinkGStreamer::dropCurrentSampleOnWindowThread(VideoSinkGStreamer* self)
++{
++
++    shared_ptr<GstVideoFrameHolder> pendingFrameHolder;
++    {
++        ScopedMutex locker(&self->m_drawMutex);
++
++        if (!self->m_currentFrameHolder)
++          return;
++
++        pendingFrameHolder.reset(GstVideoFrameHolder::clone(*self->m_currentFrameHolder));
++        self->m_currentFrameHolder.swap(pendingFrameHolder);
++    }
++}
+diff --git a/partner/dpi/gstreamer/VideoSinkGStreamer.h b/partner/dpi/gstreamer/VideoSinkGStreamer.h
+new file mode 100644
+index 00000000..fd3823d8
+--- /dev/null
++++ b/partner/dpi/gstreamer/VideoSinkGStreamer.h
+@@ -0,0 +1,90 @@
++#ifndef VIDEOSINKGSTREAMER_H
++#define VIDEOSINKGSTREAMER_H
++
++#include <nrd/IElementaryStreamPlayer.h>
++#include <nrdbase/tr1.h>
++#include <nrdbase/Mutex.h>
++#include <glib.h>
++#include <gst/gst.h>
++
++#define GST_USE_UNSTABLE_API
++#include <gst/gl/gl.h>
++#undef GST_USE_UNSTABLE_API
++
++namespace netflix  {
++namespace device   {
++namespace esplayer {
++
++class GstVideoFrameHolder {
++public:
++    explicit GstVideoFrameHolder(GstSample*);
++    ~GstVideoFrameHolder();
++
++    guint textureID() { return m_textureID; }
++    guint width() { return m_width; }
++    guint height() { return m_height; }
++
++    static GstVideoFrameHolder* clone(GstVideoFrameHolder& src);
++
++private:
++    GstVideoFrameHolder(guint textureID, guint width, guint height);
++
++    GstVideoFrame m_videoFrame;
++    GstSample* m_sample;
++
++    guint m_textureID;
++    guint m_width;
++    guint m_height;
++
++    bool m_isCloned;
++};
++
++class VideoSinkGStreamer {
++public:
++    VideoSinkGStreamer();
++    ~VideoSinkGStreamer();
++
++    void handleNeedContextMessage(GstMessage*);
++
++    GstElement* createVideoSink();
++    void setWindowGeometry(const Rect&);
++
++    void clearWindow();
++    void dropCurrentSample();
++
++    GstFlowReturn handleSample(GstSample*);
++
++private:
++    bool ensureGLContext();
++
++    static void clearWindowOnWindowThread(VideoSinkGStreamer*);
++    static void dropCurrentSampleOnWindowThread(VideoSinkGStreamer*);
++
++    static GstPadProbeReturn flushCallback(GstPad*, GstPadProbeInfo*, VideoSinkGStreamer*);
++    static GstFlowReturn newSampleCallback(GstElement*, gpointer userData);
++    static GstFlowReturn newPrerollCallback(GstElement*, gpointer userData);
++
++    static void drawOnWindowThread(VideoSinkGStreamer*);
++    static void setWindowGeometryOnWindowThread(VideoSinkGStreamer*);
++
++    void renderFrame();
++
++    GstElement* m_appsink;
++    unsigned long m_newSampleHandler;
++    unsigned long m_prerollHandler;
++    unsigned long m_flushHandler;
++
++    Mutex m_drawMutex;
++    Mutex m_windowMutex;
++
++    Rect m_windowRect;
++    bool m_isWindowRectDirty;
++
++    std::shared_ptr<GstVideoFrameHolder> m_currentFrameHolder;
++};
++
++} // namespace esplayer
++} // namespace device
++} // namespace netflix
++
++#endif // VIDEOSINKGSTREAMER_H
+-- 
+2.17.1
+

@@ -1,0 +1,27 @@
+From f39b00502a469b8a07f2fbd34c798d43f19bf41f Mon Sep 17 00:00:00 2001
+From: Neeraj Deshpande <neeraj.deshpande@valuelabs.com>
+Date: Thu, 3 Jan 2019 16:22:14 +0530
+Subject: [PATCH 06/10] Modified wayland graphics code to connect to Westeros
+ server.
+
+---
+ partner/graphics/wayland/OpenGLContextEGL.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/partner/graphics/wayland/OpenGLContextEGL.cpp b/partner/graphics/wayland/OpenGLContextEGL.cpp
+index 12892704..2972912b 100644
+--- a/partner/graphics/wayland/OpenGLContextEGL.cpp
++++ b/partner/graphics/wayland/OpenGLContextEGL.cpp
+@@ -119,7 +119,8 @@ bool OpenGLContext::init_sys(OpenGLContext* share)
+     else
+         Log::warn(TRACE_GIBBON_GRAPHICS) << "Connecting to wayland default display";
+ 
+-    display = WaylandDisplay::instance()->connect(displayName);
++    // display = WaylandDisplay::instance()->connect(displayName);
++    display = wl_display_connect(displayName);
+     if (!display) {
+         Log::error(TRACE_GIBBON_GRAPHICS) << "Unable to connect to wayland display";
+         assert(display != 0);
+-- 
+2.17.1
+

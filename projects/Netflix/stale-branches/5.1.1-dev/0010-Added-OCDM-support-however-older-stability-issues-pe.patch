@@ -1,0 +1,1005 @@
+From fb51ab761dc17a20d91c736394569aaaccdd7ee3 Mon Sep 17 00:00:00 2001
+From: Neeraj Deshpande <neeraj.deshpande@valuelabs.com>
+Date: Mon, 14 Jan 2019 13:13:43 +0530
+Subject: [PATCH 10/10] Added OCDM support; however older stability issues
+ persist.
+
+---
+ partner/dpi/gstreamer/CMakeLists.txt      |   4 +
+ partner/dpi/gstreamer/DeviceLibNative.cpp |  44 ++-
+ partner/dpi/gstreamer/OcdmDrmSession.cpp  | 185 +++++++++++
+ partner/dpi/gstreamer/OcdmDrmSession.h    | 114 +++++++
+ partner/dpi/gstreamer/OcdmDrmSystem.cpp   | 376 ++++++++++++++++++++++
+ partner/dpi/gstreamer/OcdmDrmSystem.h     | 170 ++++++++++
+ partner/dpi/gstreamer/drm.cmake           |   5 +-
+ 7 files changed, 890 insertions(+), 8 deletions(-)
+ create mode 100644 partner/dpi/gstreamer/OcdmDrmSession.cpp
+ create mode 100644 partner/dpi/gstreamer/OcdmDrmSession.h
+ create mode 100644 partner/dpi/gstreamer/OcdmDrmSystem.cpp
+ create mode 100644 partner/dpi/gstreamer/OcdmDrmSystem.h
+
+diff --git a/partner/dpi/gstreamer/CMakeLists.txt b/partner/dpi/gstreamer/CMakeLists.txt
+index a095bb15..97d28e29 100644
+--- a/partner/dpi/gstreamer/CMakeLists.txt
++++ b/partner/dpi/gstreamer/CMakeLists.txt
+@@ -237,6 +237,10 @@ if(DPI_REFERENCE_DRM STREQUAL "playready2.5-ss-tee" OR DPI_DRM STREQUAL "playrea
+         PlayReadyDrmSession.cpp)
+     # Create the DPI directory if we have DRM configured
+     set_property(GLOBAL PROPERTY HAVE_DPI_DIRECTORY ${HAVE_DPI_DIRECTORY})
++elseif(DPI_DRM STREQUAL "ocdm")
++    list(APPEND SOURCES
++        OcdmDrmSystem.cpp
++        OcdmDrmSession.cpp)
+ elseif(DPI_REFERENCE_DRM MATCHES "^playready3")
+     list(APPEND NO_CAST_QUAL
+         PlayReady3DrmSystem.cpp
+diff --git a/partner/dpi/gstreamer/DeviceLibNative.cpp b/partner/dpi/gstreamer/DeviceLibNative.cpp
+index 174eeed9..533d996b 100644
+--- a/partner/dpi/gstreamer/DeviceLibNative.cpp
++++ b/partner/dpi/gstreamer/DeviceLibNative.cpp
+@@ -21,6 +21,8 @@
+ 
+ #if defined(PLAYREADY)
+ #include "PlayReadyDrmSystem.h"
++#elif defined(OCDM)
++#include "OcdmDrmSystem.h"
+ #else
+ #include "NullDrmSystem.h"
+ #endif
+@@ -123,7 +125,7 @@ SOCUtilities* DeviceLibNative::sSOCUtilities = NULL;
+ // This is the name of the attribute that identifies the checksum.
+ static std::string const CHECKSUM_ATTRIBUTE = "CHECKSUM";
+ 
+-#if !defined(PLAYREADY)
++#if (!defined(PLAYREADY)) && (!defined(OCDM))
+ const std::string DrmSystem::type = "None";
+ #endif
+ 
+@@ -160,10 +162,39 @@ bool DeviceLibNative::init()
+     if (sConfiguration->idFile.empty())
+     {
+ #ifndef USE_PROVISIONING
+-      Log::fatal(TRACE_DPI, "No Bound Key message specified. Exiting.");
+-      Log::warn(TRACE_DPI, "You can generate the \"Bound Key Message\" by running the provisioning application \"provisionNetflixKeys\"");
+-      Log::fatal(TRACE_DPI, "Exiting the app");
+-      return false;
++        if (getenv("NF_FIXED_ESN")) {
++            unsigned char boundKeyMsg_bin[] = {
++                    0x00, 0x00, 0x00, 0xbe, 0x00, 0x00, 0x00, 0x2a, 0x4e, 0x4f, 0x53, 0x5a,
++                    0x44, 0x34, 0x59, 0x46, 0x42, 0x3d, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
++                    0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
++                    0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
++                    0x30, 0x31, 0x00, 0x00, 0x00, 0x3c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++                    0x00, 0x10, 0xf1, 0xee, 0x2c, 0xa1, 0xf2, 0x85, 0xae, 0xf5, 0xbf, 0x30,
++                    0x65, 0xae, 0x43, 0x4f, 0x76, 0xb7, 0x00, 0x00, 0x00, 0x20, 0xc5, 0x77,
++                    0xa7, 0x1c, 0x3d, 0x81, 0x8f, 0xf1, 0xd7, 0x0b, 0x31, 0xf7, 0xa6, 0x8b,
++                    0xff, 0x7a, 0xe7, 0x59, 0x7f, 0xf6, 0x17, 0x0b, 0x49, 0x6c, 0x15, 0xea,
++                    0x02, 0x28, 0x6d, 0x87, 0x04, 0x33, 0x00, 0x00, 0x00, 0x4c, 0x00, 0x00,
++                    0x00, 0x01, 0x00, 0x00, 0x00, 0x10, 0xf9, 0x75, 0xcd, 0xf9, 0x43, 0x9c,
++                    0x74, 0xff, 0x74, 0x86, 0x26, 0x6f, 0x06, 0x5f, 0x9b, 0x85, 0x00, 0x00,
++                    0x00, 0x30, 0x99, 0xdc, 0xdc, 0xac, 0x18, 0x56, 0x9c, 0xba, 0x6b, 0x2d,
++                    0xb8, 0xdb, 0x72, 0x82, 0x5e, 0xab, 0x14, 0x25, 0xf4, 0x6f, 0x15, 0xd0,
++                    0xa0, 0x80, 0x11, 0x8f, 0x0b, 0x0c, 0x8d, 0xf5, 0xdb, 0x7b, 0xbf, 0x34,
++                    0x3a, 0xad, 0x77, 0x6c, 0xe6, 0x1a, 0x53, 0xc3, 0xaf, 0x32, 0x29, 0x57,
++                    0x40, 0x71, 0x00, 0x00, 0x00, 0x20, 0x7c, 0x4e, 0x5d, 0x7d, 0x17, 0x3c,
++                    0x5d, 0x40, 0x62, 0xaf, 0x3b, 0x52, 0x45, 0xcd, 0x69, 0x11, 0x4c, 0xd1,
++                    0x81, 0x8a, 0x7d, 0x2e, 0x2e, 0xd1, 0xf9, 0xc8, 0xe4, 0x63, 0xdd, 0x0e,
++                    0x9d, 0xa1
++            };
++            unsigned int boundKeyMsg_bin_len = 230;
++            // Append msg from buffer.
++            boundKeyMsg.append(boundKeyMsg_bin, boundKeyMsg_bin_len);
++        }
++        else {
++            Log::fatal(TRACE_DPI, "No Bound Key message specified. Exiting.");
++            Log::warn(TRACE_DPI, "You can generate the \"Bound Key Message\" by running the provisioning application \"provisionNetflixKeys\"");
++            Log::fatal(TRACE_DPI, "Exiting the app");
++            return false;
++        }
+ #else
+       // Get manufacturer secure store from back office.
+       const unsigned short bufferSize = 8192; // 8 kb
+@@ -283,6 +314,9 @@ bool DeviceLibNative::init()
+ #if defined(PLAYREADY)
+     std::shared_ptr<PlayReadyDrmSystem> system(new PlayReadyDrmSystem);
+     theDrmSystem_ = system;
++#elif defined(OCDM)
++    std::shared_ptr<OcdmDrmSystem> system(new OcdmDrmSystem);
++    theDrmSystem_ = system;
+ #else
+     theDrmSystem_.reset(new NullDrmSystem);
+ #endif
+diff --git a/partner/dpi/gstreamer/OcdmDrmSession.cpp b/partner/dpi/gstreamer/OcdmDrmSession.cpp
+new file mode 100644
+index 00000000..19eaa434
+--- /dev/null
++++ b/partner/dpi/gstreamer/OcdmDrmSession.cpp
+@@ -0,0 +1,185 @@
++/* (c) 2014 Netflix, Inc. Do not copy or use without prior written permission from Netflix, Inc. */
++
++#include <cstring>
++#include <string.h>
++#include <unistd.h>
++
++#include <nrd/AppLog.h>
++#include <nrdbase/MutexRanks.h>
++#include <nrd/IElementaryStreamPlayer.h>
++#include <nrd/IDeviceError.h>
++#include <nrdbase/BaseEncoding.h>
++
++#include "ESPlayerConstants.h"
++#include "OcdmDrmSystem.h"
++#include "OcdmDrmSession.h"
++
++namespace netflix {
++namespace device {
++
++using namespace esplayer;
++
++OcdmDrmSession::OcdmDrmSession(uint32_t sessionId, std::string contentId, enum DrmLicenseType licenseType, const std::vector<uint8_t>& drmHeader, std::shared_ptr<OcdmDrmSystem> drmSystem)
++  :mDrmSystem(drmSystem)
++  ,mOpenCDMSession(nullptr)
++{TRACE_FUNC3();
++    // TODO: convert to uint recognized by OCDM
++	OcdmLicenseType licenseType2 = (OcdmLicenseType)licenseType;
++
++	opencdm_create_session_netflix(drmSystem.get()->getOpenCDMAccessor(), &mOpenCDMSession, sessionId, contentId.c_str(), contentId.size(), licenseType2, &drmHeader[0], drmHeader.size());
++}
++
++OcdmDrmSession::~OcdmDrmSession()
++{TRACE_FUNC3();
++    opencdm_destroy_session_netflix(mOpenCDMSession);
++}
++
++std::string OcdmDrmSession::getDrmType()
++{TRACE_FUNC3();
++	return "PlayReady";
++}
++
++uint32_t OcdmDrmSession::getSessionId()
++{TRACE_FUNC3();
++    return opencdm_session_get_session_id_netflix(mOpenCDMSession);
++}
++
++std::string OcdmDrmSession::getContentId()
++{TRACE_FUNC3();
++	char * buffer = nullptr;
++	uint32_t bufferSize = 0;
++
++	opencdm_session_get_content_id(mOpenCDMSession, buffer, &bufferSize);
++
++   fprintf(stderr, "Buffer size: %u\n", bufferSize);
++
++	buffer = new char[bufferSize];
++	opencdm_session_get_content_id(mOpenCDMSession, buffer, &bufferSize);
++
++	// Content ID can sometimes start with a '\0', so we can't just assign it.
++	std::string output(buffer, bufferSize);
++
++   fprintf(stderr, "output: %s\n", output.c_str());
++
++	delete [] buffer;
++
++	return output;
++}
++
++enum DrmLicenseType OcdmDrmSession::getLicenseType()
++{TRACE_FUNC3();
++	// TODO: use nice conversion method
++	DrmLicenseType licenseType = (DrmLicenseType)opencdm_session_get_license_type(mOpenCDMSession);
++	fprintf(stderr, "licenseType: %u\n", licenseType);
++    return licenseType;
++}
++
++void OcdmDrmSession::setSessionState(enum IDrmSession::SessionState sessionState)
++{TRACE_FUNC3();
++	// TODO: some nice conversion method
++	// TODO: is it even needed to put this in the OCDM implementation?
++	
++	fprintf(stderr, "sessionState: %u\n", sessionState);
++	
++	opencdm_session_set_session_state(mOpenCDMSession, (OcdmSessionState)sessionState);
++}
++
++enum IDrmSession::SessionState OcdmDrmSession::getSessionState()
++{TRACE_FUNC3();
++	// TODO: real conversion
++	IDrmSession::SessionState sessionState = (IDrmSession::SessionState)opencdm_session_get_session_state(mOpenCDMSession);
++	
++	fprintf(stderr, "sessionState: %u\n", sessionState);
++	
++    return sessionState;
++}
++
++
++NFErr OcdmDrmSession::getChallengeData(std::vector<uint8_t>& challenge,
++                                            const std::string& contentId,
++                                            enum DrmLicenseType licenseType,
++                                            const std::vector<uint8_t>& drmHeader)
++{TRACE_FUNC3();
++    // copy drm header as session information
++	// TODO: error checking.
++	opencdm_session_set_drm_header(mOpenCDMSession, &drmHeader[0], drmHeader.size());
++
++	opencdm_session_set_content_id(mOpenCDMSession, contentId.c_str(), contentId.size());
++
++    // TODO: nice conversion method.
++    opencdm_session_set_license_type(mOpenCDMSession, (OcdmLicenseType)licenseType);
++    return getChallengeData(challenge, (licenseType == LIMITED_DURATION_LICENSE)? true: false);
++}
++
++NFErr OcdmDrmSession::getChallengeData(std::vector<uint8_t>& challenge, bool isLDL)
++{TRACE_FUNC3();
++	// TODO: error checking
++	uint8_t * challengeBuffer = nullptr;
++	uint32_t challengeSize = 0;
++
++	opencdm_session_get_challenge_data_netflix(mOpenCDMSession, challengeBuffer, &challengeSize, static_cast<uint32_t>(isLDL));
++
++	challengeBuffer = new uint8_t[challengeSize];
++
++	opencdm_session_get_challenge_data_netflix(mOpenCDMSession, challengeBuffer, &challengeSize, static_cast<uint32_t>(isLDL));
++
++	challenge.resize(challengeSize);
++	memcpy(&challenge[0], challengeBuffer, challengeSize);
++
++	delete [] challengeBuffer;
++	return NFErr_OK;
++}
++
++NFErr OcdmDrmSession::storeLicenseData(const std::vector<uint8_t>& licenseData,
++                                            std::vector<unsigned char> &secureStopId)
++{TRACE_FUNC3();
++	// TODO: error check
++	unsigned char secureStopBuffer[16];
++	opencdm_session_store_license_data(mOpenCDMSession, &licenseData[0], licenseData.size(), secureStopBuffer);
++	secureStopId.resize(16);
++	memcpy(&secureStopId[0], secureStopBuffer, 16);
++	return NFErr_OK;
++}
++
++NFErr OcdmDrmSession::initDecryptContextByKid(const std::string& /*keyId*/)
++{TRACE_FUNC3();
++    // TODO: error checking.
++    opencdm_session_init_decrypt_context_by_kid(mOpenCDMSession);
++    return NFErr_OK;
++}
++
++NFErr OcdmDrmSession::decrypt(const unsigned char* IVData, uint32_t IVDataSize, ullong byteOffset, const DataSegment& dataSegment)
++{TRACE_FUNC3();
++	// TODO: error check.
++	fprintf(stderr, "dataSegment.numBytes: %u\n", dataSegment.numBytes);
++	
++	opencdm_session_decrypt_netflix(mOpenCDMSession, IVData, IVDataSize, byteOffset, dataSegment.data, dataSegment.numBytes);
++	return NFErr_OK;
++}
++
++uint16_t OcdmDrmSession::compressedDigitalVideoLevel() const
++{TRACE_FUNC3();
++	return opencdm_session_get_playlevel_compressed_video(mOpenCDMSession);
++}
++
++uint16_t OcdmDrmSession::uncompressedDigitalVideoLevel() const
++{TRACE_FUNC3();
++	return opencdm_session_get_playlevel_uncompressed_video(mOpenCDMSession);
++}
++
++uint16_t OcdmDrmSession::analogVideoLevel() const
++{TRACE_FUNC3();
++    return opencdm_session_get_playlevel_analog_video(mOpenCDMSession);
++}
++
++uint16_t OcdmDrmSession::compressedDigitalAudioLevel() const
++{TRACE_FUNC3();
++    return opencdm_session_get_playlevel_compressed_audio(mOpenCDMSession);
++}
++
++uint16_t OcdmDrmSession::uncompressedDigitalAudioLevel() const
++{TRACE_FUNC3();
++    return opencdm_session_get_playlevel_uncompressed_audio(mOpenCDMSession);
++}
++
++}} // namespace netflix::device
+diff --git a/partner/dpi/gstreamer/OcdmDrmSession.h b/partner/dpi/gstreamer/OcdmDrmSession.h
+new file mode 100644
+index 00000000..77a08684
+--- /dev/null
++++ b/partner/dpi/gstreamer/OcdmDrmSession.h
+@@ -0,0 +1,114 @@
++/* (c) 2011 Netflix, Inc. Do not copy or use without prior written permission from Netflix, Inc. */
++
++#ifndef OCDMDRMSESSION_H
++#define OCDMDRMSESSION_H
++
++#include <vector>
++
++#include <nrdbase/tr1.h>
++#include <nrdbase/StdInt.h>
++#include <nrd/IDrmSession.h>
++
++#define TRACE_FUNC3() {                                \
++    fprintf(stderr, ">> OCDM %s \n", __PRETTY_FUNCTION__);  \
++}
++
++namespace netflix {
++namespace device {
++
++class OcdmDrmSession : public IDrmSession
++{
++public:
++    OcdmDrmSession(uint32_t sessionId,
++                        std::string contentId,
++                        enum DrmLicenseType licenseType,
++                        const std::vector<uint8_t>& drmHeader,
++                        std::shared_ptr<OcdmDrmSystem> drmSystem);
++
++    ~OcdmDrmSession();
++
++    virtual std::string getDrmType() override;
++
++    virtual uint32_t getSessionId() override;
++
++    virtual std::string getContentId() override;
++
++    virtual enum DrmLicenseType getLicenseType() override;
++
++    virtual void setSessionState(enum SessionState) override;
++
++    virtual enum SessionState getSessionState() override;
++
++    virtual NFErr getChallengeData(std::vector<uint8_t>& challenge, bool isLDL) override;
++
++    virtual NFErr getChallengeData(std::vector<uint8_t>& challenge,
++                                   const std::string& contentId,
++                                   enum DrmLicenseType licenseType,
++                                   const std::vector<uint8_t>& drmHeader) override;
++
++    virtual NFErr storeLicenseData(const std::vector<uint8_t>& licenseData,
++                                   std::vector<unsigned char> &secureStopId) override;
++
++    virtual NFErr decrypt(const unsigned char *IVData,
++                                uint32_t       IVDataSize,
++                                ullong         dataSegmentOffset,
++                          const DataSegment&   dataSegment) override;
++
++    virtual NFErr initDecryptContextByKid(const std::string& /*keyId*/) override;
++
++    virtual void notifyResolution(uint32_t, uint32_t) override { /* no action to be taken */ }
++
++    /**
++     * Returns the compressed digital video minimum output protection
++     * level. Zero until decrypt(std::vector<char>&) is called.
++     *
++     * @return compressed digital video protection level.
++     */
++    uint16_t compressedDigitalVideoLevel() const;
++
++    /**
++     * Returns the uncompressed digital video minimum output
++     * protection level. Zero until decrypt(std::vector<char>&) is
++     * called.
++     *
++     * @return uncompressed digital video protection level.
++     */
++    uint16_t uncompressedDigitalVideoLevel() const;
++
++    /**
++     * Returns the analog video minimum output protection level. Zero
++     * until decrypt(std::vector<char>&) is called.
++     *
++     * @return analog video protection level.
++     */
++    uint16_t analogVideoLevel() const;
++
++    /**
++     * Returns the compressed digital audio minimum output protection
++     * level. Zero until decrypt(std::vector<char>&) is called.
++     *
++     * @return compressed digital audio protection level.
++     */
++    uint16_t compressedDigitalAudioLevel() const;
++
++    /**
++     * Returns the uncompressed digital audio minimum output
++     * protection level. Zero until decrypt(std::vector<char>&) is
++     * called.
++     *
++     * @return uncompressed digital audio protection level.
++     */
++    uint16_t uncompressedDigitalAudioLevel() const;
++
++private:
++    std::string mDrmType;
++
++    std::shared_ptr<OcdmDrmSystem> mDrmSystem;
++
++    OpenCDMSession* mOpenCDMSession;
++};
++
++} // device
++} // netflix
++
++#endif
+diff --git a/partner/dpi/gstreamer/OcdmDrmSystem.cpp b/partner/dpi/gstreamer/OcdmDrmSystem.cpp
+new file mode 100644
+index 00000000..45676d0e
+--- /dev/null
++++ b/partner/dpi/gstreamer/OcdmDrmSystem.cpp
+@@ -0,0 +1,376 @@
++/* (c) 2014 Netflix, Inc. Do not copy or use without prior written permission from Netflix, Inc. */
++
++#include <cstring>
++#include <string.h>
++#include <unistd.h>
++
++#include <nrdbase/Configuration.h>
++#include <nrdbase/ReadDir.h>
++#include <nrd/AppLog.h>
++#include <nrd/IDeviceError.h>
++
++#include "ESPlayerConstants.h"
++#include "OcdmDrmSystem.h"
++#include "OcdmDrmSession.h"
++
++using namespace netflix;
++using namespace netflix::device;
++using namespace netflix::device::esplayer;
++
++const std::string DrmSystem::type = "PlayReady";
++
++// Allows us to skip a few methods during migration.
++#define ASSERT_NOT_EXECUTED() {                             \
++	fprintf(stderr, "Error: didn't expect to use %s (%s:%d)!!\n", __PRETTY_FUNCTION__, __FILE__, __LINE__); \
++	abort(); \
++}
++
++OcdmDrmSystem::OcdmDrmSystem()
++  :mSessionId(0)
++  ,mOpenCDMAccessor(nullptr)
++{TRACE_FUNC3();
++	const std::string rdir = Configuration::dataReadPath() + "/dpi/playready";
++	const std::string wdir = Configuration::dataWritePath() + "/dpi/playready/storage/";
++	ReadDir::recursiveMakeDirectory(wdir);
++	const std::string store = wdir + "drmstore";
++
++	mOpenCDMAccessor = opencdm_create_system_netflix(rdir.c_str(), store.c_str());
++}
++
++OcdmDrmSystem::~OcdmDrmSystem()
++{TRACE_FUNC3();
++// TODO: create destroy system function.
++/*
++    ScopedMutex2 lock(opencdm_get_app_context_mutex());
++    if(opencdm_get_app_context().get() != NULL)
++    {
++        Drm_Reader_Commit(opencdm_get_app_context().get(), NULL, NULL);
++        Drm_Uninitialize(opencdm_get_app_context().get());
++        opencdm_get_app_context().reset();
++    }
++*/
++}
++
++NFErr OcdmDrmSystem::initialize(const std::shared_ptr<IDrmSystemCallback>& /*drmSystemCallback*/, std::shared_ptr<IDrmSystemProvisioningEngine>& provisioningEngine)
++{TRACE_FUNC3();
++
++    provisioningEngine = std::shared_ptr<netflix::device::IDrmSystemProvisioningEngine>(new netflix::device::IDrmSystemProvisioningEngine());
++    NFErr output = NFErr_OK;
++
++    OpenCDMError err = opencdm_init_system_netflix(mOpenCDMAccessor);
++    if (err != 0) {
++        StringBuilder ss;
++        ss << "PlayReadyDrmSystem::initialize Error: "<< StringFormatter::hex(err);
++        Variant errInfo;
++        errInfo["errorDescription"] = ss.str();
++        output = NFErr(new IDeviceError(DRMSYSTEM_INITIALIZATION_ERROR, err, errInfo));
++    }
++
++    return output;
++}
++
++NFErr OcdmDrmSystem::teardown()
++{TRACE_FUNC3();
++    opencdm_system_teardown(mOpenCDMAccessor);
++	// TODO: error checking
++	return NFErr_OK;
++}
++
++std::string OcdmDrmSystem::getDrmSystemType()
++{TRACE_FUNC3();
++	return "PlayReady";
++}
++
++std::string OcdmDrmSystem::getDrmVersion() const
++{TRACE_FUNC3();
++    const uint32_t MAXLEN = 64;
++    char versionStr[MAXLEN];
++    opencdm_system_get_version(mOpenCDMAccessor, versionStr);
++    return std::string(versionStr);
++}
++
++/**
++ * IDrmSession factory methods
++ */
++NFErr OcdmDrmSystem::createDrmSession(const std::string& contentId,
++                                           enum DrmLicenseType licenseType,
++                                           const std::vector<uint8_t>& drmHeader,
++                                           std::shared_ptr<IDrmSession>& drmSession)
++{TRACE_FUNC3();
++    if(mSessionId >= UINT_MAX)
++        mSessionId = 0;
++
++    // create a OcdmDrmSession
++    drmSession.reset(new OcdmDrmSession(mSessionId++,
++                                             contentId,
++                                             licenseType,
++                                             drmHeader,
++                                             shared_from_this()));
++
++    return NFErr_OK;
++}
++
++
++/**
++ *
++ * SecureStop interfaces
++ *
++ */
++/**
++ * Returns all the secure stop ids used by the device
++ *
++ * @param[out] sessionIds vector of session ids (16 byte vector)
++ * @return NFErr_OK if successful;
++ *         NFErr_Bad if something went wrong;
++ *         NFErr_NotAllowed if secure stop is not supported
++ *         (e.g. Janus and Ocdm).
++ */
++netflix::NFErr OcdmDrmSystem::getSecureStopIds(std::vector<std::vector<unsigned char> > &ids)
++{TRACE_FUNC3();
++	ASSERT_NOT_EXECUTED();
++	return NFErr_OK;
++
++	// TODO: seems not to be used during our tests, skipped for now, but needs to be migrated as well.
++/*
++    ScopedMutex2 lock(opencdm_get_app_context_mutex());
++
++    // if secure stop is not supported, return NotAllowed
++    DRM_BOOL supported = Drm_SupportSecureStop();
++    if (supported == FALSE)
++        return NFErr_NotAllowed;
++
++    DRM_BYTE sessionIds[TEE_MAX_NUM_SECURE_STOPS][TEE_SESSION_ID_LEN];
++    DRM_DWORD count = 0;
++    DRM_RESULT err = Drm_GetSecureStopIds(opencdm_get_app_context().get(), sessionIds, &count);
++    if (err != DRM_SUCCESS)
++    {
++        NTRACE(TRACE_DRMSYSTEM, "Drm_GetSecureStopIds returned 0x%lx", (long)err);
++        StringBuilder ss;
++        ss << "OcdmDrmSystem::getSecureStopIds Error in Drm_GetSecureStopIds:"
++           << StringFormatter::hex(err);
++        Variant errInfo;
++        errInfo["errorDescription"] = ss.str();
++        return NFErr(new IDeviceError(DRMSYSTEM_SECURESTOP_ERROR, err, errInfo));
++    }
++
++    // build up the returned ids
++    ids.clear();
++    for (unsigned int i=0; i<count; ++i) {
++        std::vector<unsigned char> id(&sessionIds[i][0], &sessionIds[i][TEE_SESSION_ID_LEN]);
++        ids.push_back(id);
++    }
++
++    return NFErr_OK;
++*/
++}
++
++/**
++ * Provides the uncommitted secure stop tokens for all destroyed
++ * DRM contexts.
++ *
++ * @param[in] sessionID sessionID of the secure stop to fetch
++ * @param[out] current list of secure stops.
++ * @return NFErr_OK if successful;
++ *         NFErr_Bad if something went wrong;
++ *         NFErr_NotAllowed if secure stop is not supported
++ *         (e.g. Janus and PlayReady).
++ */
++netflix::NFErr OcdmDrmSystem::getSecureStop(const std::vector<unsigned char> &sessionID,
++                                                 std::shared_ptr<ISecureStop> &secureStop /*out*/)
++{TRACE_FUNC3();
++
++	// TODO: seems like PlayReady 2.x doesn't support this, we still need to implement it in OCDM though (if available)
++	//opencdm_get_secure_stop(mOpenCDMAccessor);
++	return NFErr_NotAllowed;
++}
++
++/**
++ * Commits a single secure stop token. The token will no longer be
++ * available from getSecureStops().
++ *
++ * @param[in] sessionID sessionID of the secure stop to commit
++ */
++void OcdmDrmSystem::commitSecureStop(const std::vector<unsigned char> &sessionID, const std::vector<unsigned char> &serverResponse)
++{TRACE_FUNC3();
++	opencdm_system_commit_secure_stop(mOpenCDMAccessor, &sessionID[0], sessionID.size(), &serverResponse[0], serverResponse.size());
++}
++
++/**
++ * Resets all persisted secure stops. This won't destroy any active playback session.
++ *
++ * @return number of secure stops deleted
++ */
++int OcdmDrmSystem::resetSecureStops()
++{TRACE_FUNC3();
++    // TODO: implement for OCDM implementations that do support this
++	ASSERT_NOT_EXECUTED();
++	return 0;
++
++/*
++    ScopedMutex2 lock(opencdm_get_app_context_mutex());
++
++    // if secure stop is not supported, return
++    DRM_BOOL supported = Drm_SupportSecureStop();
++    if (supported == FALSE)
++        return 0;
++
++    DRM_WORD numDeleted = 0;
++    DRM_RESULT err = Drm_ResetSecureStops(opencdm_get_app_context().get(), &numDeleted);
++    if (err != DRM_SUCCESS)
++    {
++        Log::error(TRACE_DRMSYSTEM, "Drm_ResetSecureStops returned 0x%lx", (long)err);
++    }
++    return numDeleted;
++*/
++}
++
++/**
++ * Enables/disables secure stop usage on this device
++ */
++void OcdmDrmSystem::enableSecureStop(bool use)
++{TRACE_FUNC3();
++	opencdm_system_enable_secure_stop(mOpenCDMAccessor, static_cast<uint32_t>(use));
++}
++
++/**
++ * Queries secure stop support on this device
++ */
++bool OcdmDrmSystem::isSecureStopEnabled()
++{TRACE_FUNC3();
++	// TODO: implement for OCDM implementations that do support this
++	ASSERT_NOT_EXECUTED();
++	return false;
++
++/*
++	ScopedMutex2 lock(opencdm_get_app_context_mutex());
++
++    return static_cast<bool>(Drm_SupportSecureStop());
++*/
++}
++
++/**
++ *
++ * Drm Key/License storage handling interfaces
++ *
++ */
++
++/**
++ * delete drm store
++ * @return NFErr_OK if successful or if drm store is already empty
++ *         NFErr_IOError if delete operation failed
++ *         NFErr_NotImplemented if not implemented
++ */
++NFErr OcdmDrmSystem::deleteDrmStore()
++{TRACE_FUNC3();
++    OpenCDMError err = opencdm_delete_secure_store(mOpenCDMAccessor);
++    if (err == ERROR_NONE) {
++    	return NFErr_OK;
++    }
++
++    return NFErr_DRMFailed;
++}
++
++/**
++ * delete key store
++ * @return NFErr_OK if successful or if drm store is already empty
++ *         NFErr_IOError if delete operation failed
++ *         NFErr_NotImplemented if not implemented
++ */
++NFErr OcdmDrmSystem::deleteKeyStore()
++{TRACE_FUNC3();
++	// TODO: implement for OCDM implementations that do support this
++	ASSERT_NOT_EXECUTED();
++	return NFErr_OK;
++
++/*
++    NTRACE(TRACE_DRMSYSTEM, "OcdmDrmSystem::deleteKeyStore");
++
++    ScopedMutex2 lock(opencdm_get_app_context_mutex());
++
++    NFErr nferr  = NFErr_OK;
++
++    DRM_RESULT err = Drm_DeleteKeyStore();
++    if (err != DRM_SUCCESS) {
++        Log::error(TRACE_DRMSYSTEM, "Drm_DeleteKeyStore returned 0x%lx", (long)err);
++        StringBuilder ss;
++        ss << "OcdmDrmSystem::deleteKeyStore: Error in Drm_DeleteKeyStore:"
++           << StringFormatter::hex(err);
++        Variant errInfo;
++        errInfo["errorDescription"] = ss.str();
++        nferr.push(new IDeviceError(DRMSYSTEM_KEYSTORE_ERROR, err, errInfo));
++    }
++
++    return nferr;
++*/
++}
++
++/**
++ * get SHA256 hash of drm store
++ * @param[out] drmStoreHash vector of hash SHA256 result
++ * @return NFErr_OK if successful
++ *         NFErr_IOError if it can not read drm store
++ *         NFErr_NotImplemented if not implemented
++ */
++NFErr OcdmDrmSystem::getDrmStoreHash(std::vector<unsigned char> &drmStoreHash)
++{TRACE_FUNC3();
++    // TODO: error checking
++    NFErr nferr = NFErr_OK;
++
++    drmStoreHash.resize(256);
++    opencdm_get_secure_store_hash(mOpenCDMAccessor, &drmStoreHash[0], drmStoreHash.size());
++
++    return nferr;
++}
++
++/**
++ * get SHA256 hash of key store
++ * @param[out] drmStoreHash vector of hash SHA256 result
++ * @return NFErr_OK if successful
++ *         NFErr_IOError if it can not read drm store
++ *         NFErr_NotImplemented if not implemented
++ */
++netflix::NFErr OcdmDrmSystem::getKeyStoreHash(std::vector<unsigned char> &keyStoreHash)
++{TRACE_FUNC3();
++    // TODO: implement for OCDM implementations that do support this
++    ASSERT_NOT_EXECUTED();
++    return NFErr_OK;
++
++/*
++    ScopedMutex2 lock(opencdm_get_app_context_mutex());
++
++    NTRACE(TRACE_DRMSYSTEM, "OcdmDrmSystem::getKeyStoreHash");
++
++    NFErr nferr = NFErr_OK;
++
++    keyStoreHash.resize(256);
++
++    DRM_RESULT err = Drm_GetKeyStoreHash(&keyStoreHash[0]);
++    if (err != DRM_SUCCESS) {
++        Log::error(TRACE_DRMSYSTEM, "Drm_DeleteKeyStore returned 0x%lx", (long)err);
++        StringBuilder ss;
++        ss << "OcdmDrmSystem::getKeyStoreHash: Error in Drm_GetKeyStoreHash:"
++           << StringFormatter::hex(err);
++        Variant errInfo;
++        errInfo["errorDescription"] = ss.str();
++        nferr.push(new IDeviceError(DRMSYSTEM_KEYSTORE_ERROR, err, errInfo));
++    }
++
++    return nferr;
++*/
++}
++
++netflix::NFErr OcdmDrmSystem::getLdlSessionsLimit(uint32_t& ldlLimit)
++{TRACE_FUNC3();
++	OpenCDMError err = opencdm_system_get_ldl_session_limit(mOpenCDMAccessor, &ldlLimit);
++
++	// TODO: error checking
++
++	return NFErr_OK;
++}
++
++time_t OcdmDrmSystem::getDrmTime() const
++{TRACE_FUNC3();
++	time_t drmTime;
++	opencdm_system_get_drm_time(mOpenCDMAccessor, &drmTime);
++	return drmTime;
++}
+diff --git a/partner/dpi/gstreamer/OcdmDrmSystem.h b/partner/dpi/gstreamer/OcdmDrmSystem.h
+new file mode 100644
+index 00000000..56b68f98
+--- /dev/null
++++ b/partner/dpi/gstreamer/OcdmDrmSystem.h
+@@ -0,0 +1,170 @@
++/* (c) 2011 Netflix, Inc. Do not copy or use without prior written permission from Netflix, Inc. */
++
++#ifndef OCDMDRMSYSTEM_H
++#define OCDMDRMSYSTEM_H
++
++#include <vector>
++
++#include <nrdbase/tr1.h>
++#include <nrd/IDrmSystem.h>
++
++#include <opencdm/open_cdm.h>
++#include <opencdm/open_cdm_ext.h>
++
++namespace netflix {
++namespace device {
++
++class OcdmDrmSystem : public IDrmSystem, public std::enable_shared_from_this<OcdmDrmSystem>
++{
++public:
++
++    OcdmDrmSystem();
++
++    ~OcdmDrmSystem();
++
++    using IDrmSystem::initialize;
++    virtual NFErr initialize(const std::shared_ptr<IDrmSystemCallback>& drmSystemCallback, std::shared_ptr<IDrmSystemProvisioningEngine>& provisioningEngine) override;
++
++    virtual NFErr teardown() override;
++
++    virtual std::string getDrmSystemType();
++
++    virtual std::string getDrmVersion() const override;
++
++    /**
++     *
++     * IDrmSession factory methods
++     *
++     */
++    using IDrmSystem::createDrmSession;
++    virtual NFErr createDrmSession(const std::string& contentId,
++                                   enum DrmLicenseType licenseType,
++                                   const std::vector<uint8_t>& drmHeader,
++                                   std::shared_ptr<IDrmSession>& drmSession) override;
++
++    /**
++     *
++     * SecureStop interfaces
++     *
++     */
++        /**
++     * Returns all the secure stop ids used by the device
++     *
++     * @param[out] sessionIds vector of session ids (16 byte vector)
++     * @return NFErr_OK if successful;
++     *         NFErr_Bad if something went wrong;
++     *         NFErr_NotAllowed if secure stop is not supported
++     *         (e.g. Janus and Ocdm).
++     */
++    virtual netflix::NFErr getSecureStopIds(
++        /*out*/std::vector<std::vector<unsigned char> > &sessionIds) override;
++
++    /**
++     * Provides the uncommitted secure stop tokens for all destroyed
++     * DRM contexts.
++     *
++     * @param[in] sessionID sessionID of the secure stop to fetch
++     * @param[out] current list of secure stops.
++     * @return NFErr_OK if successful;
++     *         NFErr_Bad if something went wrong;
++     *         NFErr_NotAllowed if secure stop is not supported
++     *         (e.g. Janus and Ocdm).
++     */
++    virtual netflix::NFErr getSecureStop(const std::vector<unsigned char> &sessionID,
++                                         /*out*/std::shared_ptr<ISecureStop> &secureStop) override;
++
++    /**
++     * Commits a single secure stop token. The token will no longer be
++     * available from getSecureStops().
++     *
++     * @param[in] sessionID sessionID of the secure stop to commit
++     */
++    virtual void commitSecureStop(const std::vector<unsigned char> &sessionID,
++                                  const std::vector<unsigned char> &serverResponse) override;
++
++    /**
++     * Resets all persisted secure stops. This won't destroy any active playback session.
++     *
++     * @return number of secure stops deleted
++     */
++    virtual int resetSecureStops() override;
++
++    /**
++     * Enables/disables secure stop usage on this device
++     */
++    virtual void enableSecureStop(bool);
++
++    /**
++     * Queries secure stop support on this device
++     */
++    virtual bool isSecureStopEnabled();
++
++    /**
++     *
++     * Drm Key/License storage handling interfaces
++     *
++     */
++
++    /**
++     * delete drm store
++     * @return NFErr_OK if successful or if drm store is already empty
++     *         NFErr_IOError if delete operation failed
++     *         NFErr_NotImplemented if not implemented
++     */
++    virtual netflix::NFErr deleteDrmStore() override;
++
++     /**
++     * delete key store
++     * @return NFErr_OK if successful or if drm store is already empty
++     *         NFErr_IOError if delete operation failed
++     *         NFErr_NotImplemented if not implemented
++     */
++    virtual netflix::NFErr deleteKeyStore() override;
++
++    /**
++     * get SHA256 hash of drm store
++     * @param[out] drmStoreHash vector of hash SHA256 result
++     * @return NFErr_OK if successful
++     *         NFErr_IOError if it can not read drm store
++     *         NFErr_NotImplemented if not implemented
++     */
++    virtual netflix::NFErr getDrmStoreHash(std::vector<unsigned char> &drmStoreHash) override;
++
++    /**
++     * get SHA256 hash of key store
++     * @param[out] drmStoreHash vector of hash SHA256 result
++     * @return NFErr_OK if successful
++     *         NFErr_IOError if it can not read drm store
++     *         NFErr_NotImplemented if not implemented
++     */
++    virtual netflix::NFErr getKeyStoreHash(std::vector<unsigned char> &keyStoreHash) override;
++
++    /**
++     * get maximum LDL session counts supported by underlying drm system
++     * @param[out] max number of ldl session that can be created
++     * @return NFErr_Ok if successful
++     *         NFErr_NotImplemented if not implemented
++     */
++    virtual netflix::NFErr getLdlSessionsLimit(uint32_t& ldlLimit) override;
++
++    /**
++     * Return the current time from the DRM subsystem.
++     *
++     * @return the DRM subsystem time.
++     */
++    virtual time_t getDrmTime() const override;
++
++    // TODO: is this unsafe getter really needed?
++    OpenCDMAccessor* getOpenCDMAccessor() {
++    	return mOpenCDMAccessor;
++    }
++
++private:
++    uint32_t mSessionId;
++
++    /* struct */ OpenCDMAccessor* mOpenCDMAccessor;
++};
++
++}}
++
++#endif
+diff --git a/partner/dpi/gstreamer/drm.cmake b/partner/dpi/gstreamer/drm.cmake
+index 97ba132b..c7630cff 100644
+--- a/partner/dpi/gstreamer/drm.cmake
++++ b/partner/dpi/gstreamer/drm.cmake
+@@ -34,15 +34,14 @@ if(DPI_DRM STREQUAL "playready2.5-ss-tee")
+         COMMAND ${CMAKE_COMMAND} -E make_directory ${HAVE_DPI_DIRECTORY}/playready/storage
+         COMMAND ${CMAKE_COMMAND} -E copy_directory ${PLAYREADY_DIRECTORY}/etc/playready ${HAVE_DPI_DIRECTORY}/playready
+     )
+-elseif(DPI_REFERENCE_DRM STREQUAL "ocdm")
++elseif(DPI_DRM STREQUAL "ocdm")
+     set(PLAYREADY_INCLUDE "${CMAKE_INSTALL_PREFIX}/include/playready")
+ 
+     set(CMAKE_REQUIRED_INCLUDES_SAVED "${CMAKE_REQUIRED_INCLUDES}")
+     set(CMAKE_REQUIRED_DEFINITIONS_SAVED "${CMAKE_REQUIRED_DEFINITIONS}")
+     set(CMAKE_REQUIRED_INCLUDES "${PLAYREADY_INCLUDE};${PLAYREADY_INCLUDE}/oem/inc;${PLAYREADY_INCLUDE}/oem/ansi/inc;${PLAYREADY_INCLUDE}/oem/common/inc")
+ 
+-    add_definitions( -DOCDM )
+-
++    add_definitions(-DOCDM)
+ 
+ elseif(DPI_DRM STREQUAL "playready2.5")
+     # Copied from 4.2
+-- 
+2.17.1
+

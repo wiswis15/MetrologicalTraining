@@ -1,0 +1,52 @@
+From 6e6164d19991db6f847ec5d3c58560c79d976803 Mon Sep 17 00:00:00 2001
+From: HaseenaSainul <h.sainul@metrological.com>
+Date: Tue, 8 Jan 2019 02:19:56 +0530
+Subject: [PATCH 08/10] [Netflix5] graphics/wayland display name setting from
+ env added
+
+---
+ partner/graphics/wayland/OpenGLContextEGL.cpp | 20 ++++++++++++++-----
+ 1 file changed, 15 insertions(+), 5 deletions(-)
+
+diff --git a/partner/graphics/wayland/OpenGLContextEGL.cpp b/partner/graphics/wayland/OpenGLContextEGL.cpp
+index 2972912b..593dc80f 100644
+--- a/partner/graphics/wayland/OpenGLContextEGL.cpp
++++ b/partner/graphics/wayland/OpenGLContextEGL.cpp
+@@ -108,19 +108,29 @@ bool OpenGLContext::init_sys(OpenGLContext* share)
+ {
+     struct wl_display *display=0;
+     struct wl_registry *registry=0;
+-    const char *displayName=0;
++    std::string displayName;
+     EGLint contextAttributes[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
+ 
+     mPrivate = new OpenGLContextPrivate;
+     memset(mPrivate, '\0', sizeof(OpenGLContextPrivate));
+-    
+-    if (displayName)
++
++    const char* callsign(std::getenv("CLIENT_IDENTIFIER"));
++    if (callsign != nullptr) {
++        const char* delimiter = nullptr;
++        if ((delimiter = strchr(callsign, ',')) == nullptr) {
++            displayName = callsign;
++        }
++        else {
++            displayName = std::string(callsign, (delimiter - callsign));
++        }
++    }
++
++    if (displayName.empty() != true)
+         Log::warn(TRACE_GIBBON_GRAPHICS) << "Connecting to wayland display: " << displayName;
+     else
+         Log::warn(TRACE_GIBBON_GRAPHICS) << "Connecting to wayland default display";
+ 
+-    // display = WaylandDisplay::instance()->connect(displayName);
+-    display = wl_display_connect(displayName);
++    display = WaylandDisplay::instance()->connect(displayName.c_str());
+     if (!display) {
+         Log::error(TRACE_GIBBON_GRAPHICS) << "Unable to connect to wayland display";
+         assert(display != 0);
+-- 
+2.17.1
+

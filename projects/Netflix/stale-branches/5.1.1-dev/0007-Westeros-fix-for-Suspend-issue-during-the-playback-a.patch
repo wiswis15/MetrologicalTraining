@@ -1,0 +1,276 @@
+From 5796252b61f9e63b157a96b0aad4aeee12e62382 Mon Sep 17 00:00:00 2001
+From: HaseenaSainul <h.sainul@metrological.com>
+Date: Mon, 7 Jan 2019 21:16:50 +0530
+Subject: [PATCH 07/10] [Westeros] fix for Suspend issue during the playback
+ added, (if both compositor and video plyabcak use westeros)
+
+---
+ netflix/src/nrd/Dpi/ISystem.h                 |  6 ++
+ partner/dpi/gstreamer/CMakeLists.txt          |  1 +
+ partner/dpi/gstreamer/ESManagerNative.cpp     |  8 +++
+ partner/dpi/gstreamer/ESManagerNative.h       |  2 +
+ partner/dpi/gstreamer/FileSystem.cpp          |  6 ++
+ partner/dpi/gstreamer/FileSystem.h            |  5 +-
+ partner/dpi/gstreamer/GstAudioMixerOutput.cpp |  2 +
+ partner/dpi/gstreamer/PlaybackGroupNative.cpp | 57 +++++++++----------
+ partner/dpi/gstreamer/PlaybackGroupNative.h   |  5 ++
+ .../wpeframework/OpenGLContextEGL.cpp         |  2 +-
+ 10 files changed, 62 insertions(+), 32 deletions(-)
+
+diff --git a/netflix/src/nrd/Dpi/ISystem.h b/netflix/src/nrd/Dpi/ISystem.h
+index 9bc5f05d..63c8549f 100644
+--- a/netflix/src/nrd/Dpi/ISystem.h
++++ b/netflix/src/nrd/Dpi/ISystem.h
+@@ -928,6 +928,12 @@ public:
+      */
+     virtual void requestSuspend() { }
+ 
++    /**
++     * To stop playback before destroying the graphics surface,
++     * if the surface are used for video rendering as well (in westeros context)
++     */
++    virtual void stopPlayback() { }
++
+     /**
+      * Return the number of times this application has been through Netflix's
+      * the certification process.  This number should be monotonically
+diff --git a/partner/dpi/gstreamer/CMakeLists.txt b/partner/dpi/gstreamer/CMakeLists.txt
+index 0582552f..a095bb15 100644
+--- a/partner/dpi/gstreamer/CMakeLists.txt
++++ b/partner/dpi/gstreamer/CMakeLists.txt
+@@ -64,6 +64,7 @@ if (NOT ${USE_COMCAST_VERSION} STREQUAL "")
+ endif()
+ 
+ if(GIBBON_GST_PLATFORM STREQUAL "rpi")
++  add_definitions("-DRASPBERRY_PI=1")
+   add_definitions(-DUSE_GST_PLAYBIN)
+ endif()
+ 
+diff --git a/partner/dpi/gstreamer/ESManagerNative.cpp b/partner/dpi/gstreamer/ESManagerNative.cpp
+index b9b711c6..5ea161fc 100644
+--- a/partner/dpi/gstreamer/ESManagerNative.cpp
++++ b/partner/dpi/gstreamer/ESManagerNative.cpp
+@@ -143,3 +143,11 @@ std::shared_ptr<netflix::DrmManager> ESManagerNative::getMultiSessionDrmManager(
+     return mMultiSessionDrmManager;
+ }
+ 
++void ESManagerNative::stopPlayback()
++{
++    set<PlaybackGroupNative*>::iterator it;
++    for (it = mPlaybackGroups.begin(); it != mPlaybackGroups.end(); it++) {
++        PlaybackGroupNative* group = static_cast<PlaybackGroupNative*>(*it);
++        group->stop();
++    }
++}
+diff --git a/partner/dpi/gstreamer/ESManagerNative.h b/partner/dpi/gstreamer/ESManagerNative.h
+index a4596875..22121d2b 100644
+--- a/partner/dpi/gstreamer/ESManagerNative.h
++++ b/partner/dpi/gstreamer/ESManagerNative.h
+@@ -58,6 +58,8 @@ public:
+     virtual void destroyPlaybackGroup(IPlaybackGroup* streamPlayer) override;
+     virtual void commitPlaybackGroups() override;
+ 
++    void stopPlayback();
++
+     /*
+      * Native methods
+      */
+diff --git a/partner/dpi/gstreamer/FileSystem.cpp b/partner/dpi/gstreamer/FileSystem.cpp
+index d5195beb..1ebee77a 100644
+--- a/partner/dpi/gstreamer/FileSystem.cpp
++++ b/partner/dpi/gstreamer/FileSystem.cpp
+@@ -1718,6 +1718,12 @@ void FileSystem::resourceReleased(const std::string &resource)
+ #endif
+ }
+ 
++void FileSystem::stopPlayback()
++{
++    if (mESManagerNative)
++        mESManagerNative->stopPlayback();
++}
++
+ void FileSystem::resourceAcquired(const std::string &resource)
+ {
+     NRDP_UNUSED(resource);
+diff --git a/partner/dpi/gstreamer/FileSystem.h b/partner/dpi/gstreamer/FileSystem.h
+index b35dcb57..971f4688 100644
+--- a/partner/dpi/gstreamer/FileSystem.h
++++ b/partner/dpi/gstreamer/FileSystem.h
+@@ -82,9 +82,12 @@ public:
+     /** @sa ISystem::shutdown() */
+     virtual void shutdown() override;
+ 
+-    /** @sa ISystem::shutdown() */
++    /** @sa ISystem::requestSuspend() */
+     virtual void requestSuspend() override;
+ 
++    /** @sa ISystem::stopPlayback() */
++    virtual void stopPlayback() override;
++
+     /** @sa ISystem::resourceAcquired() */
+     virtual void resourceAcquired(const std::string &resource) override;
+ 
+diff --git a/partner/dpi/gstreamer/GstAudioMixerOutput.cpp b/partner/dpi/gstreamer/GstAudioMixerOutput.cpp
+index 09be2728..3afa5705 100644
+--- a/partner/dpi/gstreamer/GstAudioMixerOutput.cpp
++++ b/partner/dpi/gstreamer/GstAudioMixerOutput.cpp
+@@ -636,6 +636,8 @@ void GstAudioMixerOutput::init()
+   mStreamBegin = true;
+   ms11Enabled = true; //assume for brcm for now
+   mQueryFormat = REAL_TIME;
++#elif defined(RASPBERRY_PI)
++  mSink = gst_element_factory_make ("omxhdmiaudiosink","omxhdmiaudiosink");
+ #endif
+   g_object_set(G_OBJECT(mSink), "volume", 1.0 * AUDIO_VOLUME_SCALE_FACTOR, NULL);
+   gst_bin_add_many (GST_BIN (mGstPipeline), mSrc, mSink, NULL);
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.cpp b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+index eb720cbd..15d4c652 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.cpp
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+@@ -204,7 +204,7 @@ PlaybackGroupNative::PlaybackGroupNative(ESManagerNative& ESManager, uint32_t pi
+ #endif
+ 
+ #if defined(WESTEROS_SINK)
+-  GstElement* videoSinkGst = createWesterosSink();
++   mVideoSinkGst = createWesterosSink();
+ #endif
+ 
+ #if defined(GST_GL)
+@@ -246,7 +246,6 @@ PlaybackGroupNative::~PlaybackGroupNative()
+     // make sure audio device volume is reset back to 1 on exit
+     setVolume(1.0, 0, netflix::device::EaseLinear);
+ 
+-
+     // stop buffer push
+     for(it = mStreamPlayers.begin(); it != mStreamPlayers.end(); it++)
+     {
+@@ -286,6 +285,7 @@ PlaybackGroupNative::~PlaybackGroupNative()
+     {
+       delete *it;
+     }
++    mStreamPlayers.clear();
+ 
+     // remove main loop and main context
+     g_main_loop_unref(mMainLoop);
+@@ -294,10 +294,12 @@ PlaybackGroupNative::~PlaybackGroupNative()
+       g_main_context_unref(mMainContext);
+ 
+     gst_object_unref(mGstPipeline);
++    mGstPipeline = nullptr;
+ 
+ #if defined(USE_GST_PLAYBIN)
+     if (mSource)
+       gst_object_unref(mSource);
++    mSource = nullptr;
+ #endif
+ 
+     GstServer::instance()->disconnect();
+@@ -310,28 +312,6 @@ PlaybackGroupNative::~PlaybackGroupNative()
+     Log::warn(TRACE_MEDIACONTROL, "Finished tear down of gstreamer player");
+ }
+ 
+-/* static */ void PlaybackGroupNative::OnAudioDecoderPadAdded(GstElement *decodebin, GstPad *pad, gpointer data)
+-{
+-    // We know already we are reacting to the audio decoder bin.
+-    NRDP_UNUSED(decodebin);
+-
+-    // Audio decoder got a new pad: output (src) pad.
+-    PlaybackGroupNative *sink = reinterpret_cast<PlaybackGroupNative*>(data);
+-
+-    fprintf(stderr, "new audio pad\n");
+-
+-    GstPad * sinkpad = gst_element_get_static_pad(sink->mAudioConvert, "sink");
+-
+-    fprintf(stderr, "audio sinkpad: %p\n", sinkpad);
+-    GstPadLinkReturn linkReturn = gst_pad_link(pad, sinkpad);
+-
+-    if (linkReturn != GST_PAD_LINK_OK) {
+-        fprintf(stderr, "audio link wasn't ok\n");
+-    }
+-
+-    GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(sink->mGstPipeline), GST_DEBUG_GRAPH_SHOW_ALL, "after-add-audio-decoder-pad");
+-}
+-
+ #ifndef USE_GST_PLAYBIN
+ void PlaybackGroupNative::buildStaticPipeline()
+ {
+@@ -794,13 +774,19 @@ void PlaybackGroupNative::flush(bool /*retainLastRenderedFrame*/)
+   Log::info(TRACE_MEDIACONTROL, "flushing pipeline...");
+   gboolean ret = FALSE;
+ 
+-  ret = gst_element_send_event(mSource, gst_event_new_flush_start());
+-  if (!ret)
+-    Log::error(TRACE_MEDIACONTROL, "failed to send flush-start event");
++#if defined(WESTEROS_SINK)
++  if (mVideoSinkGst) {
++#endif
++    ret = gst_element_send_event(mSource, gst_event_new_flush_start());
++    if (!ret)
++      Log::error(TRACE_MEDIACONTROL, "failed to send flush-start event");
+ 
+-  ret = gst_element_send_event(mSource, gst_event_new_flush_stop(TRUE));
+-  if (!ret)
+-    Log::error(TRACE_MEDIACONTROL,"failed to send flush-stop event");
++    ret = gst_element_send_event(mSource, gst_event_new_flush_stop(TRUE));
++    if (!ret)
++      Log::error(TRACE_MEDIACONTROL,"failed to send flush-stop event");
++#if defined(WESTEROS_SINK)
++  }
++#endif
+ 
+   // reset pts offset for everybody
+   for(it = mStreamPlayers.begin(); it != mStreamPlayers.end(); it++)
+@@ -1638,3 +1624,14 @@ void PlaybackGroupNative::PlaybackGroupThread::run()
+ {
+   (_pbgroup.*_task)();
+ }
++
++void PlaybackGroupNative::stop()
++{
++#if defined(WESTEROS_SINK)
++  if (mGstPipeline) {
++    printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
++    gst_element_set_state(mVideoSinkGst , GST_STATE_NULL);
++    mVideoSinkGst = nullptr;
++  }
++#endif
++}
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.h b/partner/dpi/gstreamer/PlaybackGroupNative.h
+index 7b7c3781..3c198044 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.h
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.h
+@@ -116,6 +116,8 @@ public:
+     void audioFlushed();
+     uint32_t getPipelineId() const;
+ 
++    void stop();
++
+     void pipelineTask();
+ 
+     GMainContext *getMainContext(){return mMainContext;};
+@@ -251,6 +253,9 @@ private:
+     uint32_t    mCurrentZOrder;
+     bool mNewVideoWindow;
+ 
++#if defined(WESTEROS_SINK)
++    GstElement* mVideoSinkGst;
++#endif
+ #if defined(GST_GL)
+     std::shared_ptr<VideoSinkGStreamer> mVideoSinkGst;
+ #endif
+diff --git a/partner/graphics/wpeframework/OpenGLContextEGL.cpp b/partner/graphics/wpeframework/OpenGLContextEGL.cpp
+index f1f29925..6c6bc0fe 100644
+--- a/partner/graphics/wpeframework/OpenGLContextEGL.cpp
++++ b/partner/graphics/wpeframework/OpenGLContextEGL.cpp
+@@ -192,7 +192,7 @@ OpenGLDisplayEGL::~OpenGLDisplayEGL()
+ void OpenGLContext::cleanup_sys()
+ {
+     printf("%s:%s:%d\n", __FILE__, __func__, __LINE__);
+-    nrdApp()->getSystem()->resourceReleased("graphics");
++    nrdApp()->getSystem()->stopPlayback();
+     eglMakeCurrent(mPrivate->display->dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+     eglDestroySurface(mPrivate->display->dpy, mPrivate->surface);
+     eglDestroyContext(mPrivate->display->dpy, mPrivate->context);
+-- 
+2.17.1
+
