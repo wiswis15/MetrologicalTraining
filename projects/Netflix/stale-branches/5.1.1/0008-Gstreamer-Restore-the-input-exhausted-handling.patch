@@ -1,0 +1,70 @@
+From dcab5d685a8867a35594ab75761e5ae8144133d4 Mon Sep 17 00:00:00 2001
+From: Albert Dahan <albert@dahan.nl>
+Date: Mon, 5 Sep 2016 21:26:08 +0200
+Subject: [PATCH 08/97] [Gstreamer] Restore the input exhausted handling
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp | 4 ++++
+ partner/dpi/gstreamer/ESPlayerGst.h   | 3 ++-
+ 2 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index 150eadb7..51902872 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -72,6 +72,7 @@ void ESPlayerGst::ProcessFrame() {
+   switch(mCallback->getNextMediaSample(*mSampleWriter)) {
+     case NO_AVAILABLE_SAMPLES: {  // should report underflow and detach from main loop
+            Log::error(TRACE_MEDIAPLAYBACK, "Input exhausted");
++           mInputExhausted = true;
+            startWait(WAIT_FOR_VIDEO_DATA);
+            break;
+          }
+@@ -83,6 +84,7 @@ void ESPlayerGst::ProcessFrame() {
+     case END_OF_STREAM: {
+            printf("ProcessFrame::END_OF_STREAM\n");
+            mEndOfStreamFlag = true;
++           mInputExhausted = true;
+            mSampleWriter->reset();
+            Log::info(TRACE_MEDIAPLAYBACK, "ESPlayerGst::decoderTask: "
+               "getNextMediaSample returns END_OF_STREAM on stream %d", mMediaType);
+@@ -119,6 +121,7 @@ void ESPlayerGst::TransferBufferToGStreamer () {
+     mCallback->reportError(err);
+   }
+   else {
++    mInputExhausted = false;
+     // set the pts offset at the start of playback or after a seek/flush operation.
+     // both audio and video need to use the same pts offset to be in sync.
+     // so we drop audio samples until video pts offset is set.
+@@ -183,6 +186,7 @@ ESPlayerGst::ESPlayerGst() : mGstSource(NULL),
+                              mSrc(NULL),
+                              mPtsOffset(-1),
+                              mDtsOffset(-1),
++                             mInputExhausted(false),
+                              mReadyToPlay(false)
+ {
+ }
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.h b/partner/dpi/gstreamer/ESPlayerGst.h
+index ae8135cd..82407302 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.h
++++ b/partner/dpi/gstreamer/ESPlayerGst.h
+@@ -51,7 +51,7 @@ public:
+                         PlaybackGroupNative* playbackGroup);
+     virtual void flush();
+     virtual void close();
+-    virtual bool inputsAreExhausted() { return !mReadyToPlay; }; // to be deleted
++    virtual bool inputsAreExhausted() { return mInputExhausted; };
+ 
+     // Decoding and rendering is done by the GStreamer, no need to do anythng here.
+     virtual void decoderTask(){};
+@@ -109,6 +109,7 @@ private:
+     llong mPtsOffset;
+     llong mDtsOffset;
+ 
++    bool mInputExhausted;
+     bool mReadyToPlay;
+ 
+     GstElement *mSrc;
+-- 
+2.17.1
+

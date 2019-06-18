@@ -1,0 +1,27 @@
+From 4fe5eb918e83c7ef2967c080a5716329e92a596d Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Mon, 3 Jul 2017 11:48:58 +0200
+Subject: [PATCH 64/97] [graphics] ELG Surfaces have a dimension info.
+
+---
+ partner/graphics/compositor-client/OpenGLContextEGL.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/partner/graphics/compositor-client/OpenGLContextEGL.cpp b/partner/graphics/compositor-client/OpenGLContextEGL.cpp
+index c3aa75a3..e360008c 100644
+--- a/partner/graphics/compositor-client/OpenGLContextEGL.cpp
++++ b/partner/graphics/compositor-client/OpenGLContextEGL.cpp
+@@ -59,8 +59,8 @@ bool OpenGLContext::init(OpenGLContext* share)
+ 
+     assert(mPrivate->display.GetDisplay != EGL_NO_DISPLAY);
+ 
+-    mWidth = mPrivate->display.Physical().Width;
+-    mHeight = mPrivate->display.Physical().Height;
++    mWidth =  mPrivate->client.Width();
++    mHeight =  mPrivate->client.Height();
+ 
+     if (share) {
+         mWidth = share->mWidth;
+-- 
+2.17.1
+

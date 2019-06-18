@@ -1,0 +1,41 @@
+From e345da38a8abda0039a721dcb55ea033238e23e7 Mon Sep 17 00:00:00 2001
+From: Wouter Meek <woutermeek@gmail.com>
+Date: Fri, 16 Sep 2016 04:34:59 -0700
+Subject: [PATCH 13/97] [DPI/Gstreamer] only process end of stream once and
+ notify netflix playbackCompleted
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index 19c39c29..762da06c 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -83,14 +83,20 @@ void ESPlayerGst::ProcessFrame() {
+            break;
+          }
+     case END_OF_STREAM: {
+-           printf("ProcessFrame::END_OF_STREAM\n");
++          printf("ProcessFrame::END_OF_STREAM\n");
++          if (!mEndOfStreamFlag) {
+            mEndOfStreamFlag = true;
+            mInputExhausted = true;
+            mSampleWriter->reset();
+            Log::info(TRACE_MEDIAPLAYBACK, "ESPlayerGst::decoderTask: "
+               "getNextMediaSample returns END_OF_STREAM on stream %d", mMediaType);
+-           gst_element_post_message(mSrc, gst_message_new_eos(GST_OBJECT(mSrc)));
+-           detach();
++
++          if (!getCallback()->playbackCompletedReceived()) {
++            printf("getCallback()->playbackCompleted(); \n");
++            getCallback()->playbackCompleted();
++          }
++          detach();
++          }
+            break;
+          }
+     case STREAM_ERROR: {
+-- 
+2.17.1
+

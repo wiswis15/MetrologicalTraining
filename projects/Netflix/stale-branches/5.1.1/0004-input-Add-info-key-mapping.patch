@@ -1,0 +1,24 @@
+From f37b5699a705ac09b13fb2250f7ffee17c5633d8 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Tue, 23 Aug 2016 14:47:30 +0200
+Subject: [PATCH 04/97] [input] Add info key mapping
+
+---
+ partner/input/devinput/InputManagerDevInput.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/partner/input/devinput/InputManagerDevInput.cpp b/partner/input/devinput/InputManagerDevInput.cpp
+index 779971aa..f25a86df 100644
+--- a/partner/input/devinput/InputManagerDevInput.cpp
++++ b/partner/input/devinput/InputManagerDevInput.cpp
+@@ -85,6 +85,7 @@ static inline KeyEvent::Key keyCodeToKey(uint16_t c)
+     case KEY_PLAYPAUSE: code = KeyEvent::GIBBON_KEY_F8; break;
+     case KEY_FORWARD: code = KeyEvent::GIBBON_KEY_F9; break;
+     case KEY_STOPCD: code = KeyEvent::GIBBON_KEY_F10; break;
++    case KEY_INFO: code = KeyEvent::GIBBON_KEY_DELETE; break;
+     default:
+         break;
+     }
+-- 
+2.17.1
+

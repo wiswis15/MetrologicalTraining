@@ -1,0 +1,29 @@
+From f4cb9de4cbe892e0e96fc05be0d32132d06b536f Mon Sep 17 00:00:00 2001
+From: Albert Dahan <a.dahan@metrological.com>
+Date: Sat, 20 Aug 2016 00:57:51 +0200
+Subject: [PATCH 01/97] [Netflix] Add backed in error page
+
+---
+ netflix/src/platform/gibbon/CMakeLists.txt | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/netflix/src/platform/gibbon/CMakeLists.txt b/netflix/src/platform/gibbon/CMakeLists.txt
+index 7cc7ea27..6a6d2f96 100644
+--- a/netflix/src/platform/gibbon/CMakeLists.txt
++++ b/netflix/src/platform/gibbon/CMakeLists.txt
+@@ -684,9 +684,9 @@ copy_resource(gibbon ${CMAKE_CURRENT_SOURCE_DIR}/resources/configuration/stress.
+ copy_resource(gibbon ${CMAKE_CURRENT_SOURCE_DIR}/resources/configuration/1080.xml ${APP_DATA_DIR}/etc/conf/1080.xml DEBUG)
+ copy_resource(gibbon ${GIBBON_OEM_XML} ${APP_DATA_DIR}/etc/conf/oem.xml)
+ copy_resource(gibbon ${CMAKE_CURRENT_SOURCE_DIR}/resources/js/splash.js ${APP_DATA_DIR}/resources/js/)
+-copy_resource(gibbon ${CMAKE_CURRENT_SOURCE_DIR}/resources/js/error.js ${APP_DATA_DIR}/resources/js/ NON_COMPILABLE)
+-copy_resource(gibbon ${GIBBON_ERROR_FILE} ${APP_DATA_DIR}/resources/js/error.js NON_COMPILABLE)
+-copy_resource(gibbon ${CMAKE_CURRENT_SOURCE_DIR}/resources/js/error-text/* ${APP_DATA_DIR}/resources/js/error-text/ NON_COMPILABLE)
++copy_resource(gibbon ${CMAKE_CURRENT_SOURCE_DIR}/resources/js/error.js ${APP_DATA_DIR}/resources/js/)
++copy_resource(gibbon ${GIBBON_ERROR_FILE} ${APP_DATA_DIR}/resources/js/error.js)
++copy_resource(gibbon ${CMAKE_CURRENT_SOURCE_DIR}/resources/js/error-text/* ${APP_DATA_DIR}/resources/js/error-text/)
+ copy_resource(gibbon ${CMAKE_CURRENT_SOURCE_DIR}/resources/js/tests/* ${APP_DATA_DIR}/resources/js/tests/ DEBUG)
+ copy_resource(gibbon ${CMAKE_CURRENT_SOURCE_DIR}/resources/js/inject/* ${APP_DATA_DIR}/resources/js/inject/ DEBUG)
+ 
+-- 
+2.17.1
+

@@ -1,0 +1,66 @@
+From ff2a789b715333b8ff457c7bfcbf2569d2ae5b53 Mon Sep 17 00:00:00 2001
+From: Rene Barto <r.barto@metrological.com>
+Date: Tue, 29 Aug 2017 15:15:17 +0200
+Subject: [PATCH 75/97] Revert "[NETFLIX] Renamed virtualkeyboard to
+ virtualinput."
+
+This reverts commit da37b7502ee6b3c8c94568af5f6f55dccc7aabd5.
+---
+ netflix/cmake/FindVirtualKeyboard.cmake   | 20 ++++++++++----------
+ partner/input/devinput/gibbon_input.cmake |  4 ++--
+ 2 files changed, 12 insertions(+), 12 deletions(-)
+
+diff --git a/netflix/cmake/FindVirtualKeyboard.cmake b/netflix/cmake/FindVirtualKeyboard.cmake
+index 996bf876..63e1005a 100644
+--- a/netflix/cmake/FindVirtualKeyboard.cmake
++++ b/netflix/cmake/FindVirtualKeyboard.cmake
+@@ -1,20 +1,20 @@
+ 
+-# - Try to find libvirtualinput
++# - Try to find libvirtualkeyboard
+ # Once done this will define
+-#  LIBVIRTUAL_INPUT_FOUND - System has libvirtualkeyboard
+-#  LIBVIRTUAL_INPUT_INCLUDE_DIRS - The libvirtualkeyboard include directories
+-#  LIBVIRTUAL_INPUT_LIBRARIES - The libraries needed to use libvirtualkeyboard
++#  LIBVIRTUAL_KEYBOARD_FOUND - System has libvirtualkeyboard
++#  LIBVIRTUAL_KEYBOARD_INCLUDE_DIRS - The libvirtualkeyboard include directories
++#  LIBVIRTUAL_KEYBOARD_LIBRARIES - The libraries needed to use libvirtualkeyboard
+ #
+ # Copyright (C) 2016 Metrological.
+ #
+ find_package(PkgConfig)
+-pkg_check_modules(LIBVIRTUAL_INPUT REQUIRED virtualinput)
++pkg_check_modules(LIBVIRTUAL_KEYBOARD REQUIRED virtualkeyboard)
+ 
+ include(FindPackageHandleStandardArgs)
+-FIND_PACKAGE_HANDLE_STANDARD_ARGS(LIBVIRTUAL_INPUT DEFAULT_MSG
+-        LIBVIRTUAL_INPUT_FOUND
+-        LIBVIRTUAL_INPUT_INCLUDE_DIRS
+-        LIBVIRTUAL_INPUT_LIBRARIES
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(LIBVIRTUAL_KEYBOARD DEFAULT_MSG
++        LIBVIRTUAL_KEYBOARD_FOUND
++        LIBVIRTUAL_KEYBOARD_INCLUDE_DIRS
++        LIBVIRTUAL_KEYBOARD_LIBRARIES
+         )
+ 
+-mark_as_advanced(LIBVIRTUAL_INPUT_INCLUDE_DIRS LIBVIRTUAL_INPUT_LIBRARIES)
++mark_as_advanced(LIBVIRTUAL_KEYBOARD_INCLUDE_DIRS LIBVIRTUAL_KEYBOARD_LIBRARIES)
+diff --git a/partner/input/devinput/gibbon_input.cmake b/partner/input/devinput/gibbon_input.cmake
+index 8b26368f..dbf79f41 100644
+--- a/partner/input/devinput/gibbon_input.cmake
++++ b/partner/input/devinput/gibbon_input.cmake
+@@ -7,9 +7,9 @@
+ if (USE_NETFLIX_VIRTUAL_KEYBOARD)
+     set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+     find_package(VirtualKeyboard REQUIRED)
+-    gibbon_add_includes(${LIBVIRTUAL_INPUT_INCLUDE_DIRS})
++    gibbon_add_includes(${LIBVIRTUAL_KEYBOARD_INCLUDE_DIRS})
+     add_definitions(-DKEY_INPUT_HANDLING_VIRTUAL=1)
+-    gibbon_add_libraries(${LIBVIRTUAL_INPUT_LIBRARIES})
++    gibbon_add_libraries(${LIBVIRTUAL_KEYBOARD_LIBRARIES})
+ endif()
+ 
+ set(GIBBON_INPUT_DEVINPUT TRUE)
+-- 
+2.17.1
+

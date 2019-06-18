@@ -1,0 +1,52 @@
+From 477fee2f86c5ef695b666190d6ae3b6d2b0ae4cb Mon Sep 17 00:00:00 2001
+From: Albert Dahan <albert@dahan.nl>
+Date: Tue, 6 Sep 2016 00:26:45 +0200
+Subject: [PATCH 10/97] Revert "[Gstreamer] Reset stream parameters after a
+ flush"
+
+This reverts commit cc6b1af5be9f964462842d21c294ccc2436be070.
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp | 9 ---------
+ partner/dpi/gstreamer/ESPlayerGst.h   | 2 --
+ 2 files changed, 11 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index 5b7d330d..51902872 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -259,19 +259,10 @@ bool ESPlayerGst::readyForPlaybackStart()
+   return mReadyToPlay;
+ }
+ 
+-void ESPlayerGst::resetStreamParameters()
+-{
+-  ScopedMutex cs(mDecoderTaskMutex);
+-  mEndOfStreamFlag = false;
+-  mInputExhausted = false;
+-  mReadyToPlay = false;
+-}
+-
+ void ESPlayerGst::flush()
+ {
+   // buffer push shouldn't happen because of the above mutex
+   Log::info(TRACE_MEDIACONTROL, "flushing pipeline...");
+-  resetStreamParameters();
+   GstEvent* flush_start = gst_event_new_flush_start();
+   gboolean ret = FALSE;
+   ret = gst_element_send_event(mSrc, flush_start);
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.h b/partner/dpi/gstreamer/ESPlayerGst.h
+index 49913982..82407302 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.h
++++ b/partner/dpi/gstreamer/ESPlayerGst.h
+@@ -68,8 +68,6 @@ public:
+ 
+     virtual void resetPtsOffset();
+ 
+-    virtual void resetStreamParameters();
+-
+     inline GstElement* srcElement() const {
+       return (mSrc);
+     }
+-- 
+2.17.1
+

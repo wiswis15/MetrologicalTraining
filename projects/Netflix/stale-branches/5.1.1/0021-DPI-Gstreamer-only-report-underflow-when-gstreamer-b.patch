@@ -1,0 +1,27 @@
+From 2d1f296838840360b79706e9612191599715afdf Mon Sep 17 00:00:00 2001
+From: Wouter Meek <woutermeek@gmail.com>
+Date: Tue, 20 Sep 2016 05:18:53 -0700
+Subject: [PATCH 21/97] [DPI/Gstreamer] only report underflow when gstreamer
+ buffer are empty
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index 53ef6e82..ae38726b 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -75,7 +75,8 @@ void ESPlayerGst::ProcessFrame() {
+            mInputExhausted = true;
+            printf("ProcessFrame::NO_AVAILABLE_SAMPLES type: %s, mReadyToPlay: %s \n", mMediaType == AUDIO ? "AUDIO" : "VIDEO", mReadyToPlay ? "true" : "false");
+ 
+-           if (mMediaType == VIDEO && mPlaybackGroup->getPlaybackState() == 1 && !mReadyToPlay && !getCallback()->reportUnderflowReceived()) {
++           if (mMediaType == VIDEO && mPlaybackGroup->getPlaybackState() == 1 && !mEndOfStreamFlag && gst_app_src_get_current_level_bytes(GST_APP_SRC(mSrc)) == 0 && !getCallback()->reportUnderflowReceived()) {
++            printf("ProcessFrame: reporting underflow \n");
+             getCallback()->reportUnderflow();
+            }
+            startWait(WAIT_FOR_VIDEO_DATA);
+-- 
+2.17.1
+

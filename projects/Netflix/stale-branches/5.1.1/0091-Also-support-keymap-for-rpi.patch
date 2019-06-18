@@ -1,0 +1,25 @@
+From e8274ea30b8690e7cd902368d4f6cddea9015819 Mon Sep 17 00:00:00 2001
+From: Albert Dahan <a.dahan@metrological.com>
+Date: Fri, 2 Feb 2018 16:56:39 +0100
+Subject: [PATCH 91/97] Also support keymap for rpi
+
+---
+ partner/platform/rpi/platform.cmake | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/partner/platform/rpi/platform.cmake b/partner/platform/rpi/platform.cmake
+index 2fe58906..b2648418 100644
+--- a/partner/platform/rpi/platform.cmake
++++ b/partner/platform/rpi/platform.cmake
+@@ -14,3 +14,8 @@ gibbon_add_js(partner_sso.js)
+ gibbon_add_libraries(bcm_host vcos vchiq_arm)
+ include_directories("$ENV{STAGING_DIR}/usr/include/interface/vcos/pthreads")
+ include_directories("$ENV{STAGING_DIR}/usr/include/interface/vmcs_host/linux")
++
++if(NETFLIX_USE_KEYMAP)
++	message("  - Installing ${NETFLIX_USE_KEYMAP} as PartnerBridge.js")
++	file(RENAME ${CURRENT_DIRECTORY}/../posix/${NETFLIX_USE_KEYMAP} ${CURRENT_DIRECTORY}/PartnerBridge.js)
++endif()
+-- 
+2.17.1
+

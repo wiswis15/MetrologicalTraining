@@ -1,0 +1,111 @@
+From 9c97ab036de9b220432260a5c6ed1c6aba5b4fd2 Mon Sep 17 00:00:00 2001
+From: Pierre Wielders <pierre@wielders.net>
+Date: Thu, 8 Jun 2017 19:42:53 +0200
+Subject: [PATCH 57/97] [BUILD] Removed the dependencies on dependencies of
+ libprovision. These dependencies are         now found using a package config
+ (allows for WPEFramework and webbridge to coexist).         Fixed building
+ the Gibbon Netflix application again by excluding library specific        
+ triggers. Not needed for the gibbon app and lead to a link errors.
+
+---
+ partner/dpi/raspberrypi/drm.cmake    | 13 +++++++++++++
+ partner/dpi/reference/FileSystem.cpp |  6 +++---
+ partner/dpi/reference/drm.cmake      | 20 +++++++++++++++++++-
+ 3 files changed, 35 insertions(+), 4 deletions(-)
+
+diff --git a/partner/dpi/raspberrypi/drm.cmake b/partner/dpi/raspberrypi/drm.cmake
+index ee1e4ce2..6f6c96eb 100644
+--- a/partner/dpi/raspberrypi/drm.cmake
++++ b/partner/dpi/raspberrypi/drm.cmake
+@@ -8,6 +8,19 @@
+ cmake_minimum_required(VERSION 2.8)
+ include("CheckIncludeFileCXX")
+ 
++find_package(PkgConfig)
++pkg_check_modules(PC_PROVISION QUIET provisionproxy)
++
++find_path(LIBPROVISION_INCLUDE_DIR Provision.h
++           PATHS usr/include
++           PATH_SUFFIXES provision)
++
++find_library(LIBPROVISION_LIBRARY NAMES provisionproxy
++             HINTS ${PC_PROVISION_LIBDIR} ${PC_PROVISION_LIBRARY_DIRS})
++
++set(LIBPROVISION_LIBRARIES ${LIBPROVISION_LIBRARY})
++set(LIBPROVISION_INCLUDE_DIRS ${LIBPROVISION_INCLUDE_DIR})
++
+ # DRM
+ # --------------------------------------------------------------
+ if(DPI_REFERENCE_DRM STREQUAL "playready1.2")
+diff --git a/partner/dpi/reference/FileSystem.cpp b/partner/dpi/reference/FileSystem.cpp
+index ec8a926f..bc9f15ae 100644
+--- a/partner/dpi/reference/FileSystem.cpp
++++ b/partner/dpi/reference/FileSystem.cpp
+@@ -71,7 +71,7 @@ DataBuffer ncf_kav;
+ // Signatures of in-process shared objects
+ std::set<std::string> mSharedObjects;
+ 
+-#ifdef USE_PROVISIONING
++#ifdef NETFLIX_AS_LIBRARY
+ extern void gibbon_oem_request_suspend(const char* reason);
+ extern void gibbon_oem_shutdown(void);
+ #endif
+@@ -424,7 +424,7 @@ void FileSystem::init(shared_ptr<EventDispatcher> eventDispatcher)
+ void FileSystem::shutdown()
+ {
+     mEventDispatcher.reset();
+-#ifdef USE_PROVISIONING
++#ifdef NETFLIX_AS_LIBRARY
+     gibbon_oem_shutdown();
+ #endif
+ }
+@@ -1148,7 +1148,7 @@ void FileSystem::requestSuspend(const std::string &reason)
+     } else {
+         ApplicationManagerRequestSuspend();
+     }
+-#elif USE_PROVISIONING
++#elif NETFLIX_AS_LIBRARY
+     gibbon_oem_request_suspend(reason.c_str());
+ #else
+     nrdApp()->setSuspended(true, reason);
+diff --git a/partner/dpi/reference/drm.cmake b/partner/dpi/reference/drm.cmake
+index 2b359317..d46613ba 100644
+--- a/partner/dpi/reference/drm.cmake
++++ b/partner/dpi/reference/drm.cmake
+@@ -8,6 +8,23 @@
+ cmake_minimum_required(VERSION 2.8)
+ include("CheckIncludeFile")
+ 
++find_package(PkgConfig)
++pkg_check_modules(PC_PROVISION QUIET provisionproxy)
++
++find_path(LIBPROVISION_INCLUDE_DIR Provision.h
++           PATHS usr/include
++           PATH_SUFFIXES provision)
++
++find_library(LIBPROVISION_LIBRARY NAMES provisionproxy
++             HINTS ${PC_PROVISION_LIBDIR} ${PC_PROVISION_LIBRARY_DIRS})
++
++set(LIBPROVISION_LIBRARIES ${LIBPROVISION_LIBRARY})
++set(LIBPROVISION_INCLUDE_DIRS ${LIBPROVISION_INCLUDE_DIR})
++
++if(GIBBON_MODE STREQUAL "shared")
++    add_definitions( -DNETFLIX_AS_LIBRARY)
++endif()
++
+ # DRM
+ # --------------------------------------------------------------
+ if(DPI_REFERENCE_DRM STREQUAL "playready1.2")
+@@ -195,7 +212,8 @@ elseif(DPI_REFERENCE_DRM STREQUAL "playready")
+ 
+ if(NETFLIX_USE_PROVISION)
+     add_definitions( -DUSE_PROVISIONING )
+-    target_link_libraries(nrddpi playready provisionproxy generics)
++    include_directories(${LIBPROVISION_INCLUDE_DIRS})
++    target_link_libraries(nrddpi playready ${LIBPROVISION_LIBRARIES} )
+ else()
+     target_link_libraries(nrddpi playready)
+ endif(NETFLIX_USE_PROVISION)
+-- 
+2.17.1
+

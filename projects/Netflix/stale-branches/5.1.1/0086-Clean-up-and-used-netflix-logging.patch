@@ -1,0 +1,180 @@
+From 3b4e6b033d46f88645087c926eaf63274b529027 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Fri, 26 Jan 2018 20:22:24 +0100
+Subject: [PATCH 86/97] Clean-up and used netflix logging.
+
+---
+ .../wpeframework/OpenGLContextEGL.cpp         | 62 +++----------------
+ .../wpeframework/gibbon_graphics.cmake        | 56 +++++++----------
+ 2 files changed, 32 insertions(+), 86 deletions(-)
+
+diff --git a/partner/graphics/wpeframework/OpenGLContextEGL.cpp b/partner/graphics/wpeframework/OpenGLContextEGL.cpp
+index 068ccfda..9b4aec1f 100644
+--- a/partner/graphics/wpeframework/OpenGLContextEGL.cpp
++++ b/partner/graphics/wpeframework/OpenGLContextEGL.cpp
+@@ -41,16 +41,16 @@ public:
+     virtual bool Dispatch()
+     {
+         return true;
+-    };
++    }
+ };
+ 
+ static Process process;
+ 
+ static void* Processor(void* arg)
+ {
+-    printf("[%s:%d] Spin-up the wayland hamster.\n", __FILE__, __LINE__);
++    Log::warn(TRACE_GIBBON_GRAPHICS, "[%s:%d] Spin-up the wayland hamster.\n", __FILE__, __LINE__);
+     WPEFramework::Wayland::Display::Instance().Process(&process);
+-    printf("[%s:%d] The wayland hamster left the wheel.\n", __FILE__, __LINE__);
++    Log::warn(TRACE_GIBBON_GRAPHICS, "[%s:%d] The wayland hamster left the wheel.\n", __FILE__, __LINE__);
+ }
+ 
+ bool OpenGLContext::init(OpenGLContext* share)
+@@ -69,10 +69,10 @@ bool OpenGLContext::init(OpenGLContext* share)
+ 
+     pthread_t tid;
+     if (pthread_create(&tid, NULL, Processor, NULL) != 0) {
+-        printf("[Wayland Input] Error creating processor thread\n");
++        Log::error(TRACE_GIBBON_GRAPHICS,"[Wayland Input] Error creating processor thread\n");
+     }
+ 
+-    printf("\n\n[Video Texture] videoImage=%p videoTexture=%p\n\n", mPrivate->videoImage, mPrivate->videoTexture);
++    Log::warn(TRACE_GIBBON_GRAPHICS, "[%s] videoImage=%p videoTexture=%p\n", __FUNCTION__, mPrivate->videoImage, mPrivate->videoTexture);
+ 
+     return WPEFramework::Display::Instance().WaylandDisplay().IsOperational();
+ }
+@@ -110,59 +110,15 @@ void* OpenGLContext::display()
+     return  WPEFramework::Display::Instance().WaylandDisplay().GetDisplay();
+ }
+ 
+-void* OpenGLContext::createEGLVideoImage(unsigned width, unsigned height)
++void *OpenGLContext::createEGLVideoImage(unsigned width, unsigned height)
+ {
+-    printf("\n\n[createEGLVideoImage] width=%p height=%p\n\n", width, height);
+-
+-    GL_CHECK;
+-    OpenGLContext::ensureContext();
+-    if (mPrivate->videoImage.IsValid() == true) {
+-        printf("INFO: Deleting Image KHR\n");
+-        glDeleteTextures(1, &mPrivate->videoTexture);
+-        mPrivate->videoImage.Release();
+-    }
+-
+-    glGenTextures(1, &mPrivate->videoTexture);
+-    glBindTexture(GL_TEXTURE_2D, mPrivate->videoTexture);
+-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+-    GL_CHECK;
+-    mPrivate->videoImage = WPEFramework::Display::Instance().WaylandDisplay().Create(mPrivate->videoTexture, width, height);
+-    GL_CHECK;
+-    glFinish();
+-
+-    printf("\n\n[Video Texture] videoImage=%p videoTexture=%p\n\n", mPrivate->videoImage, mPrivate->videoTexture);
+-
+-    return mPrivate->videoImage.GetImage();
++    NRDP_UNUSED(width);
++    NRDP_UNUSED(height);
++    return 0;
+ }
+ 
+ bool OpenGLContext::renderVideo()
+ {
+-    if (int texture = mPrivate->videoTexture) {
+-        printf("\n\n[Video videoTexture] videoTexture=%p \n\n", mPrivate->videoTexture);
+-        GraphicsEngine* graphics = engine();
+-        Rect clip;
+-        const bool clipped = graphics->getState().hasClip;
+-        if (clipped) {
+-            clip = graphics->getState().clip;
+-            mState->disableCap(GL_SCISSOR_TEST);
+-            graphics->clearClip();
+-        }
+-
+-        Transform transform;
+-        transform.scale(1, -1, 1);
+-        static GLfloat texTransform[4] = { 0, 0, 1, 1 };
+-        graphics->blit(texture, transform, texTransform);
+-
+-        if (clipped) {
+-            mState->enableCap(GL_SCISSOR_TEST);
+-            graphics->setClip(clip);
+-        }
+-        return true;
+-    }
+     return false;
+ }
+ 
+diff --git a/partner/graphics/wpeframework/gibbon_graphics.cmake b/partner/graphics/wpeframework/gibbon_graphics.cmake
+index 249bae95..780cd544 100644
+--- a/partner/graphics/wpeframework/gibbon_graphics.cmake
++++ b/partner/graphics/wpeframework/gibbon_graphics.cmake
+@@ -20,38 +20,28 @@ gibbon_add_sources(
+     OpenGLFBO.cpp
+ )
+ 
+-set(GIBBON_GRAPHICS_GL_WSYS "auto")
+-if(GIBBON_GRAPHICS STREQUAL "wpeframework")
+-   set(GIBBON_GRAPHICS_GL_WSYS "egl")
+-endif()
+-message("    + Using GL: ${GIBBON_GRAPHICS_GL_WSYS}")
+-
+-if(GIBBON_GRAPHICS_GL_WSYS STREQUAL "egl")
+-    find_package(Wayland REQUIRED)
+-    gibbon_add_libraries(${WAYLAND_LIBRARIES})
+-    gibbon_add_includes(${WAYLAND_INCLUDE_DIRS})
+-
+-    find_package(WaylandEGL REQUIRED)
+-    gibbon_add_libraries(${WAYLAND_EGL_LIBRARIES})
+-    gibbon_add_includes(${WAYLAND_EGL_INCLUDE_DIRS})
+-    gibbon_add_extra_cflags(${WAYLAND_EGL_CFLAGS})
+-
+-    find_package(WaylandEGLClient)
+-    if (WAYLAND_EGL_CLIENT_FOUND)
+-        message(" -- Build with wayland EGL client abstraction support")
+-        gibbon_add_libraries(${WAYLAND_EGL_CLIENT_LIBRARIES})
+-        gibbon_add_includes(${WAYLAND_EGL_CLIENT_INCLUDE_DIRS})
+-    endif(WAYLAND_EGL_CLIENT_FOUND)
+-
+-    gibbon_add_sources(OpenGLContextEGL.cpp)
+-
+-    set(GIBBON_GRAPHICSENGINE_GLES2_EGL TRUE)
+-
+-    gibbon_add_includes(${CURRENT_DIRECTORY})
+-
+-    add_definitions(-DEGL_EGLEXT_PROTOTYPES=1)
+-else()
+-    message(FATAL_ERROR "Unrecognized GL subsystem: ${GIBBON_GRAPHICS_GL_WSYS}")
+-endif()
++find_package(Wayland REQUIRED)
++gibbon_add_libraries(${WAYLAND_LIBRARIES})
++gibbon_add_includes(${WAYLAND_INCLUDE_DIRS})
++
++find_package(WaylandEGL REQUIRED)
++gibbon_add_libraries(${WAYLAND_EGL_LIBRARIES})
++gibbon_add_includes(${WAYLAND_EGL_INCLUDE_DIRS})
++gibbon_add_extra_cflags(${WAYLAND_EGL_CFLAGS})
++
++find_package(WaylandEGLClient)
++if (WAYLAND_EGL_CLIENT_FOUND)
++    message(" -- Build with wayland EGL client abstraction support")
++    gibbon_add_libraries(${WAYLAND_EGL_CLIENT_LIBRARIES})
++    gibbon_add_includes(${WAYLAND_EGL_CLIENT_INCLUDE_DIRS})
++endif(WAYLAND_EGL_CLIENT_FOUND)
++
++gibbon_add_sources(OpenGLContextEGL.cpp)
++
++set(GIBBON_GRAPHICSENGINE_GLES2_EGL TRUE)
++
++gibbon_add_includes(${CURRENT_DIRECTORY})
++
++add_definitions(-DEGL_EGLEXT_PROTOTYPES=1)
+ 
+ gibbon_copy_resource(graphics.xml ${APP_DATA_DIR}/etc/conf/graphics.xml "")
+-- 
+2.17.1
+

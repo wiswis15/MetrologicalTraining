@@ -1,0 +1,41 @@
+From a8d677bad0c284c28310e761972a2ccde1badbfd Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Tue, 2 May 2017 13:47:21 +0200
+Subject: [PATCH 52/97] [devinput] Using virtualinput package
+
+---
+ partner/input/devinput/InputManagerDevInput.cpp | 2 +-
+ partner/input/devinput/gibbon_input.cmake       | 3 ++-
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/partner/input/devinput/InputManagerDevInput.cpp b/partner/input/devinput/InputManagerDevInput.cpp
+index 2ef0cc1c..c8fd281b 100644
+--- a/partner/input/devinput/InputManagerDevInput.cpp
++++ b/partner/input/devinput/InputManagerDevInput.cpp
+@@ -99,7 +99,7 @@ static inline std::string keyCodeToString(uint16_t code, bool shift)
+ 
+ #ifdef KEY_INPUT_HANDLING_VIRTUAL
+ 
+-#include <gluelogic/virtualkeyboard/VirtualKeyboard.h>
++#include <VirtualKeyboard.h>
+ 
+ static const char * connectorName = "/tmp/keyhandler";
+ static bool shiftPressed = false;
+diff --git a/partner/input/devinput/gibbon_input.cmake b/partner/input/devinput/gibbon_input.cmake
+index 2ff1ea56..dbf79f41 100644
+--- a/partner/input/devinput/gibbon_input.cmake
++++ b/partner/input/devinput/gibbon_input.cmake
+@@ -7,8 +7,9 @@
+ if (USE_NETFLIX_VIRTUAL_KEYBOARD)
+     set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+     find_package(VirtualKeyboard REQUIRED)
++    gibbon_add_includes(${LIBVIRTUAL_KEYBOARD_INCLUDE_DIRS})
+     add_definitions(-DKEY_INPUT_HANDLING_VIRTUAL=1)
+-    gibbon_add_libraries(virtualkeyboard)
++    gibbon_add_libraries(${LIBVIRTUAL_KEYBOARD_LIBRARIES})
+ endif()
+ 
+ set(GIBBON_INPUT_DEVINPUT TRUE)
+-- 
+2.17.1
+

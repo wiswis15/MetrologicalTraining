@@ -1,0 +1,41 @@
+From ce2f846da8bfe85f86de3c15b723d4087a63a2a6 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Tue, 1 Aug 2017 17:57:31 +0200
+Subject: [PATCH 70/97] [graphics] Use exposed callsign as name.
+
+---
+ partner/graphics/wpeframework/OpenGLContextEGL.h | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/partner/graphics/wpeframework/OpenGLContextEGL.h b/partner/graphics/wpeframework/OpenGLContextEGL.h
+index 6f899aac..e4c84b9e 100644
+--- a/partner/graphics/wpeframework/OpenGLContextEGL.h
++++ b/partner/graphics/wpeframework/OpenGLContextEGL.h
+@@ -27,7 +27,7 @@ namespace gibbon {
+     class OpenGLContextPrivate {
+     public:
+         OpenGLContextPrivate()
+-            : client(WPEFramework::Display::Instance().Create("Netflix", 1280, 720))
++            : client(WPEFramework::Display::Instance().Create(GetName(), 1280, 720))
+             , videoTexture()
+             , videoImage()
+             , redraw()
+@@ -45,7 +45,15 @@ namespace gibbon {
+         GLuint videoTexture;
+         ConditionVariable redraw;
+         Mutex mutex;
++
++     private:
++      static const char* GetName(){
++          const char* callsign(std::getenv("NETFLIX_CALLSIGN"));
++
++          return (callsign == nullptr) ? "Netflix_default" : callsign;
++      }
+     };
++
+ }
+ }
+ 
+-- 
+2.17.1
+

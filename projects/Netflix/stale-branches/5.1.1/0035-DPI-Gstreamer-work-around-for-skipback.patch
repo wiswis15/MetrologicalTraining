@@ -1,0 +1,28 @@
+From aa8f2ad5c2d3fe64895f88af3b2e3c39ccbeb539 Mon Sep 17 00:00:00 2001
+From: Wouter Meek <woutermeek@gmail.com>
+Date: Thu, 29 Sep 2016 06:08:15 -0700
+Subject: [PATCH 35/97] [DPI/Gstreamer] work around for skipback
+
+---
+ partner/dpi/gstreamer/PlaybackGroupNative.cpp | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.cpp b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+index 4b54e239..36d3c41e 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.cpp
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+@@ -386,10 +386,9 @@ bool PlaybackGroupNative::setPlaybackState(PlaybackState state)
+ 
+         //Log::error(TRACE_MEDIACONTROL, "get_state returned: %d, state: %s pending: %s\n", ret, gst_element_state_get_name(state), gst_element_state_get_name(pending));
+ 
+-        if (state == GST_STATE_PAUSED && streamPlayersAreReadyForPlaybackStart()){  // truely ready, set to play
++        if ((state == GST_STATE_PAUSED && streamPlayersAreReadyForPlaybackStart()) || state == GST_STATE_PLAYING) {  // truely ready, set to play
+             ret = gst_element_set_state(mGstPipeline, GST_STATE_PLAYING);
+             // allow buffer push
+-        }else if (state == GST_STATE_PLAYING){ // already playing, do nothing
+         }else if (pending == GST_STATE_PAUSED){ // will be ready, return false
+             return false;
+         }else{ // set state to pause first
+-- 
+2.17.1
+

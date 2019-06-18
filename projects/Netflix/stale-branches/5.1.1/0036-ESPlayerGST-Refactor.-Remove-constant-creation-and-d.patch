@@ -1,0 +1,402 @@
+From 772c62a78ceabfb819acc15d5e45e13c4421f76d Mon Sep 17 00:00:00 2001
+From: Pierre Wielders <pierre@wielders.net>
+Date: Fri, 30 Sep 2016 12:52:27 +0200
+Subject: [PATCH 36/97] [ESPlayerGST] Refactor. Remove constant creation and
+ dropping of source.
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp | 211 +++++++++++++-------------
+ partner/dpi/gstreamer/ESPlayerGst.h   |  28 ++--
+ 2 files changed, 120 insertions(+), 119 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index 196ea648..00a6ed16 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -42,8 +42,8 @@ static int fileCount = 1;
+ 
+   self->mReadyToPlay = false;
+   if (self->mMediaType == VIDEO || self->mPtsOffset != -1) {
+-    // attach to the playback group main context
+-    self->attach();
++    // Start collecting samples again
++    self->Signal(DATA_REQUIRED);
+   }
+ }
+ 
+@@ -55,29 +55,35 @@ static int fileCount = 1;
+   ScopedMutex cs(self->mDecoderTaskMutex);
+ 
+   self->mReadyToPlay = true;
+-  self->detach();
++  self->Signal(DATA_SUFFICIENT);
+ }
+ 
+-/* static */ gboolean ESPlayerGst::gst_wait_timeout(ESPlayerGst* self)
++/* static */ void* ESPlayerGst::pull_sample_worker(void* self)
+ {
+-  // Run like normal again
+-  self->attach();
++    static_cast<ESPlayerGst*>(self)->ProcessFrame();
+ 
+-  return FALSE;
++    return (NULL);
+ }
+ 
+-/* static */ gboolean ESPlayerGst::gst_decode_iteration(ESPlayerGst* self)
+-{
+-  self->ProcessFrame();
+-};
++unsigned int ESPlayerGst::ProcessFrame() {
+ 
+-void ESPlayerGst::ProcessFrame() {
++  unsigned int delay = ~0;
++  unsigned int signal;
+ 
+-  ScopedMutex cs(mDecoderTaskMutex);
++  while ( (signal = Wait (delay)) != DESTRUCTION )
++  {
++    if ( (signal == DATA_SUFFICIENT) || ((mMediaType == AUDIO) && (mPtsOffset == -1)) ) {
++      delay = ~0;
++    }
++    else {
++      ScopedMutex cs(mDecoderTaskMutex);
+ 
+-  // Check if any access-unit data is available to decode.
+-  switch(mCallback->getNextMediaSample(*mSampleWriter)) {
+-    case NO_AVAILABLE_SAMPLES: {  // should report underflow and detach from main loop
++      // Unless stated differently, continue loading data..
++      delay = 0;
++
++      // Check if any access-unit data is available to decode.
++      switch(mCallback->getNextMediaSample(*mSampleWriter)) {
++         case NO_AVAILABLE_SAMPLES: {  // should report underflow and detach from main loop
+            Log::error(TRACE_MEDIAPLAYBACK, "Input exhausted");
+            mInputExhausted = true;
+            printf("ProcessFrame::NO_AVAILABLE_SAMPLES type: %s, mReadyToPlay: %s \n", mMediaType == AUDIO ? "AUDIO" : "VIDEO", mReadyToPlay ? "true" : "false");
+@@ -87,51 +93,54 @@ void ESPlayerGst::ProcessFrame() {
+              mCallback->reportUnderflow();
+            }
+ #endif
+-           startWait(WAIT_FOR_VIDEO_DATA);
++           delay = WAIT_FOR_VIDEO_DATA;
+            break;
+          }
+-    case NO_AVAILABLE_BUFFERS: {  // should never happen
++         case NO_AVAILABLE_BUFFERS: {  // should never happen
+            printf("ProcessFrame::NO_AVAILABLE_BUFFERS\n");
+-           startWait(WAIT_FOR_VIDEO_DATA);
++           delay = WAIT_FOR_VIDEO_DATA;
+            break;
+          }
+-    case END_OF_STREAM: {
+-          printf("ProcessFrame::END_OF_STREAM\n");
+-          if (!mEndOfStreamFlag) {
+-           mEndOfStreamFlag = true;
+-           mInputExhausted = true;
+-           mSampleWriter->reset();
+-           Log::info(TRACE_MEDIAPLAYBACK, "ESPlayerGst::decoderTask: "
++         case END_OF_STREAM: {
++           printf("ProcessFrame::END_OF_STREAM\n");
++           if (!mEndOfStreamFlag) {
++             mEndOfStreamFlag = true;
++             mInputExhausted = true;
++             mSampleWriter->reset();
++             Log::info(TRACE_MEDIAPLAYBACK, "ESPlayerGst::decoderTask: "
+               "getNextMediaSample returns END_OF_STREAM on stream %d", mMediaType);
+ 
+-          if (!getCallback()->playbackCompletedReceived()) {
+-            mPlaybackGroup->streamPlaybackCompleted();
+-            //gst_element_post_message(mSrc, gst_message_new_eos(GST_OBJECT(mSrc)));
+-          }
+-          detach();
+-          }
++             if (!getCallback()->playbackCompletedReceived()) {
++               mPlaybackGroup->streamPlaybackCompleted();
++               //gst_element_post_message(mSrc, gst_message_new_eos(GST_OBJECT(mSrc)));
++             }
++             delay = ~0;
++           }
+            break;
+          }
+-    case STREAM_ERROR: {
++         case STREAM_ERROR: {
+            printf("ProcessFrame::STREAM_ERROR\n");
+            Log::error(TRACE_MEDIAPLAYBACK, "ESPlayerGst::decoderTask: "
+                "getNextMediaSample returns STREAM_ERROR. ");
+            break;
+          }
+-    case ERROR: {
++         case ERROR: {
+            printf("ProcessFrame::ERROR\n");
+            Log::error(TRACE_MEDIAPLAYBACK, "ESPlayerGst::decoderTask: "
+                "getNextMediaSample returns ERROR. ");
+            break;
+          }
+-    default: {
++         default: {
+            TransferBufferToGStreamer();
+            break;
+          }
++      }
++    }
+   }
+ }
+ 
+ void ESPlayerGst::TransferBufferToGStreamer () {
++  unsigned int result = 0;
+   const ISampleAttributes* pSampleAttr = mSampleWriter->getSampleAttributes();
+   
+   NFErr err = decrypt(pSampleAttr, *mSampleWriter);
+@@ -146,30 +155,21 @@ void ESPlayerGst::TransferBufferToGStreamer () {
+     // both audio and video need to use the same pts offset to be in sync.
+     // so we drop audio samples until video pts offset is set.
+     if (mPtsOffset == -1) {
+-      if (mMediaType == VIDEO) {
+ #ifdef NRD_VIDEO_RECORDER
+-        gchar* filename = g_strdup_printf("/tmp/netflix-dump-%03d.h264", fileCount++);
+-        if (mRecorder == -1) mRecorder = open(filename, O_CREAT|O_WRONLY);
+-        g_free(filename);
+-        if (mRecorder != -1) ::ftruncate(mRecorder, 0);
++      gchar* filename = g_strdup_printf("/tmp/netflix-dump-%03d.h264", fileCount++);
++      if (mRecorder == -1) mRecorder = open(filename, O_CREAT|O_WRONLY);
++      g_free(filename);
++      if (mRecorder != -1) ::ftruncate(mRecorder, 0);
+ #endif
+-        mPlaybackGroup->firstVideo(pSampleAttr->getPTS(), pSampleAttr->getDTS());
+-      }
+-      else {
+-        printf("We should not be able to start AUDIO extraction before the PTS is set !!!!\n");
+-        pSampleAttr = NULL;
+-        detach();
+-      }
++      mPlaybackGroup->firstVideo(pSampleAttr->getPTS(), pSampleAttr->getDTS());
+     }
+-    else {
+-      // can't have negative timestamps, drop the samples if they
+-      // have a timestamp smaller than the pts offset (happens occasionaly
+-      // after a seek with audio samples)
+-      if (pSampleAttr->getPTS() < mPtsOffset) {
++    // can't have negative timestamps, drop the samples if they
++    // have a timestamp smaller than the pts offset (happens occasionaly
++    // after a seek with audio samples)
++    else if (pSampleAttr->getPTS() < mPtsOffset) {
+         printf("TransferBufferToGStreamer::Smaller than PTS (%llu < %llu) \n", pSampleAttr->getPTS(), mPtsOffset);
+         Log::error(TRACE_MEDIAPLAYBACK, "skipping audio frame until audio pts >  offset is set %lld %lld", pSampleAttr->getPTS(), mPtsOffset);
+         pSampleAttr = NULL;
+-      }
+     }
+ 
+     if (pSampleAttr != NULL) {
+@@ -205,8 +205,51 @@ void ESPlayerGst::TransferBufferToGStreamer () {
+   }
+ }
+ 
++void ESPlayerGst::Signal (const unsigned int value)
++{
++  g_mutex_lock (&_mutex);
++  _current_data = value;
++  g_cond_signal (&_data_cond);
++  g_mutex_unlock (&_mutex);
++}
++
++unsigned int ESPlayerGst::Wait(unsigned int time)
++{
++  unsigned int result;
++
++  if (time == 0) {
++ 
++    g_mutex_lock (&_mutex);
++    result = _current_data;
++    _current_data = 0;
++    g_mutex_unlock (&_mutex);
++  }
++  else {
++    gint64 end_time (g_get_monotonic_time () + (time == ~0 ? (30 * G_TIME_SPAN_DAY) : (time * G_TIME_SPAN_MILLISECOND)));
++
++    g_mutex_lock (&_mutex);
++
++    while (_current_data == 0) {
++      if (!g_cond_wait_until (&_data_cond, &_mutex, end_time)) {
++        // timeout has passed.
++        g_mutex_unlock (&_mutex);
++        return 0;
++      }
++    }
++    
++    result = _current_data;
++    _current_data = 0;
++
++    g_mutex_unlock (&_mutex);
++  }
++
++  return result;
++}
++
+ ESPlayerGst::~ESPlayerGst()
+ {
++  Signal(DESTRUCTION);
++  g_thread_join(_thread);
+   setCloseThreadsFlag();
+ #ifdef NRD_VIDEO_RECORDER
+   if (mRecorder != -1) ::close(mRecorder);
+@@ -214,11 +257,11 @@ ESPlayerGst::~ESPlayerGst()
+   if (mAppsrcCaps) {
+     gst_caps_unref(mAppsrcCaps);
+   }
+-  detach();
+ }
+ 
+-ESPlayerGst::ESPlayerGst() : mGstSource(NULL),
+-                             mGstSourceID(0),
++ESPlayerGst::ESPlayerGst() : _current_data(0),
++                             _data_cond(),
++                             _mutex(),
+                              mSrc(NULL),
+                              mPtsOffset(-1),
+                              mDtsOffset(-1),
+@@ -276,6 +319,9 @@ ESPlayerGst::init(const struct StreamPlayerInitData& initData,
+   mSrc = gst_element_factory_make("appsrc", NULL);
+   GstAppSrcCallbacks callbacks = {gst_bin_need_data, gst_bin_enough_data, NULL};
+   gst_app_src_set_callbacks(GST_APP_SRC(mSrc), &callbacks, (gpointer)(this), NULL);
++
++  // Right start the processing thread..
++  _thread = g_thread_new (NULL, pull_sample_worker, (gpointer)this);
+   return err;
+ }
+ 
+@@ -330,9 +376,9 @@ void ESPlayerGst::flush()
+   if (!ret)
+     Log::error(TRACE_MEDIACONTROL,"failed to send flush-stop event");
+ 
++  Signal(DATA_SIFFICIENT);
+   printf ("Detaching %d sink due to flush.\n", mMediaType);
+   mEndOfStreamFlag = false;
+-  detach();
+   resetPtsOffset();
+ }
+ 
+@@ -341,57 +387,6 @@ MediaType ESPlayerGst::getMediaType()
+   return mMediaType;
+ }
+ 
+-void ESPlayerGst::attach()
+-{
+-  NTRACE(TRACE_MEDIACONTROL, "ESPlayerGst::attachGstSource() called");
+-  ScopedMutex cs(mDecoderTaskMutex);
+-
+-  // If there is still something attached to it, it should be the timer,
+-  // just remove it :-)
+-  if (mGstSourceID) {
+-    g_source_destroy(mGstSource);
+-  }
+-
+-  mGstSource = g_idle_source_new();
+-  g_source_set_callback(mGstSource,
+-                        (GSourceFunc)(&gst_decode_iteration),
+-                        (gpointer)(this),
+-                        NULL);
+-
+-  mGstSourceID = g_source_attach(mGstSource, mPlaybackGroup->getMainContext());
+-}
+-
+-void ESPlayerGst::detach()
+-{
+-  NTRACE(TRACE_MEDIACONTROL, "ESPlayerGst::detachGstSource() called");
+-  ScopedMutex cs(mDecoderTaskMutex);
+-  if (mGstSourceID) {
+-    g_source_destroy(mGstSource);
+-    mGstSource = NULL;
+-    mGstSourceID = 0;
+-  }
+-}
+-
+-void ESPlayerGst::startWait(uint32_t timeToWaitMS)
+-{
+-  // Decoder callbacks both live in the same main glib thread so
+-  // sleeping will block the whole loop, causing data starvation at times
+-  // so detach and reattach to main loop after timeToWaitMS
+-  ScopedMutex cs(mDecoderTaskMutex);
+-
+-  // The decoder process, might still be attached :-)
+-  if (mGstSourceID) {
+-    g_source_destroy(mGstSource);
+-  }
+-
+-  mGstSource = g_timeout_source_new(timeToWaitMS);
+-  g_source_set_callback(mGstSource,
+-                        (GSourceFunc)(&ESPlayerGst::gst_wait_timeout),
+-                        (gpointer)(this),
+-                        NULL);
+-    
+-  mGstSourceID = g_source_attach(mGstSource, mPlaybackGroup->getMainContext());
+-}
+ void ESPlayerGst::updatePts(int64_t currentPts)
+ {
+   mCallback->updatePlaybackPosition(currentPts + mPtsOffset);
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.h b/partner/dpi/gstreamer/ESPlayerGst.h
+index 32494bac..5af2d684 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.h
++++ b/partner/dpi/gstreamer/ESPlayerGst.h
+@@ -44,6 +44,13 @@ namespace esplayer {
+ 
+ class ESPlayerGst :  public ESPlayerNative
+ {
++private:
++    enum signals {
++        DATA_REQUIRED   = 0x01,
++        DATA_SUFFICIENT = 0x02,
++        DESTRUCTION     = 0x04
++    };
++
+ public:
+ 
+     virtual ~ESPlayerGst();
+@@ -90,16 +97,16 @@ public:
+     inline void setOffset(llong pts, llong dts) { 
+       mPtsOffset = pts;
+       mDtsOffset = dts;
++      Signal (DATA_REQUIRED);
+     }
+ 
+-    // Methods to Attach the process of reading data and detaching it.
+-    void attach();
+-    void detach();
++    // Signal sending
++    void Signal(const unsigned int signal);
++    unsigned int Wait (const unsigned int time);
+ 
+ private:
+     // feed the decoder, called by idle callback vDecIteration
+-    void startWait(uint32_t waitTime);
+-    void ProcessFrame();
++    unsigned int ProcessFrame();
+     void TransferBufferToGStreamer();
+ 
+     friend class PlaybackGroupNative;
+@@ -110,17 +117,16 @@ private:
+     // Gluelogic for the C-functions of gstreamer...
+     static void gst_bin_need_data (GstAppSrc *src, guint length, gpointer user_data);
+     static void gst_bin_enough_data (GstAppSrc *src, gpointer user_data);
+-    static gboolean gst_wait_timeout(ESPlayerGst* self);
+-    static gboolean gst_decode_iteration(ESPlayerGst* self);
++    static void* pull_sample_worker(void* self);
+ 
+ private:
+     std::auto_ptr<SampleWriterNative> mSampleWriter;
+ 
+     MediaType mMediaType;
+-
+-    // gst bitstream source
+-    GSource *mGstSource;
+-    guint    mGstSourceID;
++    unsigned int _current_data;
++    GCond _data_cond;
++    GThread* _thread;
++    GMutex _mutex;
+ 
+     llong mPtsOffset;
+     llong mDtsOffset;
+-- 
+2.17.1
+

@@ -1,0 +1,34 @@
+From 5b744fcc642f6e8b46a3dd0be111c20b3b73838c Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Sat, 3 Feb 2018 20:31:53 +0100
+Subject: [PATCH 92/97] get display from correct object :bug:
+
+---
+ partner/graphics/wpeframework/OpenGLContextEGL.cpp | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/partner/graphics/wpeframework/OpenGLContextEGL.cpp b/partner/graphics/wpeframework/OpenGLContextEGL.cpp
+index 9b4aec1f..91a8b122 100644
+--- a/partner/graphics/wpeframework/OpenGLContextEGL.cpp
++++ b/partner/graphics/wpeframework/OpenGLContextEGL.cpp
+@@ -57,7 +57,7 @@ bool OpenGLContext::init(OpenGLContext* share)
+ {
+     mPrivate = new OpenGLContextPrivate;
+ 
+-    assert(WPEFramework::Display::Instance().GetDisplay() != EGL_NO_DISPLAY);
++    assert(WPEFramework::Display::Instance().WaylandDisplay().GetDisplay() != EGL_NO_DISPLAY);
+ 
+     mWidth =  mPrivate->client.Width();
+     mHeight =  mPrivate->client.Height();
+@@ -72,8 +72,6 @@ bool OpenGLContext::init(OpenGLContext* share)
+         Log::error(TRACE_GIBBON_GRAPHICS,"[Wayland Input] Error creating processor thread\n");
+     }
+ 
+-    Log::warn(TRACE_GIBBON_GRAPHICS, "[%s] videoImage=%p videoTexture=%p\n", __FUNCTION__, mPrivate->videoImage, mPrivate->videoTexture);
+-
+     return WPEFramework::Display::Instance().WaylandDisplay().IsOperational();
+ }
+ 
+-- 
+2.17.1
+

@@ -1,0 +1,25 @@
+From e53a0ce00f299867a2afd636c49e1400fb8a6d0b Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Tue, 6 Feb 2018 22:13:53 +0100
+Subject: [PATCH 95/97] Enable UI upscaling
+
+---
+ partner/graphics/wpeframework/display.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/partner/graphics/wpeframework/display.h b/partner/graphics/wpeframework/display.h
+index 0786138b..2a193c9a 100644
+--- a/partner/graphics/wpeframework/display.h
++++ b/partner/graphics/wpeframework/display.h
+@@ -82,7 +82,7 @@ public:
+     {
+         _display.InitializeEGL();
+ 
+-        Wayland::Display::Surface newSurface = _display.Create(name, width, height);
++        Wayland::Display::Surface newSurface = _display.Create(name, width, height, true);
+ 
+         newSurface.Keyboard(&_keyboardHandler);
+ 
+-- 
+2.17.1
+

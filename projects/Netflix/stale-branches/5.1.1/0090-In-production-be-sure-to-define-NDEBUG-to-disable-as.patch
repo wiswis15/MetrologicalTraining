@@ -1,0 +1,25 @@
+From d41c1d7b1c0ade5aa5e5a74ce0250e4c21fec8c1 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Thu, 1 Feb 2018 13:17:49 +0100
+Subject: [PATCH 90/97] In production be sure to define NDEBUG to disable
+ asserts :bug:
+
+---
+ netflix/cmake/Toolchain.cmake | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/netflix/cmake/Toolchain.cmake b/netflix/cmake/Toolchain.cmake
+index 9dcd2be7..2fdd1405 100644
+--- a/netflix/cmake/Toolchain.cmake
++++ b/netflix/cmake/Toolchain.cmake
+@@ -88,6 +88,7 @@ endif()
+ 
+         if(BUILD_PRODUCTION)
+             add_definitions(-DBUILD_PRODUCTION)
++            add_definitions(-DNDEBUG)
+         endif()
+ 
+ # -------------------------------------------------
+-- 
+2.17.1
+

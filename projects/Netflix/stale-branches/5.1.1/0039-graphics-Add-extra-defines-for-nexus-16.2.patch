@@ -1,0 +1,38 @@
+From 73475ce7675828498e497c52a9ebdda7888cf566 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Tue, 1 Nov 2016 18:52:07 +0100
+Subject: [PATCH 39/97] [graphics] Add extra defines for nexus 16.2
+
+---
+ partner/graphics/nexus/OpenGLContextEGL.h    | 2 --
+ partner/graphics/nexus/gibbon_graphics.cmake | 1 +
+ 2 files changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/partner/graphics/nexus/OpenGLContextEGL.h b/partner/graphics/nexus/OpenGLContextEGL.h
+index 85ae84c6..9ad46915 100644
+--- a/partner/graphics/nexus/OpenGLContextEGL.h
++++ b/partner/graphics/nexus/OpenGLContextEGL.h
+@@ -10,8 +10,6 @@
+ #ifndef OPENGLCONTEXTEGL_H
+ #define OPENGLCONTEXTEGL_H
+ 
+-#define EGL_EGLEXT_PROTOTYPES 1
+-
+ #include <GLES2/gl2.h>
+ #include <EGL/egl.h>
+ #include <EGL/eglext.h>
+diff --git a/partner/graphics/nexus/gibbon_graphics.cmake b/partner/graphics/nexus/gibbon_graphics.cmake
+index 7470e0b8..ab868dea 100644
+--- a/partner/graphics/nexus/gibbon_graphics.cmake
++++ b/partner/graphics/nexus/gibbon_graphics.cmake
+@@ -31,6 +31,7 @@ if(GIBBON_GRAPHICS_GL_WSYS STREQUAL "egl")
+ 
+     set(GIBBON_GRAPHICSENGINE_GLES2_EGL TRUE)
+     gibbon_add_libraries(GLESv2 EGL nexus nxpl nxclient)
++    add_definitions(-DEGL_EGLEXT_PROTOTYPES=1 -DBROADCOM_PLATFORM=1)
+ else()
+     message(FATAL_ERROR "Unrecognized GL subsystem: ${GIBBON_GRAPHICS_GL_WSYS}")
+ endif()
+-- 
+2.17.1
+

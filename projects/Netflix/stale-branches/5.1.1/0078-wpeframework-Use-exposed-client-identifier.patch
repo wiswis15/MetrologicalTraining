@@ -1,0 +1,25 @@
+From e2a9166728d86ecaf4d05b949ecd27a3daa69da8 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Sat, 21 Oct 2017 11:48:42 +0200
+Subject: [PATCH 78/97] [wpeframework] Use exposed client identifier
+
+---
+ partner/graphics/wpeframework/OpenGLContextEGL.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/partner/graphics/wpeframework/OpenGLContextEGL.h b/partner/graphics/wpeframework/OpenGLContextEGL.h
+index 35d553e1..16bc22ca 100644
+--- a/partner/graphics/wpeframework/OpenGLContextEGL.h
++++ b/partner/graphics/wpeframework/OpenGLContextEGL.h
+@@ -48,7 +48,7 @@ namespace gibbon {
+ 
+      private:
+       static const char* GetName(){
+-          const char* callsign(std::getenv("NETFLIX_CALLSIGN"));
++          const char* callsign(std::getenv("CLIENT_IDENTIFIER"));
+ 
+           return (callsign == nullptr) ? "Netflix_default" : callsign;
+       }
+-- 
+2.17.1
+

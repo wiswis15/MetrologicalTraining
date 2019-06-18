@@ -1,0 +1,80 @@
+From 8261f83d61ad7642bbbf913567810829e81dbe26 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Wed, 3 May 2017 16:57:09 +0200
+Subject: [PATCH 53/97] [wayland-egl] make specific EGL calls.
+
+---
+ .../graphics/wayland-egl/OpenGLContextEGL.cpp  | 18 ++++++++++++++++--
+ .../graphics/wayland-egl/gibbon_graphics.cmake | 10 +++++++---
+ 2 files changed, 23 insertions(+), 5 deletions(-)
+
+diff --git a/partner/graphics/wayland-egl/OpenGLContextEGL.cpp b/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
+index 0e1f0124..f21457cd 100644
+--- a/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
++++ b/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
+@@ -164,7 +164,15 @@ bool OpenGLContext::init(OpenGLContext* share)
+         EGLint majorVersion;
+         EGLint minorVersion;
+ 
+-        mPrivate->display = eglGetDisplay(mPrivate->wayland.display);
++        if (PFNEGLGETPLATFORMDISPLAYEXTPROC getPlatformDisplay =
++            reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(eglGetProcAddress("eglGetPlatformDisplay"))){
++                mPrivate->display = getPlatformDisplay(EGL_PLATFORM_WAYLAND_KHR, mPrivate->wayland.display, NULL);
++                Log::info(TRACE_GIBBON_GRAPHICS) << "EGL EXTENSIONS PFNEGLGETPLATFORMDISPLAYEXTPROC";
++        } else if (PFNEGLGETPLATFORMDISPLAYEXTPROC getPlatformDisplay =
++            reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(eglGetProcAddress("eglGetPlatformDisplayEXT"))){
++                mPrivate->display = getPlatformDisplay(EGL_PLATFORM_WAYLAND_KHR, mPrivate->wayland.display, NULL);
++                Log::info(TRACE_GIBBON_GRAPHICS) << "EGL EXTENSIONS PFNEGLGETPLATFORMDISPLAYEXTPROC";
++        }
+ 
+         assert(mPrivate->display != EGL_NO_DISPLAY);
+ 
+@@ -243,7 +251,13 @@ bool OpenGLContext::init(OpenGLContext* share)
+         EGLint height(0);
+         EGLint width(0);
+ 
+-        mPrivate->surface = eglCreateWindowSurface(mPrivate->display, mPrivate->config, mPrivate->wayland.eglWindow, 0);
++       // mPrivate->surface = eglCreateWindowSurface(mPrivate->display, mPrivate->config, mPrivate->wayland.eglWindow, NULL);
++
++        if (PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC createPlatformWindowSurface =
++            reinterpret_cast<PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC>(eglGetProcAddress("eglCreatePlatformWindowSurfaceEXT"))){
++            mPrivate->surface = createPlatformWindowSurface(mPrivate->display, mPrivate->config, mPrivate->wayland.eglWindow, NULL);
++            Log::info(TRACE_GIBBON_GRAPHICS) << "EGL EXTENSIONS PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC";
++        }
+ 
+         assert(EGL_NO_SURFACE != mPrivate->surface);
+ 
+diff --git a/partner/graphics/wayland-egl/gibbon_graphics.cmake b/partner/graphics/wayland-egl/gibbon_graphics.cmake
+index 6ec535f2..503cd5fc 100644
+--- a/partner/graphics/wayland-egl/gibbon_graphics.cmake
++++ b/partner/graphics/wayland-egl/gibbon_graphics.cmake
+@@ -9,8 +9,8 @@ set(GIBBON_GRAPHICSENGINE_GLES2 TRUE)
+ add_definitions(-DGIBBON_SCREEN_FULLRENDER -DGIBBON_COORDINATE_FLOAT -DGIBBON_SURFACE_COPY_PINGPONG -DGIBBON_GRAPHICSENGINE_DRAWTEXT_DL -DGIBBON_SCREEN_FLIPVSYNC)
+ 
+ get_filename_component(CURRENT_DIRECTORY ${CMAKE_CURRENT_LIST_FILE} PATH)
+-include_directories(${CURRENT_DIRECTORY})
+-include_directories(${CURRENT_DIRECTORY}/protocols)
++gibbon_add_includes(${CURRENT_DIRECTORY})
++gibbon_add_includes(${CURRENT_DIRECTORY}/protocols)
+ gibbon_add_sources(
+     GraphicsEngineGLES2.cpp
+     ScreenGLES2.cpp
+@@ -28,10 +28,14 @@ endif()
+ message("    + Using GL: ${GIBBON_GRAPHICS_GL_WSYS}")
+ 
+ if(GIBBON_GRAPHICS_GL_WSYS STREQUAL "egl")
++    find_package(PkgConfig)
++    pkg_check_modules(WAYLAND egl wayland-egl wayland-client>=1.2 wayland-server)
++
+     gibbon_add_sources(OpenGLContextEGL.cpp)
+ 
+     set(GIBBON_GRAPHICSENGINE_GLES2_EGL TRUE)
+-    gibbon_add_libraries(wayland-egl GLESv2 EGL)
++    gibbon_add_libraries(${WAYLAND_INCLUDE_DIRS})
++    gibbon_add_includes(${CURRENT_DIRECTORY})
+     add_definitions(-DEGL_EGLEXT_PROTOTYPES=1)
+ else()
+     message(FATAL_ERROR "Unrecognized GL subsystem: ${GIBBON_GRAPHICS_GL_WSYS}")
+-- 
+2.17.1
+

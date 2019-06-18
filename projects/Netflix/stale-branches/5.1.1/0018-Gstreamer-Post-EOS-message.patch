@@ -1,0 +1,24 @@
+From 27976017bd44c5e5e12257ecc8880ff271348f05 Mon Sep 17 00:00:00 2001
+From: Albert Dahan <albert@dahan.nl>
+Date: Mon, 19 Sep 2016 21:32:51 +0200
+Subject: [PATCH 18/97] [Gstreamer] Post EOS message
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index c2e23922..75c3d343 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -98,6 +98,7 @@ void ESPlayerGst::ProcessFrame() {
+           if (!getCallback()->playbackCompletedReceived()) {
+             printf("getCallback()->playbackCompleted(); \n");
+             getCallback()->playbackCompleted();
++            gst_element_post_message(mSrc, gst_message_new_eos(GST_OBJECT(mSrc)));
+           }
+           detach();
+           }
+-- 
+2.17.1
+

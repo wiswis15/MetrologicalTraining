@@ -1,0 +1,25 @@
+From 506f9769192fd04cc1725406d5fbda25442e5554 Mon Sep 17 00:00:00 2001
+From: Albert Dahan <a.dahan@metrological.com>
+Date: Tue, 20 Sep 2016 21:23:20 +0200
+Subject: [PATCH 26/97] [DeviceLibNative] Disable on the fly audio switch
+
+---
+ partner/dpi/reference/DeviceLibNative.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/partner/dpi/reference/DeviceLibNative.h b/partner/dpi/reference/DeviceLibNative.h
+index d4ce770c..b29a1195 100644
+--- a/partner/dpi/reference/DeviceLibNative.h
++++ b/partner/dpi/reference/DeviceLibNative.h
+@@ -195,7 +195,7 @@ struct referenceDpiConfig {
+         audioBufferPoolSize(m_kAudioPoolSize),
+         support2DVideoResize(true),
+         support2DVideoResizeAnimation(true),
+-        supportOnTheFlyAudioSwitch(true),
++        supportOnTheFlyAudioSwitch(false),
+         supportOnTheFlyAudioCodecSwitch(false),
+         supportDolbyVisionComposerControl(true),
+         supportDynamicVideoPipelines(false),
+-- 
+2.17.1
+

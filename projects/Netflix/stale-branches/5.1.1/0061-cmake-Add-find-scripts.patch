@@ -1,0 +1,282 @@
+From 40865ed3b62a0f3432c225bbb741f87ae375e9c5 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Mon, 26 Jun 2017 22:08:56 +0200
+Subject: [PATCH 61/97] [cmake] Add find scripts
+
+---
+ netflix/cmake/FindCompositorClient.cmake | 37 +++++++++++++++++++++++
+ netflix/cmake/FindCppsdk.cmake           | 38 ++++++++++++++++++++++++
+ netflix/cmake/FindWPEFramework.cmake     | 37 +++++++++++++++++++++++
+ netflix/cmake/FindWayland.cmake          | 37 +++++++++++++++++++++++
+ netflix/cmake/FindWaylandEGL.cmake       | 37 +++++++++++++++++++++++
+ netflix/cmake/FindWesteros.cmake         | 37 +++++++++++++++++++++++
+ 6 files changed, 223 insertions(+)
+ create mode 100644 netflix/cmake/FindCompositorClient.cmake
+ create mode 100644 netflix/cmake/FindCppsdk.cmake
+ create mode 100644 netflix/cmake/FindWPEFramework.cmake
+ create mode 100644 netflix/cmake/FindWayland.cmake
+ create mode 100644 netflix/cmake/FindWaylandEGL.cmake
+ create mode 100644 netflix/cmake/FindWesteros.cmake
+
+diff --git a/netflix/cmake/FindCompositorClient.cmake b/netflix/cmake/FindCompositorClient.cmake
+new file mode 100644
+index 00000000..8ad8615b
+--- /dev/null
++++ b/netflix/cmake/FindCompositorClient.cmake
+@@ -0,0 +1,37 @@
++# - Try to find WPEFramework compositor client wrapper.
++# Once done, this will define
++#
++#  COMPOSITOR_CLIENT_FOUND - system has WPEFramework compositor client.
++#  COMPOSITOR_CLIENT_INCLUDE_DIRS - the WPEFramework compositor client include directories
++#  COMPOSITOR_CLIENT_LIBRARIES - link these to use WPEFramework compositor client.
++#
++# Copyright (C) 2017 Metrological B.V.
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions
++# are met:
++# 1.  Redistributions of source code must retain the above copyright
++#     notice, this list of conditions and the following disclaimer.
++# 2.  Redistributions in binary form must reproduce the above copyright
++#     notice, this list of conditions and the following disclaimer in the
++#     documentation and/or other materials provided with the distribution.
++#
++# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND ITS CONTRIBUTORS ``AS
++# IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++# PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR ITS
++# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
++# OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
++# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
++# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
++# ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++find_package(PkgConfig)
++pkg_check_modules(COMPOSITOR_CLIENT compositorclient)
++
++include(FindPackageHandleStandardArgs)
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(COMPOSITOR_CLIENT DEFAULT_MSG COMPOSITOR_CLIENT_FOUND)
++
++mark_as_advanced(COMPOSITOR_CLIENT_INCLUDE_DIRS COMPOSITOR_CLIENT_LIBRARIES)
+diff --git a/netflix/cmake/FindCppsdk.cmake b/netflix/cmake/FindCppsdk.cmake
+new file mode 100644
+index 00000000..c856ce61
+--- /dev/null
++++ b/netflix/cmake/FindCppsdk.cmake
+@@ -0,0 +1,38 @@
++# Sets:
++#  - CPPSDK_INCLUDE_DIRS
++#
++# For each component:
++#  - <uppercase component name>_LIBRARIES
++
++# Components need to be written lower-case without "lib" prefix, e.g.: "generics", "rpc", "tracing"
++
++find_package (PkgConfig REQUIRED)
++
++if ((NOT (DEFINED CPPSDK_INCLUDE_DIRS)) OR (CPPSDK_INCLUDE_DIRS STREQUAL ""))
++   set(CPPSDK_INCLUDE_DIRS "" CACHE STRING "CPPSDK include directories.")
++   
++   pkg_check_modules (CPPSDK cppsdk)
++   
++   if (NOT CPPSDK_FOUND)
++      message(FATAL_ERROR "Failed to find cppsdk, please set CPPSDK_INCLUDE_DIRS.")
++   endif ()
++endif ()
++
++foreach (component ${Cppsdk_FIND_COMPONENTS})
++   string (TOUPPER ${component} UPPERCASE_COMPONENT)
++
++   set (COMPONENT_LIBRARY_NAME "LIB${UPPERCASE_COMPONENT}_LIBRARIES")
++   find_library(
++      ${COMPONENT_LIBRARY_NAME}
++      NAMES "${component}" 
++      HINTS "${CPPSDK_LIBDIR}" "${CPPSDK_INCLUDE_DIRS}/../../build/${component}"
++      DOC "Cppsdk component '${component}' shared library."
++   )
++
++   if (${${COMPONENT_LIBRARY_NAME}} STREQUAL "${COMPONENT_LIBRARY_NAME}-NOTFOUND")
++      message(FATAL_ERROR "Couldn't find libraries for cppsdk component '${component}'.")
++   endif()
++endforeach ()
++
++set (CPPSDK_FOUND 1)
++
+diff --git a/netflix/cmake/FindWPEFramework.cmake b/netflix/cmake/FindWPEFramework.cmake
+new file mode 100644
+index 00000000..8e3d0fa4
+--- /dev/null
++++ b/netflix/cmake/FindWPEFramework.cmake
+@@ -0,0 +1,37 @@
++# - Try to find WPEFramework.
++# Once done, this will define
++#
++#  WPEFRAMEWORK_FOUND - system has Wayland.
++#  WPEFRAMEWORK_INCLUDE_DIRS - the Wayland include directories
++#  WPEFRAMEWORK_LIBRARIES - link these to use Wayland.
++#
++# Copyright (C) 2017 Metrological B.V.
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions
++# are met:
++# 1.  Redistributions of source code must retain the above copyright
++#     notice, this list of conditions and the following disclaimer.
++# 2.  Redistributions in binary form must reproduce the above copyright
++#     notice, this list of conditions and the following disclaimer in the
++#     documentation and/or other materials provided with the distribution.
++#
++# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND ITS CONTRIBUTORS ``AS
++# IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++# PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR ITS
++# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
++# OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
++# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
++# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
++# ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++find_package(PkgConfig)
++pkg_check_modules(WPEFRAMEWORK WPEFramework)
++
++include(FindPackageHandleStandardArgs)
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(WPEFRAMEWORK DEFAULT_MSG WPEFRAMEWORK_FOUND)
++
++mark_as_advanced(WPEFRAMEWORK_INCLUDE_DIRS WPEFRAMEWORK_LIBRARIES)
+diff --git a/netflix/cmake/FindWayland.cmake b/netflix/cmake/FindWayland.cmake
+new file mode 100644
+index 00000000..f90f5351
+--- /dev/null
++++ b/netflix/cmake/FindWayland.cmake
+@@ -0,0 +1,37 @@
++# - Try to find Wayland.
++# Once done, this will define
++#
++#  WAYLAND_FOUND - system has Wayland.
++#  WAYLAND_INCLUDE_DIRS - the Wayland include directories
++#  WAYLAND_LIBRARIES - link these to use Wayland.
++#
++# Copyright (C) 2014 Igalia S.L.
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions
++# are met:
++# 1.  Redistributions of source code must retain the above copyright
++#     notice, this list of conditions and the following disclaimer.
++# 2.  Redistributions in binary form must reproduce the above copyright
++#     notice, this list of conditions and the following disclaimer in the
++#     documentation and/or other materials provided with the distribution.
++#
++# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND ITS CONTRIBUTORS ``AS
++# IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++# PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR ITS
++# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
++# OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
++# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
++# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
++# ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++find_package(PkgConfig)
++pkg_check_modules(WAYLAND wayland-client>=1.2 wayland-server)
++
++include(FindPackageHandleStandardArgs)
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(WAYLAND DEFAULT_MSG WAYLAND_LIBRARIES)
++
++mark_as_advanced(WAYLAND_INCLUDE_DIRS WAYLAND_LIBRARIES)
+diff --git a/netflix/cmake/FindWaylandEGL.cmake b/netflix/cmake/FindWaylandEGL.cmake
+new file mode 100644
+index 00000000..5f53e318
+--- /dev/null
++++ b/netflix/cmake/FindWaylandEGL.cmake
+@@ -0,0 +1,37 @@
++# - Try to find wayland-egl.
++# Once done, this will define
++#
++#  WAYLAND_EGL_FOUND - system has wayland-egl.
++#  WAYLAND_EGL_INCLUDE_DIRS - the wayland-egl include directories
++#  WAYLAND_EGL_LIBRARIES - link these to use wayland-egl.
++#
++# Copyright (C) 2017 Metrological B.V.
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions
++# are met:
++# 1.  Redistributions of source code must retain the above copyright
++#     notice, this list of conditions and the following disclaimer.
++# 2.  Redistributions in binary form must reproduce the above copyright
++#     notice, this list of conditions and the following disclaimer in the
++#     documentation and/or other materials provided with the distribution.
++#
++# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND ITS CONTRIBUTORS ``AS
++# IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++# PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR ITS
++# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
++# OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
++# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
++# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
++# ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++find_package(PkgConfig)
++pkg_check_modules(WAYLAND_EGL wayland-egl)
++
++include(FindPackageHandleStandardArgs)
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(WAYLAND_EGL DEFAULT_MSG WAYLAND_EGL_FOUND)
++
++mark_as_advanced(WAYLAND_EGL_INCLUDE_DIRS WAYLAND_EGL_LIBRARIES)
+diff --git a/netflix/cmake/FindWesteros.cmake b/netflix/cmake/FindWesteros.cmake
+new file mode 100644
+index 00000000..ac087e22
+--- /dev/null
++++ b/netflix/cmake/FindWesteros.cmake
+@@ -0,0 +1,37 @@
++# - Try to find Westeros.
++# Once done, this will define
++#
++#  WESTEROS_FOUND - system has Westeros.
++#  WESTEROS_INCLUDE_DIRS - the Westeros include directories
++#  WESTEROS_LIBRARIES - link these to use Westeros.
++#
++# Copyright (C) 2017 Metrological B.V.
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions
++# are met:
++# 1.  Redistributions of source code must retain the above copyright
++#     notice, this list of conditions and the following disclaimer.
++# 2.  Redistributions in binary form must reproduce the above copyright
++#     notice, this list of conditions and the following disclaimer in the
++#     documentation and/or other materials provided with the distribution.
++#
++# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND ITS CONTRIBUTORS ``AS
++# IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++# PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR ITS
++# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
++# OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
++# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
++# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
++# ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++find_package(PkgConfig)
++pkg_check_modules(WESTEROS westeros-compositor)
++
++include(FindPackageHandleStandardArgs)
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(WESTEROS DEFAULT_MSG WESTEROS_FOUND)
++
++mark_as_advanced(WESTEROS_INCLUDE_DIRS WESTEROS_LIBRARIES)
+-- 
+2.17.1
+

@@ -1,0 +1,36 @@
+From 79f893f0708ae79a175fa33e619e1c69eb505d89 Mon Sep 17 00:00:00 2001
+From: wouterlucas <wouter@wouterlucas.com>
+Date: Thu, 27 Apr 2017 15:58:21 -0700
+Subject: [PATCH 50/97] [gstreamer] Expose HAVE DDPLUS flag
+
+---
+ partner/dpi/gstreamer/CMakeLists.txt | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/partner/dpi/gstreamer/CMakeLists.txt b/partner/dpi/gstreamer/CMakeLists.txt
+index 30c98b92..0b1e8dfe 100644
+--- a/partner/dpi/gstreamer/CMakeLists.txt
++++ b/partner/dpi/gstreamer/CMakeLists.txt
+@@ -25,6 +25,8 @@ include_directories($ENV{STAGING_DIR}/usr/include/glib-2.0)
+ include_directories($ENV{STAGING_DIR}/usr/lib/gstreamer-1.0/include)
+ include_directories($ENV{STAGING_DIR}/usr/lib/glib-2.0/include)
+ 
++set(DPI_REFERENCE_HAVE_DDPLUS false CACHE STRING false)
++
+ add_definitions(-D__STDC_CONSTANT_MACROS)
+ 
+ if (GIBBON_PLATFORM STREQUAL "mac-video-window")
+@@ -202,7 +204,9 @@ if (GST_VIDEO_RENDERING STREQUAL "gl")
+     list(APPEND LIBRARIES gstgl-1.0 )
+ endif()
+ 
+-add_definitions("-DHAVE_DDPLUS=1")
++if (DPI_REFERENCE_HAVE_DDPLUS)
++    add_definitions("-DHAVE_DDPLUS=1")
++endif()
+         
+ add_library(nrddpi ${SOURCES})
+ target_link_libraries(nrddpi nrdtee nrdbase nrd z ${LIBRARIES})
+-- 
+2.17.1
+

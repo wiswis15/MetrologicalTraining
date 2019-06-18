@@ -1,0 +1,153 @@
+From 5d9aa3c12ecba621a02202067db963abc947c657 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Sat, 3 Feb 2018 20:34:29 +0100
+Subject: [PATCH 94/97] Add synaptics native EGL/GLES support
+
+---
+ partner/dpi/gstreamer/CMakeLists.txt          |  4 +++
+ partner/dpi/gstreamer/PlaybackGroupNative.cpp | 26 ++++++++++---------
+ partner/dpi/gstreamer/PlaybackGroupNative.h   |  2 +-
+ .../graphics/synaptics/gibbon_graphics.cmake  | 16 ++++--------
+ 4 files changed, 24 insertions(+), 24 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/CMakeLists.txt b/partner/dpi/gstreamer/CMakeLists.txt
+index 9852767a..3361996a 100644
+--- a/partner/dpi/gstreamer/CMakeLists.txt
++++ b/partner/dpi/gstreamer/CMakeLists.txt
+@@ -42,7 +42,11 @@ elseif (GST_VIDEO_RENDERING STREQUAL "gl")
+ elseif (GST_VIDEO_RENDERING STREQUAL "westeros")
+   add_definitions(-DWESTEROS_SINK)
+ elseif (GST_VIDEO_RENDERING STREQUAL "synaptics")
++    message("-- Westeros video rendering for synaptics")
+     add_definitions(-DSYNAPTICS)
++elseif (GST_VIDEO_RENDERING STREQUAL "synaptics_native")
++    message("-- Native video rendering for synaptics")
++    add_definitions(-DSYNAPTICS_NATIVE)
+ endif()
+ 
+ set(HAVE_DPI_DIRECTORY "${NRDP_BINARY_ROOT_DIR}/lib/dpi")
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.cpp b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+index 08add103..7aa3a0ed 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.cpp
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+@@ -98,8 +98,8 @@ PlaybackGroupNative::PlaybackGroupNative(ESManagerNative& ESManager, uint32_t pi
+   //  mCloseThread(false)
+   mCurrentVideoWindow(zeroRect),
+   mNewVideoWindow(false)
+-#if defined(WESTEROS_SINK) || defined(SYNAPTICS)
+-  , mSink(NULL)
++#if defined(WESTEROS_SINK) || defined(SYNAPTICS)  || defined(SYNAPTICS_NATIVE)
++, mSink(NULL)
+ #endif
+ {
+   mPositionMonitor.reset(new PositionMonitor(this));
+@@ -122,7 +122,7 @@ PlaybackGroupNative::PlaybackGroupNative(ESManagerNative& ESManager, uint32_t pi
+     unsigned flagAudio = getGstPlayFlag("audio");
+     unsigned flagVideo = getGstPlayFlag("video");
+     unsigned flagNativeVideo = getGstPlayFlag("native-video");
+-#if defined(SYNAPTICS)
++#if defined(SYNAPTICS) || defined(SYNAPTICS_NATIVE)
+     unsigned flagNativeAudio = getGstPlayFlag("native-audio");
+ #else
+     unsigned flagNativeAudio = 0x0;
+@@ -154,7 +154,13 @@ PlaybackGroupNative::PlaybackGroupNative(ESManagerNative& ESManager, uint32_t pi
+     // g_object_set(mSink, "opacity",0.6f, NULL);
+ #endif
+ 
+-#if defined(SYNAPTICS)
++#if defined(SYNAPTICS_NATIVE)
++    GstElementFactory* sinkFactory(gst_element_factory_find("synasink"));
++    mSink = gst_element_factory_create(sinkFactory, "SynaVideoSink");
++    g_object_set(mGstPipeline, "video-sink", mSink, NULL);
++#endif
++
++#if defined(SYNAPTICS) || defined(SYNAPTICS_NATIVE)
+     GstElement* audioSink = gst_element_factory_make("amparen", "AmpAudioSink");
+     g_object_set(mGstPipeline, "audio-sink", audioSink, NULL);
+ 
+@@ -164,12 +170,6 @@ PlaybackGroupNative::PlaybackGroupNative(ESManagerNative& ESManager, uint32_t pi
+     if (clk != NULL && mSink != NULL) {
+         gst_element_set_clock(mSink, clk);
+     }
+-
+-    /* Native audio */
+-    gint playbin_flag;
+-    g_object_get (mGstPipeline, "flags", &playbin_flag, NULL);
+-    playbin_flag |= 0x00000020;
+-    g_object_set (mGstPipeline, "flags", playbin_flag, NULL);
+ #endif
+ 
+     ESPlayerConstants::VIDEO_REN_SCREEN_WIDTH = sConfiguration->videoRendererScreenWidth;
+@@ -223,7 +223,7 @@ PlaybackGroupNative::~PlaybackGroupNative()
+     if (mSource)
+         gst_object_unref(mSource);
+ 
+-#if defined(WESTEROS_SINK) || defined(SYNAPTICS)
++#if defined(WESTEROS_SINK) || defined(SYNAPTICS) || defined(SYNAPTICS_NATIVE)
+     if (mSink != NULL){
+          gst_object_unref(mSink);
+     }
+@@ -498,7 +498,7 @@ void PlaybackGroupNative::audioFlushed()
+ {
+ }
+ 
+-#if defined(BCM_NEXUS) || defined(WESTEROS_SINK) || defined(SYNAPTICS)
++#if defined(BCM_NEXUS) || defined(WESTEROS_SINK) || defined(SYNAPTICS) || defined(SYNAPTICS_NATIVE)
+ // utility function for bcm nexus seek functionality
+ static GstElement* findElement(GstElement *element, const char* targetName)
+ {
+@@ -653,6 +653,8 @@ void PlaybackGroupNative::updateVideoRectangle()
+   videoDec = findElement(mGstPipeline, "brcmvideosink");
+ #elif defined(WESTEROS_SINK) || defined(SYNAPTICS)
+   videoDec = findElement(mGstPipeline, "westerossink");
++#elif defined(SYNAPTICS_NATIVE)
++  videoDec = findElement(mGstPipeline, "synasink");
+ #else
+     return;
+ #endif
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.h b/partner/dpi/gstreamer/PlaybackGroupNative.h
+index ed931210..e91aa2a0 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.h
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.h
+@@ -174,7 +174,7 @@ private:
+     shared_ptr<VideoSinkGStreamer> mVideoSinkGst;
+ #endif
+ 
+-#if defined(WESTEROS_SINK) || defined(SYNAPTICS)
++#if defined(WESTEROS_SINK) || defined(SYNAPTICS) || defined(SYNAPTICS_NATIVE)
+     GstElement* mSink;
+ #endif
+ };
+diff --git a/partner/graphics/synaptics/gibbon_graphics.cmake b/partner/graphics/synaptics/gibbon_graphics.cmake
+index ccf42b28..cca177e1 100644
+--- a/partner/graphics/synaptics/gibbon_graphics.cmake
++++ b/partner/graphics/synaptics/gibbon_graphics.cmake
+@@ -18,20 +18,14 @@ gibbon_add_sources(
+     EffectsGLES2.cpp
+     OpenGLContext.cpp
+     OpenGLFBO.cpp
++    OpenGLContextEGL.cpp
+ )
+ 
+-set(GIBBON_GRAPHICS_GL_WSYS "egl")
+-message("    + Using GL: ${GIBBON_GRAPHICS_GL_WSYS}")
++set(GIBBON_GRAPHICSENGINE_GLES2_EGL TRUE)
+ 
+-if(GIBBON_GRAPHICS_GL_WSYS STREQUAL "egl")
+-    gibbon_add_sources(OpenGLContextEGL.cpp)
++gibbon_add_libraries(ampclient OSAL graphics GLESv2 EGL)
+ 
+-    set(GIBBON_GRAPHICSENGINE_GLES2_EGL TRUE)
+-    gibbon_add_libraries(ampclient OSAL graphics GLESv2 EGL)
+-    include_directories("$ENV{STAGING_DIR}/usr/include/marvell/osal/include")
+-    include_directories("$ENV{STAGING_DIR}/usr/include/marvell/amp/inc")
+-else()
+-    message(FATAL_ERROR "Unrecognized GL subsystem: ${GIBBON_GRAPHICS_GL_WSYS}")
+-endif()
++include_directories("$ENV{STAGING_DIR}/usr/include/marvell/osal/include")
++include_directories("$ENV{STAGING_DIR}/usr/include/marvell/amp/inc")
+ 
+ gibbon_copy_resource(graphics.xml ${APP_DATA_DIR}/etc/conf/graphics.xml "")
+-- 
+2.17.1
+

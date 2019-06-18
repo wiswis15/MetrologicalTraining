@@ -1,0 +1,35 @@
+From 0db88982acfff5d58663317c42297175eb170aff Mon Sep 17 00:00:00 2001
+From: Albert Dahan <a.dahan@metrological.com>
+Date: Sun, 25 Sep 2016 10:05:19 +0200
+Subject: [PATCH 28/97] [FileSystem] Disable mixing capabilities
+
+---
+ partner/dpi/reference/FileSystem.cpp | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/partner/dpi/reference/FileSystem.cpp b/partner/dpi/reference/FileSystem.cpp
+index 259c1982..ec8a926f 100644
+--- a/partner/dpi/reference/FileSystem.cpp
++++ b/partner/dpi/reference/FileSystem.cpp
+@@ -321,13 +321,13 @@ FileSystem::FileSystem(const std::string& encryptedFile,
+     mAudioProfiles.push_back(AUDIO_DDPLUS_5_1_DASH);
+ # endif
+ 
+-    mAudioEaseProfiles.push_back(EASE_LINEAR);
+-    mAudioEaseProfiles.push_back(EASE_INCUBIC);
+-    mAudioEaseProfiles.push_back(EASE_OUTCUBIC);
++//    mAudioEaseProfiles.push_back(EASE_LINEAR);
++//    mAudioEaseProfiles.push_back(EASE_INCUBIC);
++//    mAudioEaseProfiles.push_back(EASE_OUTCUBIC);
+ 
+-    mAudioDecodeProfiles.push_back(AUDIO_HEAAC_2_DASH);
++//    mAudioDecodeProfiles.push_back(AUDIO_HEAAC_2_DASH);
+ #ifdef HAVE_DDPLUS
+-    mAudioDecodeProfiles.push_back(AUDIO_DDPLUS_5_1_DASH);
++//    mAudioDecodeProfiles.push_back(AUDIO_DDPLUS_5_1_DASH);
+ # endif
+ 
+     mQaBridgeIpConnectivityMode = 0;
+-- 
+2.17.1
+

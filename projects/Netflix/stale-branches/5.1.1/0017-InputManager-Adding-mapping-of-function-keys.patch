@@ -1,0 +1,27 @@
+From 62977186c744214106bc43059418fa31e345993b Mon Sep 17 00:00:00 2001
+From: Albert Dahan <a.dahan@metrological.com>
+Date: Mon, 19 Sep 2016 21:26:28 +0200
+Subject: [PATCH 17/97] [InputManager] Adding mapping of function keys
+
+---
+ partner/input/devinput/InputManagerDevInput.cpp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/partner/input/devinput/InputManagerDevInput.cpp b/partner/input/devinput/InputManagerDevInput.cpp
+index bfd70dab..d8904aca 100644
+--- a/partner/input/devinput/InputManagerDevInput.cpp
++++ b/partner/input/devinput/InputManagerDevInput.cpp
+@@ -90,6 +90,10 @@ static inline KeyEvent::Key keyCodeToKey(uint16_t c)
+     case KEY_GREEN: code = KeyEvent::GIBBON_KEY_OEM_5; break;
+     case KEY_YELLOW: code = KeyEvent::GIBBON_KEY_OEM_6; break;
+     case KEY_BLUE: code = KeyEvent::GIBBON_KEY_OEM_7; break;
++    case KEY_F7: code = KeyEvent::GIBBON_KEY_F7; break;
++    case KEY_F8: code = KeyEvent::GIBBON_KEY_F8; break;
++    case KEY_F9: code = KeyEvent::GIBBON_KEY_F9; break;
++    case KEY_F10: code = KeyEvent::GIBBON_KEY_F10; break;
+     default:
+         break;
+     }
+-- 
+2.17.1
+

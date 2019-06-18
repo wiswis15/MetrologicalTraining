@@ -1,0 +1,30 @@
+From ea0950438dbb1df2ad17e12be999ee2bc1582540 Mon Sep 17 00:00:00 2001
+From: Albert Dahan <a.dahan@metrological.com>
+Date: Tue, 23 Aug 2016 21:50:05 +0200
+Subject: [PATCH 06/97] [Gstreamer] Increase buffers only on horizon-fusion
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index 52f45659..f9cd9b1f 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -231,11 +231,12 @@ ESPlayerGst::init(const struct StreamPlayerInitData& initData,
+   }
+ 
+   mSrc = gst_element_factory_make("appsrc", NULL);
++#if defined(HORIZON_FUSION)
+   if (mMediaType == VIDEO) 
+     g_object_set(mSrc, "min-percent", (guint) 40, "max-bytes", (guint64) 2 * 1024 * 1024, NULL);
+   else 
+     g_object_set(mSrc, "min-percent", (guint) 20, "max-bytes", (guint64) 1 * 64 * 1024, NULL);
+-
++#endif
+   GstAppSrcCallbacks callbacks = {gst_bin_need_data, gst_bin_enough_data, NULL};
+   gst_app_src_set_callbacks(GST_APP_SRC(mSrc), &callbacks, (gpointer)(this), NULL);
+   return err;
+-- 
+2.17.1
+

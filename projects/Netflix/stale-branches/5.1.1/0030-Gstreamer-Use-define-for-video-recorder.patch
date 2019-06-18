@@ -1,0 +1,123 @@
+From 2919cf436373c48181173f9a9e89378c10efb36c Mon Sep 17 00:00:00 2001
+From: Albert Dahan <albert@dahan.nl>
+Date: Mon, 26 Sep 2016 17:07:23 +0200
+Subject: [PATCH 30/97] [Gstreamer] Use define for video recorder
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp | 35 ++++++++++++++++++---------
+ partner/dpi/gstreamer/ESPlayerGst.h   |  6 ++++-
+ 2 files changed, 28 insertions(+), 13 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index 3bcf4f47..ab35925c 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -18,14 +18,19 @@
+ #include <nrd/AppThread.h>
+ #include <nrdbase/ScopedMutex.h>
+ #include <nrdbase/NFErr.h>
+-//#include <sys/stat.h>
+-//#include <fcntl.h>
++
++#ifdef NRD_VIDEO_RECORDER
++#include <sys/stat.h>
++#include <fcntl.h>
++#endif
+ 
+ using namespace netflix::device::esplayer;
+ using namespace netflix;
+ 
+ static const uint32_t WAIT_FOR_VIDEO_DATA = 30;
+-//static int fileCount = 1;
++#ifdef NRD_VIDEO_RECORDER
++static int fileCount = 1;
++#endif
+ 
+ // Helper method for the GST framework.
+ /* static */ void ESPlayerGst::gst_bin_need_data (GstAppSrc *src, guint length, gpointer user_data)
+@@ -141,10 +146,12 @@ void ESPlayerGst::TransferBufferToGStreamer () {
+     // so we drop audio samples until video pts offset is set.
+     if (mPtsOffset == -1) {
+       if (mMediaType == VIDEO) {
+-//        gchar* filename = g_strdup_printf("/tmp/netflix-dump-%03d.h264", fileCount++);
+-//        if (mRecorder == -1) mRecorder = open(filename, O_CREAT|O_WRONLY);
+-//        g_free(filename);
+-//        if (mRecorder != -1) ::ftruncate(mRecorder, 0);
++#ifdef NRD_VIDEO_RECORDER
++        gchar* filename = g_strdup_printf("/tmp/netflix-dump-%03d.h264", fileCount++);
++        if (mRecorder == -1) mRecorder = open(filename, O_CREAT|O_WRONLY);
++        g_free(filename);
++        if (mRecorder != -1) ::ftruncate(mRecorder, 0);
++#endif
+         mPlaybackGroup->firstVideo(pSampleAttr->getPTS(), pSampleAttr->getDTS());
+       }
+       else {
+@@ -176,7 +183,7 @@ void ESPlayerGst::TransferBufferToGStreamer () {
+       GstSample* sample = gst_sample_new(gstBuffer, mAppsrcCaps, NULL, NULL);
+  
+       GstFlowReturn ret = gst_app_src_push_sample(GST_APP_SRC(mSrc), sample);
+-/*
++#ifdef NRD_VIDEO_RECORDER
+       if (mMediaType == VIDEO && mRecorder != -1) {
+         gpointer data = NULL;
+         gsize n = 0;
+@@ -184,7 +191,7 @@ void ESPlayerGst::TransferBufferToGStreamer () {
+         gst_buffer_extract_dup (gstBuffer, 0, l, &data, &n);
+         ::write(mRecorder, data, l);
+       }
+-*/
++#endif
+       gst_buffer_unref(gstBuffer);
+       gst_sample_unref(sample);
+ 
+@@ -200,7 +207,9 @@ void ESPlayerGst::TransferBufferToGStreamer () {
+ ESPlayerGst::~ESPlayerGst()
+ {
+   setCloseThreadsFlag();
+-//  if (mRecorder != -1) ::close(mRecorder);
++#ifdef NRD_VIDEO_RECORDER
++  if (mRecorder != -1) ::close(mRecorder);
++#endif
+   if (mAppsrcCaps) {
+     gst_caps_unref(mAppsrcCaps);
+   }
+@@ -213,8 +222,10 @@ ESPlayerGst::ESPlayerGst() : mGstSource(NULL),
+                              mPtsOffset(-1),
+                              mDtsOffset(-1),
+                              mInputExhausted(false),
+-                             mReadyToPlay(false)/*,
+-                             mRecorder(-1)*/
++                             mReadyToPlay(false)
++#ifdef NRD_VIDEO_RECORDER
++                             , mRecorder(-1)
++#endif
+ {
+ }
+ 
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.h b/partner/dpi/gstreamer/ESPlayerGst.h
+index 9daccf68..1dd7e43b 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.h
++++ b/partner/dpi/gstreamer/ESPlayerGst.h
+@@ -36,6 +36,8 @@
+ #include <gst/gst.h>
+ #include <gst/app/gstappsrc.h>
+ 
++//#define NRD_VIDEO_RECORDER 1
++
+ namespace netflix {
+ namespace device {
+ namespace esplayer {
+@@ -120,7 +122,9 @@ private:
+     GstElement *mSrc;
+     GstCaps    *mAppsrcCaps;
+ 
+-//    int mRecorder;
++#ifdef NRD_VIDEO_RECORDER
++    int mRecorder;
++#endif
+ };
+ 
+ } // esplayer
+-- 
+2.17.1
+

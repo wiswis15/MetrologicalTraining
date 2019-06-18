@@ -1,0 +1,61 @@
+From 26170bf511615c8c1f5d8a7f9000a6e03d029aa3 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Mon, 21 Aug 2017 13:55:47 +0200
+Subject: [PATCH 73/97] [graphics] make Neflix build for mesa3d
+
+---
+ partner/graphics/gles2/OpenGLContextEGL.cpp  | 9 +++++++++
+ partner/graphics/gles2/gibbon_graphics.cmake | 3 +++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/partner/graphics/gles2/OpenGLContextEGL.cpp b/partner/graphics/gles2/OpenGLContextEGL.cpp
+index d4543cb2..696ab5b1 100644
+--- a/partner/graphics/gles2/OpenGLContextEGL.cpp
++++ b/partner/graphics/gles2/OpenGLContextEGL.cpp
+@@ -176,6 +176,9 @@ void OpenGLContext::cleanup()
+ {
+     eglMakeCurrent(mPrivate->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+     if(mPrivate->videoImage) {
++#ifdef USEEGLGETPROCADDRESS  		
++		PFNEGLDESTROYIMAGEKHRPROC eglDestroyImageKHR( (PFNEGLDESTROYIMAGEKHRPROC) eglGetProcAddress("eglDestroyImageKHR") );
++#endif		
+         eglDestroyImageKHR(mPrivate->display, mPrivate->videoImage);
+         glDeleteTextures(1 , &mPrivate->videoTexture );
+         mPrivate->videoImage = 0;
+@@ -204,6 +207,9 @@ void *OpenGLContext::createEGLVideoImage(unsigned width, unsigned height)
+     GL_CHECK;
+     OpenGLContext::ensureContext();
+     if(mPrivate->videoImage) {
++#ifdef USEEGLGETPROCADDRESS  		
++		PFNEGLDESTROYIMAGEKHRPROC eglDestroyImageKHR( (PFNEGLDESTROYIMAGEKHRPROC) eglGetProcAddress("eglDestroyImageKHR") );
++#endif
+         eglDestroyImageKHR(mPrivate->display, mPrivate->videoImage);
+         glDeleteTextures(1, &mPrivate->videoTexture);
+     }
+@@ -215,6 +221,9 @@ void *OpenGLContext::createEGLVideoImage(unsigned width, unsigned height)
+     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+     GL_CHECK;
++#ifdef USEEGLGETPROCADDRESS    
++    PFNEGLCREATEIMAGEKHRPROC eglCreateImageKHR( (PFNEGLCREATEIMAGEKHRPROC) eglGetProcAddress("eglCreateImageKHR") );
++#endif
+     mPrivate->videoImage = eglCreateImageKHR(mPrivate->display, mPrivate->context, EGL_GL_TEXTURE_2D_KHR, (EGLClientBuffer)mPrivate->videoTexture, 0);
+     GL_CHECK;
+     glFinish();
+diff --git a/partner/graphics/gles2/gibbon_graphics.cmake b/partner/graphics/gles2/gibbon_graphics.cmake
+index 6a20d603..c3313875 100644
+--- a/partner/graphics/gles2/gibbon_graphics.cmake
++++ b/partner/graphics/gles2/gibbon_graphics.cmake
+@@ -29,6 +29,9 @@ elseif(GIBBON_GRAPHICS STREQUAL "gles2-ios")
+    set(GIBBON_GRAPHICS_GL_WSYS "ios")
+ elseif(GIBBON_GRAPHICS STREQUAL "gles2-osx")
+    set(GIBBON_GRAPHICS_GL_WSYS "osx")
++elseif(GIBBON_GRAPHICS STREQUAL "gles2-mesa")
++   set(GIBBON_GRAPHICS_GL_WSYS "egl")
++   add_definitions(-DUSEEGLGETPROCADDRESS)
+ elseif(GIBBON_GRAPHICS_GL_WSYS STREQUAL "auto")
+    if(IOS)
+       set(GIBBON_GRAPHICS_GL_WSYS "ios")
+-- 
+2.17.1
+

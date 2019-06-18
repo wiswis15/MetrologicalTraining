@@ -1,0 +1,51 @@
+From dcec2be0543bf13bfc97e188762bc158c4209b3c Mon Sep 17 00:00:00 2001
+From: Pierre Wielders <pierre@wielders.net>
+Date: Thu, 8 Jun 2017 22:48:36 +0200
+Subject: [PATCH 58/97] [CMAKE] Interesting product CMAKE....
+
+---
+ partner/dpi/reference/drm.cmake | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/partner/dpi/reference/drm.cmake b/partner/dpi/reference/drm.cmake
+index d46613ba..315d601c 100644
+--- a/partner/dpi/reference/drm.cmake
++++ b/partner/dpi/reference/drm.cmake
+@@ -11,15 +11,16 @@ include("CheckIncludeFile")
+ find_package(PkgConfig)
+ pkg_check_modules(PC_PROVISION QUIET provisionproxy)
+ 
+-find_path(LIBPROVISION_INCLUDE_DIR Provision.h
+-           PATHS usr/include
+-           PATH_SUFFIXES provision)
+-
+-find_library(LIBPROVISION_LIBRARY NAMES provisionproxy
+-             HINTS ${PC_PROVISION_LIBDIR} ${PC_PROVISION_LIBRARY_DIRS})
++if (PC_PROVISION_FOUND)
++    set(PROVISION_NAMES ${PC_EGL_LIBRARIES})
++    foreach (_library ${PROVISION_NAMES})
++        find_library(PROVISION_LIBRARIES_${_library} ${_library}
++            HINTS ${PC_PROVISION_LIBDIR} ${PC_PROVISION_LIBRARY_DIRS}
++        )
++        set(PROVISION_LIBRARIES ${PROVISION_LIBRARIES} ${PROVISION_LIBRARIES_${_library}})
++    endforeach ()
++endif ()
+ 
+-set(LIBPROVISION_LIBRARIES ${LIBPROVISION_LIBRARY})
+-set(LIBPROVISION_INCLUDE_DIRS ${LIBPROVISION_INCLUDE_DIR})
+ 
+ if(GIBBON_MODE STREQUAL "shared")
+     add_definitions( -DNETFLIX_AS_LIBRARY)
+@@ -212,8 +213,7 @@ elseif(DPI_REFERENCE_DRM STREQUAL "playready")
+ 
+ if(NETFLIX_USE_PROVISION)
+     add_definitions( -DUSE_PROVISIONING )
+-    include_directories(${LIBPROVISION_INCLUDE_DIRS})
+-    target_link_libraries(nrddpi playready ${LIBPROVISION_LIBRARIES} )
++    target_link_libraries(nrddpi playready ${PROVISION_LIBRARIES} )
+ else()
+     target_link_libraries(nrddpi playready)
+ endif(NETFLIX_USE_PROVISION)
+-- 
+2.17.1
+

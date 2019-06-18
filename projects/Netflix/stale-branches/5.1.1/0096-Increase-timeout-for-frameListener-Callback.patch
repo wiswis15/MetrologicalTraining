@@ -1,0 +1,25 @@
+From 9a3fd8196fa91ab362032e2c65e0dfc868ee41bb Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Thu, 8 Feb 2018 16:46:52 +0100
+Subject: [PATCH 96/97] Increase timeout for frameListener Callback
+
+---
+ partner/graphics/wpeframework/OpenGLContextEGL.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/partner/graphics/wpeframework/OpenGLContextEGL.cpp b/partner/graphics/wpeframework/OpenGLContextEGL.cpp
+index 91a8b122..05d54a73 100644
+--- a/partner/graphics/wpeframework/OpenGLContextEGL.cpp
++++ b/partner/graphics/wpeframework/OpenGLContextEGL.cpp
+@@ -97,7 +97,7 @@ void OpenGLContext::flip()
+     mPrivate->client.Callback(&frameListener, mPrivate);
+ 
+     // wait for eglSwapBuffer to be completed or time out.
+-    if (mPrivate->redraw.wait(&mPrivate->mutex, Time(500)) != NFErr_OK) {
++    if (mPrivate->redraw.wait(&mPrivate->mutex, Time(5000)) != NFErr_OK) {
+         printf("[%s:%d] OOOPS, redraw timed out!\n", __FILE__, __LINE__);
+     }
+ 
+-- 
+2.17.1
+

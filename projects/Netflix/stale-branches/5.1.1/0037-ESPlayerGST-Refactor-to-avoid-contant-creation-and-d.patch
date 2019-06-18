@@ -1,0 +1,105 @@
+From a0b8cd13ad70bf670febf7f0a52686acb4ec636e Mon Sep 17 00:00:00 2001
+From: Pierre Wielders <pierre@wielders.net>
+Date: Fri, 30 Sep 2016 13:43:34 +0200
+Subject: [PATCH 37/97] [ESPlayerGST] Refactor, to avoid contant creation and
+ deletion of GSources during playback.
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp         |  2 +-
+ partner/dpi/gstreamer/ESPlayerGst.h           |  4 +---
+ partner/dpi/gstreamer/PlaybackGroupNative.cpp | 10 +++++-----
+ 3 files changed, 7 insertions(+), 9 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index 00a6ed16..b425d59e 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -376,7 +376,7 @@ void ESPlayerGst::flush()
+   if (!ret)
+     Log::error(TRACE_MEDIACONTROL,"failed to send flush-stop event");
+ 
+-  Signal(DATA_SIFFICIENT);
++  Signal(DATA_SUFFICIENT);
+   printf ("Detaching %d sink due to flush.\n", mMediaType);
+   mEndOfStreamFlag = false;
+   resetPtsOffset();
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.h b/partner/dpi/gstreamer/ESPlayerGst.h
+index 5af2d684..860a6abe 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.h
++++ b/partner/dpi/gstreamer/ESPlayerGst.h
+@@ -44,14 +44,13 @@ namespace esplayer {
+ 
+ class ESPlayerGst :  public ESPlayerNative
+ {
+-private:
++public:
+     enum signals {
+         DATA_REQUIRED   = 0x01,
+         DATA_SUFFICIENT = 0x02,
+         DESTRUCTION     = 0x04
+     };
+ 
+-public:
+ 
+     virtual ~ESPlayerGst();
+ 
+@@ -97,7 +96,6 @@ public:
+     inline void setOffset(llong pts, llong dts) { 
+       mPtsOffset = pts;
+       mDtsOffset = dts;
+-      Signal (DATA_REQUIRED);
+     }
+ 
+     // Signal sending
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.cpp b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+index 36d3c41e..9608b013 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.cpp
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+@@ -160,7 +160,7 @@ PlaybackGroupNative::~PlaybackGroupNative()
+     // stop buffer push
+     for(it = mStreamPlayers.begin(); it != mStreamPlayers.end(); it++)
+     {
+-        (*it)->detach();
++        (*it)->Signal(ESPlayerGst::DATA_SUFFICIENT);
+     }
+ 
+     Log::info(TRACE_MEDIACONTROL, "Pipeline disposing");
+@@ -331,7 +331,7 @@ void PlaybackGroupNative::destroyStreamPlayer(IElementaryStreamPlayer* iesPlayer
+     if(mStreamPlayers.find(streamPlayer) != mStreamPlayers.end())
+     {
+         // stop buffer push
+-        streamPlayer->detach();
++        streamPlayer->Signal(ESPlayerGst::DATA_SUFFICIENT);
+     } else
+       Log::warn(TRACE_MEDIACONTROL, "player not found");
+ }
+@@ -369,7 +369,7 @@ bool PlaybackGroupNative::setPlaybackState(PlaybackState state)
+           gst_netflix_src_register_player(mSource, (void*) (*it));
+           if ((*it)->getMediaType() == VIDEO) {
+             printf("Moving to play, attaching video sink.\n");
+-            (*it)->attach();  
++            (*it)->Signal(ESPlayerGst::DATA_REQUIRED);  
+           }
+         }
+ 
+@@ -440,7 +440,7 @@ void PlaybackGroupNative::flush()
+     {
+         if ((*it)->getMediaType() == VIDEO) {
+           printf ("Attaching Video Sink again...\n");
+-          (*it)->attach();
++          (*it)->Signal(ESPlayerGst::DATA_REQUIRED);
+         }
+     }
+ }
+@@ -451,7 +451,7 @@ void PlaybackGroupNative::firstVideo(llong pts, llong dts)
+       (*it)->setOffset(pts, dts);
+       if ((*it)->getMediaType() == AUDIO) {
+           printf ("Attaching Audio Sink again...\n");
+-          (*it)->attach();  
++          (*it)->Signal(ESPlayerGst::DATA_REQUIRED);
+       }
+   }
+ }
+-- 
+2.17.1
+

@@ -1,0 +1,101 @@
+From b6a4f8b6e79d0457d04eb81465382ddd66c152cd Mon Sep 17 00:00:00 2001
+From: Albert Dahan <albert@dahan.nl>
+Date: Sat, 20 Aug 2016 15:49:15 +0200
+Subject: [PATCH 02/97] [Netflix] Adding DTS support
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp         | 8 +++++---
+ partner/dpi/gstreamer/ESPlayerGst.h           | 4 ++++
+ partner/dpi/gstreamer/PlaybackGroupNative.cpp | 5 +++--
+ partner/dpi/gstreamer/PlaybackGroupNative.h   | 2 +-
+ 4 files changed, 13 insertions(+), 6 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index 09401729..f190525f 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -124,7 +124,7 @@ void ESPlayerGst::TransferBufferToGStreamer () {
+     // so we drop audio samples until video pts offset is set.
+     if (mPtsOffset == -1) {
+       if (mMediaType == VIDEO) {
+-        mPlaybackGroup->firstVideoPts(pSampleAttr->getPTS());
++        mPlaybackGroup->firstVideoPts(pSampleAttr->getPTS(), pSampleAttr->getDTS());
+       }
+       else {
+         printf("We should not be able to start AUDIO extraction before the PTS is set !!!!\n");
+@@ -148,8 +148,9 @@ void ESPlayerGst::TransferBufferToGStreamer () {
+ 
+       // Log::error(TRACE_MEDIAPLAYBACK, "pts %lld\n", pts);
+       GST_BUFFER_PTS(gstBuffer) = (pSampleAttr->getPTS() - mPtsOffset) * 1000 * 1000;
+-      // GST_BUFFER_DTS(gstBuffer) = (pSampleAttr->getDTS() - mPtsOffset) * 1000 * 1000;
+-
++#if !defined(HORIZON_FUSION)
++      GST_BUFFER_DTS(gstBuffer) = (pSampleAttr->getDTS() - mDtsOffset) * 1000 * 1000;
++#endif
+       GstSample* sample = gst_sample_new(gstBuffer, mAppsrcCaps, NULL, NULL);
+  
+       GstFlowReturn ret = gst_app_src_push_sample(GST_APP_SRC(mSrc), sample);
+@@ -180,6 +181,7 @@ ESPlayerGst::ESPlayerGst() : mGstSource(NULL),
+                              mGstSourceID(0),
+                              mSrc(NULL),
+                              mPtsOffset(-1),
++                             mDtsOffset(0),
+                              mReadyToPlay(false)
+ {
+ }
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.h b/partner/dpi/gstreamer/ESPlayerGst.h
+index ae25f095..c1138b10 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.h
++++ b/partner/dpi/gstreamer/ESPlayerGst.h
+@@ -74,6 +74,9 @@ public:
+     inline void setPTSOffset(uint64_t pts) { 
+       mPtsOffset = pts;
+     }
++    inline void setDTSOffset(uint64_t dts) { 
++      mDtsOffset = dts;
++    }
+ 
+     // Methods to Attach the process of reading data and detaching it.
+     void attach();
+@@ -106,6 +109,7 @@ private:
+     guint    mGstSourceID;
+ 
+     llong mPtsOffset;
++    llong mDtsOffset;
+ 
+     bool mReadyToPlay;
+ 
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.cpp b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+index 520e2127..dea0a556 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.cpp
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+@@ -419,10 +419,11 @@ void PlaybackGroupNative::flush()
+     }
+ }
+ 
+-void PlaybackGroupNative::firstVideoPts(uint64_t pts)
++void PlaybackGroupNative::firstVideoPts(uint64_t pts, uint64_t dts)
+ {
+   for(set<ESPlayerGst*>::iterator it = mStreamPlayers.begin(); it != mStreamPlayers.end(); it++) {
+-      (*it)->setPTSOffset(pts);  
++      (*it)->setPTSOffset(pts);
++      (*it)->setDTSOffset(dts);
+       if ((*it)->getMediaType() == AUDIO) {
+           printf ("Attaching Audio Sink again...\n");
+           (*it)->attach();  
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.h b/partner/dpi/gstreamer/PlaybackGroupNative.h
+index 709b1a9a..6c3845b2 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.h
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.h
+@@ -90,7 +90,7 @@ public:
+     virtual void bringVideoToFront();
+     virtual void sendVideoToBack();
+ 
+-    void firstVideoPts(uint64_t pts);
++    void firstVideoPts(uint64_t pts, uint64_t dts);
+     void updateVideoRectangle();
+ 
+     ESManagerNative* getESManager();
+-- 
+2.17.1
+

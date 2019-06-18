@@ -1,0 +1,48 @@
+From 87c68233bc846a79efad0945641e72d99e0146db Mon Sep 17 00:00:00 2001
+From: Albert Dahan <albert@dahan.nl>
+Date: Tue, 6 Sep 2016 12:59:35 +0200
+Subject: [PATCH 11/97] [Netflix] Reset input exhausted on flush
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index 51902872..19c39c29 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -73,6 +73,7 @@ void ESPlayerGst::ProcessFrame() {
+     case NO_AVAILABLE_SAMPLES: {  // should report underflow and detach from main loop
+            Log::error(TRACE_MEDIAPLAYBACK, "Input exhausted");
+            mInputExhausted = true;
++           printf("ProcessFrame::NO_AVAILABLE_SAMPLES\n");
+            startWait(WAIT_FOR_VIDEO_DATA);
+            break;
+          }
+@@ -251,12 +252,12 @@ bool ESPlayerGst::readyForPlaybackStart()
+   ScopedMutex cs(mDecoderTaskMutex);
+   // Make sure to return ready if we have already sent the last
+   // access unit.
+-  if(mEndOfStreamFlag == true) {
++  if (mEndOfStreamFlag == true) {
+       return true;
+   }
+ 
+-  //printf("bool ESPlayerGst::readyForPlaybackStart() mInputExhausted: %s mReadyToPlay: %s \n", mInputExhausted ? "TRUE" : "FALSE", mReadyToPlay ? "TRUE" : "FALSE");
+-  return mReadyToPlay;
++  printf("bool ESPlayerGst::readyForPlaybackStart() mInputExhausted: %s mReadyToPlay: %s \n", mInputExhausted ? "TRUE" : "FALSE", mReadyToPlay ? "TRUE" : "FALSE");
++  return !mInputExhausted && mReadyToPlay;
+ }
+ 
+ void ESPlayerGst::flush()
+@@ -344,6 +345,7 @@ void ESPlayerGst::updatePts(int64_t currentPts)
+ void ESPlayerGst::resetPtsOffset()
+ {
+   ScopedMutex cs(mDecoderTaskMutex);
++  mInputExhausted = false;
+   mPtsOffset = -1;
+   mDtsOffset = -1;
+   NTRACE(TRACE_MEDIAPLAYBACK, "ESPlayerGst::resetPtsOffset() called");
+-- 
+2.17.1
+

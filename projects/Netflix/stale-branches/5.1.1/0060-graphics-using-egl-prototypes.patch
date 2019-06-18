@@ -1,0 +1,75 @@
+From 8fa2fa006abe45e0dea475e1c8270fbbf7568b2e Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Mon, 26 Jun 2017 22:07:42 +0200
+Subject: [PATCH 60/97] [graphics] using egl prototypes
+
+---
+ partner/graphics/wayland-egl/OpenGLContextEGL.cpp | 11 ++++++-----
+ partner/graphics/wayland-egl/OpenGLContextEGL.h   |  3 +++
+ 2 files changed, 9 insertions(+), 5 deletions(-)
+
+diff --git a/partner/graphics/wayland-egl/OpenGLContextEGL.cpp b/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
+index f21457cd..d84d5657 100644
+--- a/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
++++ b/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
+@@ -7,8 +7,6 @@
+  * prohibited.
+  */
+ 
+-#define WL_EGL_PLATFORM 1
+-
+ #include "OpenGLContext.h"
+ #include "OpenGLState.h"
+ #include "OpenGLContextEGL.h"
+@@ -164,6 +162,8 @@ bool OpenGLContext::init(OpenGLContext* share)
+         EGLint majorVersion;
+         EGLint minorVersion;
+ 
++        mPrivate->display = eglGetDisplay(mPrivate->wayland.display);
++/*
+         if (PFNEGLGETPLATFORMDISPLAYEXTPROC getPlatformDisplay =
+             reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(eglGetProcAddress("eglGetPlatformDisplay"))){
+                 mPrivate->display = getPlatformDisplay(EGL_PLATFORM_WAYLAND_KHR, mPrivate->wayland.display, NULL);
+@@ -173,6 +173,7 @@ bool OpenGLContext::init(OpenGLContext* share)
+                 mPrivate->display = getPlatformDisplay(EGL_PLATFORM_WAYLAND_KHR, mPrivate->wayland.display, NULL);
+                 Log::info(TRACE_GIBBON_GRAPHICS) << "EGL EXTENSIONS PFNEGLGETPLATFORMDISPLAYEXTPROC";
+         }
++*/
+ 
+         assert(mPrivate->display != EGL_NO_DISPLAY);
+ 
+@@ -251,14 +252,14 @@ bool OpenGLContext::init(OpenGLContext* share)
+         EGLint height(0);
+         EGLint width(0);
+ 
+-       // mPrivate->surface = eglCreateWindowSurface(mPrivate->display, mPrivate->config, mPrivate->wayland.eglWindow, NULL);
+-
++        mPrivate->surface = eglCreateWindowSurface(mPrivate->display, mPrivate->config, mPrivate->wayland.eglWindow, NULL);
++/*
+         if (PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC createPlatformWindowSurface =
+             reinterpret_cast<PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC>(eglGetProcAddress("eglCreatePlatformWindowSurfaceEXT"))){
+             mPrivate->surface = createPlatformWindowSurface(mPrivate->display, mPrivate->config, mPrivate->wayland.eglWindow, NULL);
+             Log::info(TRACE_GIBBON_GRAPHICS) << "EGL EXTENSIONS PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC";
+         }
+-
++*/
+         assert(EGL_NO_SURFACE != mPrivate->surface);
+ 
+         eglQuerySurface(mPrivate->display, mPrivate->surface, EGL_WIDTH, &width);
+diff --git a/partner/graphics/wayland-egl/OpenGLContextEGL.h b/partner/graphics/wayland-egl/OpenGLContextEGL.h
+index 0f5e2bd8..6b9bbd2e 100644
+--- a/partner/graphics/wayland-egl/OpenGLContextEGL.h
++++ b/partner/graphics/wayland-egl/OpenGLContextEGL.h
+@@ -10,6 +10,9 @@
+ #ifndef OPENGLCONTEXTEGL_H
+ #define OPENGLCONTEXTEGL_H
+ 
++#define EGL_EGLEXT_PROTOTYPES 1
++#define WL_EGL_PLATFORM 1
++
+ #include <GLES2/gl2.h>
+ #include <EGL/egl.h>
+ #include <EGL/eglext.h>
+-- 
+2.17.1
+

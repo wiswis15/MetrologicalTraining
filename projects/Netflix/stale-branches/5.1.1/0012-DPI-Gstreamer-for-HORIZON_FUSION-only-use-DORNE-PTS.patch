@@ -1,0 +1,39 @@
+From 04c283cf17ba1176ca51e0e6495eb79774ae91a4 Mon Sep 17 00:00:00 2001
+From: Wouter Meek <woutermeek@gmail.com>
+Date: Fri, 16 Sep 2016 04:31:30 -0700
+Subject: [PATCH 12/97] [DPI/Gstreamer] for HORIZON_FUSION only use DORNE PTS
+
+---
+ partner/dpi/gstreamer/PlaybackGroupNative.cpp | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.cpp b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+index 875b27a1..694a350e 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.cpp
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+@@ -493,13 +493,11 @@ GstClockTime PlaybackGroupNative::currentPosition()
+   if (currentPts != GST_CLOCK_TIME_NONE)
+     return currentPts;
+ 
+-#if defined(BCM_NEXUS) || defined(HORIZON_FUSION)
++#if defined(BCM_NEXUS)
+   GstElement* videoDec = findElement(mGstPipeline, DECODER_NAME);
+   if (videoDec) {
+     g_object_get(videoDec, "video_pts", &currentPts, NULL);
+-#if defined(BCM_NEXUS)
+     currentPts = (currentPts * GST_MSECOND) / 45;
+-#endif
+   }
+ #endif
+ 
+@@ -697,7 +695,6 @@ gboolean PlaybackGroupNative::handleGstMessage(GstMessage* message)
+       break;
+     case GST_MESSAGE_EOS: {
+       set<ESPlayerGst*>::iterator it;
+-
+       Log::info(TRACE_MEDIAPLAYBACK, "EOS message received");
+       for(it = mStreamPlayers.begin(); it != mStreamPlayers.end(); it++) {
+         (*it)->getCallback()->playbackCompleted();
+-- 
+2.17.1
+

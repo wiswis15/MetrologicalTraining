@@ -1,0 +1,32 @@
+From ee79ca69a2ebcaee42bb7f170e7fe8b91cae4698 Mon Sep 17 00:00:00 2001
+From: Pierre Wielders <pierre@wielders.net>
+Date: Fri, 21 Jul 2017 09:14:20 +0200
+Subject: [PATCH 66/97] [PROVISION] Make it backwards compatible. CFlags is not
+ set on legacy builds, if so, CMake crashes. Fixed.
+
+---
+ partner/dpi/reference/drm.cmake | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/partner/dpi/reference/drm.cmake b/partner/dpi/reference/drm.cmake
+index 20f9fb83..b812e6c7 100644
+--- a/partner/dpi/reference/drm.cmake
++++ b/partner/dpi/reference/drm.cmake
+@@ -222,10 +222,12 @@ if(NETFLIX_USE_PROVISION)
+             )
+             set(PROVISION_LIBRARIES ${PROVISION_LIBRARIES} ${PROVISION_LIBRARIES_${_library}})
+         endforeach ()
+-        message("Additional libraries: ${PROVISION_LIBRARIES}")
+         list_to_string(PC_PROVISION_CFLAGS_OTHER LIBPROVISION_CFLAGS_AS_STRING)
+         target_link_libraries(nrddpi playready ${PROVISION_LIBRARIES} )
+-        set_target_properties(nrddpi PROPERTIES LINK_FLAGS ${LIBPROVISION_CFLAGS_AS_STRING})
++        if (LIBPROVISION_CFLAGS_AS_STRING)
++            message("Additional flags: ${LIBPROVISION_CFLAGS_AS_STRING}")
++            set_target_properties(nrddpi PROPERTIES LINK_FLAGS ${LIBPROVISION_CFLAGS_AS_STRING})
++        endif ()
+     endif ()
+ else()
+     target_link_libraries(nrddpi playready)
+-- 
+2.17.1
+

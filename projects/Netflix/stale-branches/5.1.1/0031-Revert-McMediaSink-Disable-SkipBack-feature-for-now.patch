@@ -1,0 +1,25 @@
+From c8f74271da44a4c8900b3fc2a4f596751b916647 Mon Sep 17 00:00:00 2001
+From: Albert Dahan <albert@dahan.nl>
+Date: Wed, 28 Sep 2016 08:46:06 +0200
+Subject: [PATCH 31/97] Revert "[McMediaSink] Disable SkipBack feature for now"
+
+This reverts commit df53ee74689ff378f090f3efb9d11dc99df0c6f5.
+---
+ netflix/src/nrd/MediaControl/McMediaSink.cpp | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/netflix/src/nrd/MediaControl/McMediaSink.cpp b/netflix/src/nrd/MediaControl/McMediaSink.cpp
+index 0eacda26..a65d45fc 100644
+--- a/netflix/src/nrd/MediaControl/McMediaSink.cpp
++++ b/netflix/src/nrd/MediaControl/McMediaSink.cpp
+@@ -712,7 +712,6 @@ void AdaptiveStreamingPlayer::McMediaSink::getBufferRange(
+ 
+ bool AdaptiveStreamingPlayer::McMediaSink::enableSkipBack()
+ {
+-    return false; // TODO: Remove for now
+     uint32_t minVideoBufferRequiredForSkipBack;
+     if ( mIsStereoVideo )
+     {
+-- 
+2.17.1
+

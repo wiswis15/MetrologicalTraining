@@ -1,0 +1,43 @@
+From c466de637fd0201dc1239d6fa83d69990e6218b6 Mon Sep 17 00:00:00 2001
+From: Albert Dahan <albert@dahan.nl>
+Date: Tue, 20 Sep 2016 19:52:17 +0200
+Subject: [PATCH 24/97] [Netflix] Cleaning up keys
+
+---
+ partner/input/devinput/InputManagerDevInput.cpp | 13 +------------
+ 1 file changed, 1 insertion(+), 12 deletions(-)
+
+diff --git a/partner/input/devinput/InputManagerDevInput.cpp b/partner/input/devinput/InputManagerDevInput.cpp
+index bfd70dab..2ef0cc1c 100644
+--- a/partner/input/devinput/InputManagerDevInput.cpp
++++ b/partner/input/devinput/InputManagerDevInput.cpp
+@@ -39,7 +39,7 @@ static inline KeyEvent::Key keyCodeToKey(uint16_t c)
+     case KEY_F2: code = KeyEvent::GIBBON_KEY_F2; break;
+     case KEY_F3: code = KeyEvent::GIBBON_KEY_F3; break;
+     case KEY_F4: code = KeyEvent::GIBBON_KEY_F4; break;
+-    case KEY_F5: code = KeyEvent::GIBBON_KEY_F5; break;
++    case KEY_F5: code = KeyEvent::GIBBON_KEY_DELETE; break;
+     case KEY_F6: code = KeyEvent::GIBBON_KEY_F6; break;
+     case KEY_F7: code = KeyEvent::GIBBON_KEY_F7; break;
+     case KEY_F8: code = KeyEvent::GIBBON_KEY_F8; break;
+@@ -79,17 +79,6 @@ static inline KeyEvent::Key keyCodeToKey(uint16_t c)
+     case KEY_TAB: code = KeyEvent::GIBBON_KEY_TAB; break;
+     case KEY_INSERT: code = KeyEvent::GIBBON_KEY_INSERT; break;
+     case KEY_DELETE: code = KeyEvent::GIBBON_KEY_DELETE; break;
+-    case KEY_PRINT: code = KeyEvent::GIBBON_KEY_PRINT; break;
+-    case KEY_PAUSE: code = KeyEvent::GIBBON_KEY_PAUSE; break;
+-    case KEY_REWIND: code = KeyEvent::GIBBON_KEY_F7; break;
+-    case KEY_PLAYPAUSE: code = KeyEvent::GIBBON_KEY_F8; break;
+-    case KEY_FORWARD: code = KeyEvent::GIBBON_KEY_F9; break;
+-    case KEY_STOPCD: code = KeyEvent::GIBBON_KEY_F10; break;
+-    case KEY_INFO: code = KeyEvent::GIBBON_KEY_DELETE; break;
+-    case KEY_RED: code = KeyEvent::GIBBON_KEY_OEM_4; break;
+-    case KEY_GREEN: code = KeyEvent::GIBBON_KEY_OEM_5; break;
+-    case KEY_YELLOW: code = KeyEvent::GIBBON_KEY_OEM_6; break;
+-    case KEY_BLUE: code = KeyEvent::GIBBON_KEY_OEM_7; break;
+     default:
+         break;
+     }
+-- 
+2.17.1
+

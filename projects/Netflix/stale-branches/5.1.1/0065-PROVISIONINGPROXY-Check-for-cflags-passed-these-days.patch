@@ -1,0 +1,73 @@
+From 17c010ace6b24731ebfa5f9d0c14b8c7414504f5 Mon Sep 17 00:00:00 2001
+From: Pierre Wielders <pierre@wielders.net>
+Date: Thu, 20 Jul 2017 23:44:22 +0200
+Subject: [PATCH 65/97] [PROVISIONINGPROXY] Check for cflags passed these days.
+
+---
+ partner/dpi/reference/drm.cmake | 42 +++++++++++++++++++++------------
+ 1 file changed, 27 insertions(+), 15 deletions(-)
+
+diff --git a/partner/dpi/reference/drm.cmake b/partner/dpi/reference/drm.cmake
+index d979a901..20f9fb83 100644
+--- a/partner/dpi/reference/drm.cmake
++++ b/partner/dpi/reference/drm.cmake
+@@ -8,19 +8,18 @@
+ cmake_minimum_required(VERSION 2.8)
+ include("CheckIncludeFile")
+ 
+-find_package(PkgConfig)
+-pkg_check_modules(PC_PROVISION QUIET provisionproxy)
+-
+-if (PC_PROVISION_FOUND)
+-    set(PROVISION_NAMES ${PC_PROVISION_LIBRARIES})
+-    foreach (_library ${PROVISION_NAMES})
+-        find_library(PROVISION_LIBRARIES_${_library} ${_library}
+-            HINTS ${PC_PROVISION_LIBDIR} ${PC_PROVISION_LIBRARY_DIRS}
+-        )
+-        set(PROVISION_LIBRARIES ${PROVISION_LIBRARIES} ${PROVISION_LIBRARIES_${_library}})
+-    endforeach ()
+-endif ()
++# Converts a CMake list to a CMake string. Items in the string are separated by spaces.
++# in  input list variable, referenced by name (so X, not S{X} or "S{X}")
++# out resulting string variable, referenced by name (so X, not S{X} or "S{X}")
++function(list_to_string in out)
++    set(tmp "")
++    foreach(VAL ${${in}})
++        string(APPEND tmp "${VAL} ")
++    endforeach()
++    set(${out} "${tmp}" PARENT_SCOPE)
++endfunction()
+ 
++find_package(PkgConfig)
+ 
+ if(GIBBON_MODE STREQUAL "shared")
+     add_definitions( -DNETFLIX_AS_LIBRARY)
+@@ -212,9 +211,22 @@ elseif(DPI_REFERENCE_DRM STREQUAL "playready")
+     link_directories(${PLAYREADY_LIB})
+ 
+ if(NETFLIX_USE_PROVISION)
+-    add_definitions( -DUSE_PROVISIONING )
+-    message("Additional libraries: ${PROVISION_LIBRARIES}")
+-    target_link_libraries(nrddpi playready ${PROVISION_LIBRARIES} )
++    pkg_check_modules(PC_PROVISION REQUIRED provisionproxy)
++
++    if (PC_PROVISION_FOUND)
++        add_definitions( -DUSE_PROVISIONING )
++        set(PROVISION_NAMES ${PC_PROVISION_LIBRARIES})
++        foreach (_library ${PROVISION_NAMES})
++            find_library(PROVISION_LIBRARIES_${_library} ${_library}
++                HINTS ${PC_PROVISION_LIBDIR} ${PC_PROVISION_LIBRARY_DIRS}
++            )
++            set(PROVISION_LIBRARIES ${PROVISION_LIBRARIES} ${PROVISION_LIBRARIES_${_library}})
++        endforeach ()
++        message("Additional libraries: ${PROVISION_LIBRARIES}")
++        list_to_string(PC_PROVISION_CFLAGS_OTHER LIBPROVISION_CFLAGS_AS_STRING)
++        target_link_libraries(nrddpi playready ${PROVISION_LIBRARIES} )
++        set_target_properties(nrddpi PROPERTIES LINK_FLAGS ${LIBPROVISION_CFLAGS_AS_STRING})
++    endif ()
+ else()
+     target_link_libraries(nrddpi playready)
+ endif(NETFLIX_USE_PROVISION)
+-- 
+2.17.1
+

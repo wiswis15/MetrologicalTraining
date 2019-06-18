@@ -1,0 +1,24 @@
+From d40165adae65521e11d000ee15c304a8a04c3c14 Mon Sep 17 00:00:00 2001
+From: wouterlucas <wouter@wouterlucas.com>
+Date: Thu, 17 Nov 2016 15:59:27 -0800
+Subject: [PATCH 40/97] [intelce/oe] Add missing include for Yocto 2.1
+
+---
+ partner/graphics/intelce/gibbon_graphics.cmake | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/partner/graphics/intelce/gibbon_graphics.cmake b/partner/graphics/intelce/gibbon_graphics.cmake
+index f3b584ce..eaf018fb 100644
+--- a/partner/graphics/intelce/gibbon_graphics.cmake
++++ b/partner/graphics/intelce/gibbon_graphics.cmake
+@@ -35,6 +35,7 @@ if(GIBBON_GRAPHICS_GL_WSYS STREQUAL "egl")
+     
+     include_directories("$ENV{STAGING_DIR}/include")
+     message("    + Adding incl dir: $ENV{STAGING_DIR}/include")
++    include_directories("$ENV{STAGING_DIR}/usr/include/intelce")
+     include_directories("$ENV{STAGING_DIR}/usr/include/interface/vcos/pthreads")
+     include_directories("$ENV{STAGING_DIR}/usr/include/interface/vmcs_host/linux")
+ 
+-- 
+2.17.1
+

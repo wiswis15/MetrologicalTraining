@@ -1,0 +1,26 @@
+From b4ba8c404d3d846ba538a735cc8bf42597cef609 Mon Sep 17 00:00:00 2001
+From: Wouter Meek <woutermeek@gmail.com>
+Date: Wed, 31 Aug 2016 05:12:24 -0700
+Subject: [PATCH 07/97] [DPI/Gstreamer] fix deadlock
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index f9cd9b1f..150eadb7 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -257,9 +257,7 @@ bool ESPlayerGst::readyForPlaybackStart()
+ 
+ void ESPlayerGst::flush()
+ {
+-  ScopedMutex cs(mDecoderTaskMutex);
+   // buffer push shouldn't happen because of the above mutex
+-
+   Log::info(TRACE_MEDIACONTROL, "flushing pipeline...");
+   GstEvent* flush_start = gst_event_new_flush_start();
+   gboolean ret = FALSE;
+-- 
+2.17.1
+

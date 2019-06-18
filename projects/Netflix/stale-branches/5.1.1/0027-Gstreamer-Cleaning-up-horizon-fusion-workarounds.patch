@@ -1,0 +1,48 @@
+From 9e7a47746f5114361cb8ae1dc756a58dba614a5b Mon Sep 17 00:00:00 2001
+From: Albert Dahan <albert@dahan.nl>
+Date: Thu, 22 Sep 2016 22:27:21 +0200
+Subject: [PATCH 27/97] [Gstreamer] Cleaning up horizon fusion workarounds
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp         | 6 ------
+ partner/dpi/gstreamer/PlaybackGroupNative.cpp | 7 -------
+ 2 files changed, 13 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index a3ffe37e..e8ce282c 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -247,12 +247,6 @@ ESPlayerGst::init(const struct StreamPlayerInitData& initData,
+   }
+ 
+   mSrc = gst_element_factory_make("appsrc", NULL);
+-#if defined(HORIZON_FUSION)
+-  if (mMediaType == VIDEO) 
+-    g_object_set(mSrc, "min-percent", (guint) 40, "max-bytes", (guint64) 2 * 1024 * 1024, NULL);
+-  else 
+-    g_object_set(mSrc, "min-percent", (guint) 20, "max-bytes", (guint64) 1 * 64 * 1024, NULL);
+-#endif
+   GstAppSrcCallbacks callbacks = {gst_bin_need_data, gst_bin_enough_data, NULL};
+   gst_app_src_set_callbacks(GST_APP_SRC(mSrc), &callbacks, (gpointer)(this), NULL);
+   return err;
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.cpp b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+index b89a30f0..af0e41fa 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.cpp
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+@@ -739,13 +739,6 @@ gboolean PlaybackGroupNative::handleGstMessage(GstMessage* message)
+       GstState oldstate, newstate, pending;
+       gst_message_parse_state_changed (message, &oldstate, &newstate, &pending);
+ 
+-#ifdef HORIZON_FUSION
+-      if (g_strstr_len(GST_MESSAGE_SRC_NAME(message), 9, "h264parse") != NULL) {
+-        if (oldstate == GST_STATE_NULL && newstate == GST_STATE_READY)
+-          g_object_set(GST_MESSAGE_SRC(message), "config-interval", 1, NULL);
+-      }
+-#endif
+-
+       // Ignore messages not coming directly from the pipeline.
+       if (GST_ELEMENT(GST_MESSAGE_SRC(message)) != mGstPipeline)
+         break;
+-- 
+2.17.1
+

@@ -1,0 +1,108 @@
+From 5bf3af1d1c800acf8a8dbc25bf631e6f298941ce Mon Sep 17 00:00:00 2001
+From: Wouter Meek <woutermeek@gmail.com>
+Date: Tue, 23 Aug 2016 05:45:55 -0700
+Subject: [PATCH 03/97] [DPI/Gstreamer] add dts for fusion/horizon
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp         | 12 +++++++-----
+ partner/dpi/gstreamer/ESPlayerGst.h           |  4 +---
+ partner/dpi/gstreamer/PlaybackGroupNative.cpp |  5 ++---
+ partner/dpi/gstreamer/PlaybackGroupNative.h   |  2 +-
+ 4 files changed, 11 insertions(+), 12 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index f190525f..52f45659 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -124,10 +124,11 @@ void ESPlayerGst::TransferBufferToGStreamer () {
+     // so we drop audio samples until video pts offset is set.
+     if (mPtsOffset == -1) {
+       if (mMediaType == VIDEO) {
+-        mPlaybackGroup->firstVideoPts(pSampleAttr->getPTS(), pSampleAttr->getDTS());
++        mPlaybackGroup->firstVideo(pSampleAttr->getPTS(), pSampleAttr->getDTS());
+       }
+       else {
+         printf("We should not be able to start AUDIO extraction before the PTS is set !!!!\n");
++        pSampleAttr = NULL;
+         detach();
+       }
+     }
+@@ -148,9 +149,9 @@ void ESPlayerGst::TransferBufferToGStreamer () {
+ 
+       // Log::error(TRACE_MEDIAPLAYBACK, "pts %lld\n", pts);
+       GST_BUFFER_PTS(gstBuffer) = (pSampleAttr->getPTS() - mPtsOffset) * 1000 * 1000;
+-#if !defined(HORIZON_FUSION)
+-      GST_BUFFER_DTS(gstBuffer) = (pSampleAttr->getDTS() - mDtsOffset) * 1000 * 1000;
+-#endif
++      if (pSampleAttr->getDTS() > -1 && mDtsOffset > -1)
++        GST_BUFFER_DTS(gstBuffer) = (pSampleAttr->getDTS() - mDtsOffset) * 1000 * 1000;
++
+       GstSample* sample = gst_sample_new(gstBuffer, mAppsrcCaps, NULL, NULL);
+  
+       GstFlowReturn ret = gst_app_src_push_sample(GST_APP_SRC(mSrc), sample);
+@@ -181,7 +182,7 @@ ESPlayerGst::ESPlayerGst() : mGstSource(NULL),
+                              mGstSourceID(0),
+                              mSrc(NULL),
+                              mPtsOffset(-1),
+-                             mDtsOffset(0),
++                             mDtsOffset(-1),
+                              mReadyToPlay(false)
+ {
+ }
+@@ -341,5 +342,6 @@ void ESPlayerGst::resetPtsOffset()
+ {
+   ScopedMutex cs(mDecoderTaskMutex);
+   mPtsOffset = -1;
++  mDtsOffset = -1;
+   NTRACE(TRACE_MEDIAPLAYBACK, "ESPlayerGst::resetPtsOffset() called");
+ }
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.h b/partner/dpi/gstreamer/ESPlayerGst.h
+index c1138b10..ae8135cd 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.h
++++ b/partner/dpi/gstreamer/ESPlayerGst.h
+@@ -71,10 +71,8 @@ public:
+     inline GstElement* srcElement() const {
+       return (mSrc);
+     }
+-    inline void setPTSOffset(uint64_t pts) { 
++    inline void setOffset(llong pts, llong dts) { 
+       mPtsOffset = pts;
+-    }
+-    inline void setDTSOffset(uint64_t dts) { 
+       mDtsOffset = dts;
+     }
+ 
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.cpp b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+index dea0a556..875b27a1 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.cpp
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+@@ -419,11 +419,10 @@ void PlaybackGroupNative::flush()
+     }
+ }
+ 
+-void PlaybackGroupNative::firstVideoPts(uint64_t pts, uint64_t dts)
++void PlaybackGroupNative::firstVideo(llong pts, llong dts)
+ {
+   for(set<ESPlayerGst*>::iterator it = mStreamPlayers.begin(); it != mStreamPlayers.end(); it++) {
+-      (*it)->setPTSOffset(pts);
+-      (*it)->setDTSOffset(dts);
++      (*it)->setOffset(pts, dts);
+       if ((*it)->getMediaType() == AUDIO) {
+           printf ("Attaching Audio Sink again...\n");
+           (*it)->attach();  
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.h b/partner/dpi/gstreamer/PlaybackGroupNative.h
+index 6c3845b2..f0232b63 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.h
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.h
+@@ -90,7 +90,7 @@ public:
+     virtual void bringVideoToFront();
+     virtual void sendVideoToBack();
+ 
+-    void firstVideoPts(uint64_t pts, uint64_t dts);
++    void firstVideo(llong pts, llong dts);
+     void updateVideoRectangle();
+ 
+     ESManagerNative* getESManager();
+-- 
+2.17.1
+

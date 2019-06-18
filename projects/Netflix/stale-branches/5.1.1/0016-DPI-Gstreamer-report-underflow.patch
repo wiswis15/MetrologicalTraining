@@ -1,0 +1,29 @@
+From 5f4e55030e13ffbe097e7b231b21e28b622584f7 Mon Sep 17 00:00:00 2001
+From: Wouter Meek <woutermeek@gmail.com>
+Date: Fri, 16 Sep 2016 07:48:28 -0700
+Subject: [PATCH 16/97] [DPI/Gstreamer] report underflow
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index 1e0ef4bb..c2e23922 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -73,7 +73,11 @@ void ESPlayerGst::ProcessFrame() {
+     case NO_AVAILABLE_SAMPLES: {  // should report underflow and detach from main loop
+            Log::error(TRACE_MEDIAPLAYBACK, "Input exhausted");
+            mInputExhausted = true;
+-           printf("ProcessFrame::NO_AVAILABLE_SAMPLES\n");
++           printf("ProcessFrame::NO_AVAILABLE_SAMPLES type: %s, mReadyToPlay: %s \n", mMediaType == AUDIO ? "AUDIO" : "VIDEO", mReadyToPlay ? "true" : "false");
++
++           if (mMediaType == VIDEO && mPlaybackGroup->getPlaybackState() == 1 && !mReadyToPlay && !getCallback()->reportUnderflowReceived()) {
++            getCallback()->reportUnderflow();
++           }
+            startWait(WAIT_FOR_VIDEO_DATA);
+            break;
+          }
+-- 
+2.17.1
+

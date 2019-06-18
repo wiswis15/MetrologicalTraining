@@ -1,0 +1,52 @@
+From cc6b1af5be9f964462842d21c294ccc2436be070 Mon Sep 17 00:00:00 2001
+From: Albert Dahan <albert@dahan.nl>
+Date: Mon, 5 Sep 2016 21:48:50 +0200
+Subject: [PATCH 09/97] [Gstreamer] Reset stream parameters after a flush
+
+If you hit eos flag and then seek backwards you need to reset eos or
+playback will get stuck.
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp | 9 +++++++++
+ partner/dpi/gstreamer/ESPlayerGst.h   | 2 ++
+ 2 files changed, 11 insertions(+)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index 51902872..5b7d330d 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -259,10 +259,19 @@ bool ESPlayerGst::readyForPlaybackStart()
+   return mReadyToPlay;
+ }
+ 
++void ESPlayerGst::resetStreamParameters()
++{
++  ScopedMutex cs(mDecoderTaskMutex);
++  mEndOfStreamFlag = false;
++  mInputExhausted = false;
++  mReadyToPlay = false;
++}
++
+ void ESPlayerGst::flush()
+ {
+   // buffer push shouldn't happen because of the above mutex
+   Log::info(TRACE_MEDIACONTROL, "flushing pipeline...");
++  resetStreamParameters();
+   GstEvent* flush_start = gst_event_new_flush_start();
+   gboolean ret = FALSE;
+   ret = gst_element_send_event(mSrc, flush_start);
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.h b/partner/dpi/gstreamer/ESPlayerGst.h
+index 82407302..49913982 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.h
++++ b/partner/dpi/gstreamer/ESPlayerGst.h
+@@ -68,6 +68,8 @@ public:
+ 
+     virtual void resetPtsOffset();
+ 
++    virtual void resetStreamParameters();
++
+     inline GstElement* srcElement() const {
+       return (mSrc);
+     }
+-- 
+2.17.1
+

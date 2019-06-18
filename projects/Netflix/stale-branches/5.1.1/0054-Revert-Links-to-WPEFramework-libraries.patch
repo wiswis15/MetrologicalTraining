@@ -1,0 +1,27 @@
+From 622c72a397f3fec52af6dcca8054f7f4b08d5e85 Mon Sep 17 00:00:00 2001
+From: wouterlucas <wouter@wouterlucas.com>
+Date: Mon, 22 May 2017 11:11:18 -0700
+Subject: [PATCH 54/97] Revert "Links to WPEFramework libraries" Please put
+ this on a branch until WPEFramework is available
+
+This reverts commit c6e8bb0d36024c8da535d7d048a8edcc4aca4423.
+---
+ partner/dpi/reference/drm.cmake | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/partner/dpi/reference/drm.cmake b/partner/dpi/reference/drm.cmake
+index 97731b45..2b359317 100644
+--- a/partner/dpi/reference/drm.cmake
++++ b/partner/dpi/reference/drm.cmake
+@@ -195,7 +195,7 @@ elseif(DPI_REFERENCE_DRM STREQUAL "playready")
+ 
+ if(NETFLIX_USE_PROVISION)
+     add_definitions( -DUSE_PROVISIONING )
+-    target_link_libraries(nrddpi playready provisionproxy WPEFrameworkCore)
++    target_link_libraries(nrddpi playready provisionproxy generics)
+ else()
+     target_link_libraries(nrddpi playready)
+ endif(NETFLIX_USE_PROVISION)
+-- 
+2.17.1
+

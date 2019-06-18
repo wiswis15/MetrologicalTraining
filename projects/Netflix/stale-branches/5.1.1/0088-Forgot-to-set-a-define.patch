@@ -1,0 +1,25 @@
+From f132a0b4e5dbaf9784b1bd77a8c0fcb5c1645b40 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Mon, 29 Jan 2018 17:23:56 +0100
+Subject: [PATCH 88/97] Forgot to set a define
+
+---
+ partner/dpi/gstreamer/PlaybackGroupNative.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.h b/partner/dpi/gstreamer/PlaybackGroupNative.h
+index 88e8799c..ed931210 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.h
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.h
+@@ -174,7 +174,7 @@ private:
+     shared_ptr<VideoSinkGStreamer> mVideoSinkGst;
+ #endif
+ 
+-#if defined(WESTEROS_SINK)
++#if defined(WESTEROS_SINK) || defined(SYNAPTICS)
+     GstElement* mSink;
+ #endif
+ };
+-- 
+2.17.1
+

@@ -1,0 +1,73 @@
+From 365e39c70702aaa38990c91505dfca662b6b0fca Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Mon, 21 Aug 2017 13:39:33 +0200
+Subject: [PATCH 72/97] [DPI] align method signatures to match interface
+
+---
+ partner/dpi/reference/DeviceLibNative.h | 14 +++++++-------
+ partner/dpi/reference/FileSystem.h      |  2 +-
+ 2 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/partner/dpi/reference/DeviceLibNative.h b/partner/dpi/reference/DeviceLibNative.h
+index b29a1195..fd1b4076 100644
+--- a/partner/dpi/reference/DeviceLibNative.h
++++ b/partner/dpi/reference/DeviceLibNative.h
+@@ -64,7 +64,7 @@ namespace device {
+ struct referenceDpiConfig {
+ 
+ #if defined(NRDP_HAS_IPV6)
+-    int64_t ipConnectivityMode;
++    llong ipConnectivityMode;
+ #endif
+ 
+     bool mgk; // true if the idFile is for Model Group Key
+@@ -128,13 +128,13 @@ struct referenceDpiConfig {
+ 
+     bool supportDrmStorageDeletion;
+ 
+-    int64_t tcpReceiveBufferSize; // tcp receive buffer in bytes for video/audio
++    llong tcpReceiveBufferSize; // tcp receive buffer in bytes for video/audio
+                                   // downloading sockets. 0 means using default.
+ 
+-    int64_t videoBufferPoolSize;  // The size in bytes of the pool of buffers
++    llong videoBufferPoolSize;  // The size in bytes of the pool of buffers
+                                   // used to receive video stream data.
+ 
+-    int64_t audioBufferPoolSize;  // The size in bytes of the pool of buffers used
++    llong audioBufferPoolSize;  // The size in bytes of the pool of buffers used
+                                   // to receive audio stream data.
+ 
+     bool support2DVideoResize;    // "true" if the device can resize the
+@@ -153,13 +153,13 @@ struct referenceDpiConfig {
+ 
+     bool hevcEnabled;
+ 
+-    int64_t minAudioPtsGap;
++    llong minAudioPtsGap;
+ 
+     // These set the size of the video window in the reference
+     // application. Change the values set in the constructor below to change the
+     // video window size.
+-    int64_t videoRendererScreenWidth;
+-    int64_t videoRendererScreenHeight;
++    llong videoRendererScreenWidth;
++    llong videoRendererScreenHeight;
+ 
+     bool enableSSO;     // "true" if app supports SSO, "false" otherwise
+     bool enableSignup;  // "true" if app supports Signup, "false" otherwise
+diff --git a/partner/dpi/reference/FileSystem.h b/partner/dpi/reference/FileSystem.h
+index 2006622d..966142db 100644
+--- a/partner/dpi/reference/FileSystem.h
++++ b/partner/dpi/reference/FileSystem.h
+@@ -175,7 +175,7 @@ public:
+      *  Get the size of the device persistent cache.For 12.4 PS3 will give the size of their secure store
+      *  size is in bytes
+      */
+-    virtual uint64_t getSecureStoreSize() { return 1024 * 1024; }
++    virtual ullong getSecureStoreSize() { return 1024 * 1024; }
+ 
+ 
+     /*
+-- 
+2.17.1
+

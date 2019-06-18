@@ -1,0 +1,5054 @@
+From 373960c72db9c17629b9c095ac6b89a907d6fdb4 Mon Sep 17 00:00:00 2001
+From: Rene Barto <rene.barto66@gmail.com>
+Date: Fri, 26 Jan 2018 11:35:52 +0100
+Subject: [PATCH 89/97] [Netflix] Implemented synaptics platform and graphics
+ support.
+
+---
+ partner/graphics/synaptics/EffectsGLES2.cpp   | 421 ++++++++++
+ partner/graphics/synaptics/EffectsGLES2.h     | 134 +++
+ .../synaptics/GraphicsEngineGLES2.cpp         | 795 ++++++++++++++++++
+ partner/graphics/synaptics/OpenGLContext.cpp  | 579 +++++++++++++
+ partner/graphics/synaptics/OpenGLContext.h    | 264 ++++++
+ .../graphics/synaptics/OpenGLContextEGL.cpp   | 283 +++++++
+ partner/graphics/synaptics/OpenGLContextEGL.h |  38 +
+ .../graphics/synaptics/OpenGLContextGLX.cpp   | 255 ++++++
+ partner/graphics/synaptics/OpenGLContextGLX.h |  45 +
+ partner/graphics/synaptics/OpenGLContextOSX.h |  28 +
+ .../graphics/synaptics/OpenGLContextOSX.mm    |  86 ++
+ partner/graphics/synaptics/OpenGLExtensions.h |  69 ++
+ partner/graphics/synaptics/OpenGLFBO.cpp      | 134 +++
+ partner/graphics/synaptics/OpenGLFBO.h        |  55 ++
+ partner/graphics/synaptics/OpenGLFloats.h     |  49 ++
+ partner/graphics/synaptics/OpenGLShaders.h    | 256 ++++++
+ partner/graphics/synaptics/OpenGLState.h      | 292 +++++++
+ partner/graphics/synaptics/ScreenGLES2.cpp    | 125 +++
+ partner/graphics/synaptics/SurfaceGLES2.cpp   | 260 ++++++
+ .../graphics/synaptics/gibbon_graphics.cmake  |  37 +
+ partner/graphics/synaptics/graphics.xml       |  24 +
+ partner/graphics/synaptics/test.cpp           | 534 ++++++++++++
+ partner/platform/synaptics/appboot.key        |   1 +
+ partner/platform/synaptics/main_synaptics.cpp |  41 +
+ partner/platform/synaptics/partner_signup.js  |   1 +
+ partner/platform/synaptics/partner_sso.js     |   1 +
+ partner/platform/synaptics/platform.cmake     |  16 +
+ 27 files changed, 4823 insertions(+)
+ create mode 100644 partner/graphics/synaptics/EffectsGLES2.cpp
+ create mode 100644 partner/graphics/synaptics/EffectsGLES2.h
+ create mode 100644 partner/graphics/synaptics/GraphicsEngineGLES2.cpp
+ create mode 100644 partner/graphics/synaptics/OpenGLContext.cpp
+ create mode 100644 partner/graphics/synaptics/OpenGLContext.h
+ create mode 100644 partner/graphics/synaptics/OpenGLContextEGL.cpp
+ create mode 100644 partner/graphics/synaptics/OpenGLContextEGL.h
+ create mode 100644 partner/graphics/synaptics/OpenGLContextGLX.cpp
+ create mode 100644 partner/graphics/synaptics/OpenGLContextGLX.h
+ create mode 100644 partner/graphics/synaptics/OpenGLContextOSX.h
+ create mode 100644 partner/graphics/synaptics/OpenGLContextOSX.mm
+ create mode 100644 partner/graphics/synaptics/OpenGLExtensions.h
+ create mode 100644 partner/graphics/synaptics/OpenGLFBO.cpp
+ create mode 100644 partner/graphics/synaptics/OpenGLFBO.h
+ create mode 100644 partner/graphics/synaptics/OpenGLFloats.h
+ create mode 100644 partner/graphics/synaptics/OpenGLShaders.h
+ create mode 100644 partner/graphics/synaptics/OpenGLState.h
+ create mode 100644 partner/graphics/synaptics/ScreenGLES2.cpp
+ create mode 100644 partner/graphics/synaptics/SurfaceGLES2.cpp
+ create mode 100644 partner/graphics/synaptics/gibbon_graphics.cmake
+ create mode 100644 partner/graphics/synaptics/graphics.xml
+ create mode 100644 partner/graphics/synaptics/test.cpp
+ create mode 120000 partner/platform/synaptics/appboot.key
+ create mode 100644 partner/platform/synaptics/main_synaptics.cpp
+ create mode 120000 partner/platform/synaptics/partner_signup.js
+ create mode 120000 partner/platform/synaptics/partner_sso.js
+ create mode 100644 partner/platform/synaptics/platform.cmake
+
+diff --git a/partner/graphics/synaptics/EffectsGLES2.cpp b/partner/graphics/synaptics/EffectsGLES2.cpp
+new file mode 100644
+index 00000000..3ab15397
+--- /dev/null
++++ b/partner/graphics/synaptics/EffectsGLES2.cpp
+@@ -0,0 +1,421 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#include "EffectsGLES2.h"
++#include "Animation.h"
++#include "Screen.h"
++#include "SurfaceCache.h"
++
++using namespace netflix;
++using namespace netflix::gibbon;
++
++class ProgramDeleteEvent : public Application::Event
++{
++public:
++    ProgramDeleteEvent(GLuint program) : mProgram(program) { }
++
++    void eventFired()
++    {
++        glDeleteProgram(mProgram);
++    }
++private:
++    GLuint mProgram;
++};
++
++static inline void effectDeleteProgram(GLuint program)
++{
++#if !defined(GIBBON_NO_THREADANIMATION)
++    if (!Animation::isAnimationThread()) {
++        shared_ptr<ProgramDeleteEvent> event(new ProgramDeleteEvent(program));
++        Animation::postEvent(event);
++        return;
++    }
++#else
++    if (!Application::isAppThread()) {
++        shared_ptr<ProgramDeleteEvent> event(new ProgramDeleteEvent(program));
++        app()->postEvent(event);
++        return;
++    }
++#endif
++    glDeleteProgram(program);
++}
++
++EffectBlurGLES2::GLES2Renderer::~GLES2Renderer()
++{
++    if (mShader)
++        effectDeleteProgram(mShader->takeProgram());
++}
++
++DisplayList::SharedPtr EffectBlurGLES2::GLES2Renderer::render(const DisplayList::SharedPtr &dl, const Rect &area) const
++{
++    const int radius = mEffect->getRadius();
++    if (!radius)
++        return dl;
++
++    Surface::SharedPtr surface = dl->flatten();
++    OpenGLContext* context = OpenGLContext::context();
++
++    const Rect dstRect = getRect(area);
++
++    OpenGLState* state = context->state();
++
++    if(!mShader) {
++        const GLchar* vertex[] = {
++            "uniform mat4 u_projection;\n"
++            "attribute vec4 a_position;\n"
++            "attribute vec2 a_texCoord;\n"
++            "varying vec2   v_texCoord;\n"
++            "void main()\n"
++            "{\n"
++            "  gl_Position = u_projection * a_position;\n"
++            "  v_texCoord = a_texCoord;\n"
++            "}\n"
++        };
++
++        const GLchar* fragment[] = {
++            "#ifdef GL_ES\n"
++            "precision highp float;\n"
++            "#endif\n"
++            "uniform sampler2D s_texture;\n"
++            "varying vec2 v_texCoord;\n"
++            "uniform vec3 u_offsets;\n"
++            "void main(void)\n"
++            "{\n"
++            "   vec4 sum = vec4(0.0);\n"
++            "   sum += texture2D(s_texture, vec2(v_texCoord.x - u_offsets.x, v_texCoord.y - u_offsets.y));\n"
++            "   sum += texture2D(s_texture, vec2(v_texCoord.x              , v_texCoord.y - u_offsets.y)) * 2.0;\n"
++            "   sum += texture2D(s_texture, vec2(v_texCoord.x + u_offsets.x, v_texCoord.y - u_offsets.y));\n"
++            "   sum += texture2D(s_texture, vec2(v_texCoord.x - u_offsets.x, v_texCoord.y              )) * 2.0;\n"
++            "   sum += texture2D(s_texture, vec2(v_texCoord.x              , v_texCoord.y              ));\n"
++            "   sum += texture2D(s_texture, vec2(v_texCoord.x + u_offsets.x, v_texCoord.y              )) * 2.0;\n"
++            "   sum += texture2D(s_texture, vec2(v_texCoord.x - u_offsets.x, v_texCoord.y + u_offsets.y));\n"
++            "   sum += texture2D(s_texture, vec2(v_texCoord.x              , v_texCoord.y + u_offsets.y)) * 2.0;\n"
++            "   sum += texture2D(s_texture, vec2(v_texCoord.x + u_offsets.x, v_texCoord.y + u_offsets.y));\n"
++            "   gl_FragColor = sum / 13.0;\n"
++            "}\n"
++        };
++        mShader.reset(new Shader(context, vertex, fragment));
++        mShader->use();
++        mShader->defineAttribute(Shader::Position, "a_position");
++        mShader->defineAttribute(Shader::TexCoord, "a_texCoord");
++        mShader->defineUniform(Shader::Offsets, "u_offsets");
++        mShader->defineUniform(Shader::ProjMatrix, "u_projection");
++
++        glUniform1i(glGetUniformLocation(mShader->program(), "s_texture"), 0);
++    }
++
++    Surface::SharedPtr surface1 = requestSurface(dstRect.width, dstRect.height);
++    const Rect surface1Rect(0, 0, surface1->getWidth(), surface1->getHeight());
++
++    GraphicsEngine engine1(surface1);
++
++    // populate result with an unblurred version of the source, centered
++    GLuint texture = surface->getTexture();
++    if (!texture)
++        Log::warn(TRACE_GIBBON_GRAPHICS, "Bind failed %fx%f", surface->getWidth(), surface->getHeight());
++    {
++        Transform modelViewMatrix;
++        const float dx = (surface1Rect.width - dstRect.width) - (surface->getWidth() - area.width);
++        const float dy = (surface1Rect.height - dstRect.height) - (surface->getHeight() - area.height);
++        modelViewMatrix.translate(-dx / surface1Rect.width, dy / surface1Rect.height, 0.);
++        modelViewMatrix.scale(surface->getWidth() / surface1Rect.width, surface->getHeight() / surface1Rect.height, 1.);
++        const bool hasClip = engine1.getState().hasClip;
++        const Rect clipRect = engine1.clip();
++        engine1.setClip(surface1Rect);
++        glClearColor(0, 0, 0, 0);
++        glClear(GL_COLOR_BUFFER_BIT);
++        engine1.setClip(Rect(area.x + radius, area.y + radius, area.width, area.height));
++        static GLfloat texTransform[4] = { 0, 0, 1, 1 };
++        context->engine()->blit(texture, modelViewMatrix, texTransform);
++        if (hasClip)
++            engine1.setClip(clipRect);
++        else
++            engine1.clearClip();
++    }
++
++    if (radius) {
++        // Time to blur! The goal is to perform a series of box filters, approximating a Gaussian blur
++
++        // Grab a second surface so we can pingpong between surface1 and surface2 during the passes.
++        Surface::SharedPtr surface2 = GibbonApplication::instance()->getSurfaceCache()->requestSurface(surface1Rect.width, surface1Rect.height,
++                                                                                                       Surface::Flags_Alpha|Surface::Flags_RenderTarget,
++                                                                                                       true);
++        GraphicsEngine engine2(surface2);
++        GLuint texture1 = surface1->getTexture();
++        GLuint texture2 = surface2->getTexture();
++
++        OpenGLShader::Scope<Shader> scope(mShader);
++
++        OpenGLState::Scope stateScope(state);
++
++        mShader->bindVertexBuffer();
++        glVertexAttribPointer(mShader->variable(Shader::Position), 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
++        stateScope.enableVAA(mShader->variable(Shader::Position));
++
++        mShader->bindTextureBuffer();
++        glVertexAttribPointer(mShader->variable(Shader::TexCoord), 2, GL_UNSIGNED_BYTE, GL_FALSE, 2 * sizeof(GLubyte), 0);
++        stateScope.enableVAA(mShader->variable(Shader::TexCoord));
++
++        const GLfloat blurOffsets[3] = { static_cast<float>(1. / area.width), static_cast<float>(1. / area.height), 0. };
++        glUniform3fv(mShader->variable(Shader::Offsets), 1, blurOffsets);
++
++        Transform projectionMatrix;
++        projectionMatrix.scale(1, -1, 1);
++        glUniformMatrix4fv(mShader->variable(Shader::ProjMatrix), 1, GL_FALSE, (GLfloat*)projectionMatrix.matrix());
++
++        stateScope.flush();
++
++        bool srcSurface1 = true;
++        for (int i = 0; i < radius; ++i) {
++            state->bindTexture(srcSurface1 ? texture1 : texture2);
++            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, 0);
++            if (srcSurface1) {
++                context->popEngine();
++            } else {
++                context->pushEngine(&engine2);
++            }
++            srcSurface1 = !srcSurface1;
++        }
++
++        if (!srcSurface1)
++            surface1.swap(surface2);
++
++        if (context->engine() != &engine2) {
++            assert(context->engine() == &engine1);
++            context->pushEngine(&engine2);
++        }
++    }
++
++    return DisplayList::SharedPtr(new DisplayList(surface1));
++}
++
++DisplayList::SharedPtr EffectTransformGLES2::GLES2Renderer::render(const DisplayList::SharedPtr &dl, const Rect &area) const
++{
++    Surface::SharedPtr surface = dl->flatten();
++    OpenGLContext* context = OpenGLContext::context();
++
++    const Rect resultRect(getRect(area));
++    Surface::SharedPtr result = requestSurface(resultRect.width, resultRect.height);
++
++    GLuint texture = surface->getTexture();
++    if (!texture)
++        Log::warn(TRACE_GIBBON_GRAPHICS, "Bind failed %fx%f", surface->getWidth(), surface->getHeight());
++
++    GraphicsEngine engine(result);
++    engine.clear(resultRect);
++
++    const Rect surfaceRect = surface->getRect();
++    GLfloat textureTransform[4] = { 0, 0, 1, 1 };
++    if (area != surfaceRect) {
++        textureTransform[0] = area.x / (float) surfaceRect.width;
++        textureTransform[1] = area.y / (float) surfaceRect.height;
++        textureTransform[2] = area.width / (float) surfaceRect.width;
++        textureTransform[3] = area.height / (float) surfaceRect.height;
++    }
++
++    Transform transform = getTransform();
++
++    if(!mEffect->getShowBackFace()) {
++        glEnable(GL_CULL_FACE);
++        glCullFace(GL_FRONT);
++    }
++    context->engine()->blit(texture, transform, textureTransform);
++    glDisable(GL_CULL_FACE);
++
++    return DisplayList::SharedPtr(new DisplayList(result));
++}
++
++EffectDesaturateGLES2::GLES2Renderer::~GLES2Renderer()
++{
++    if (mShader)
++        effectDeleteProgram(mShader->takeProgram());
++}
++
++DisplayList::SharedPtr EffectDesaturateGLES2::GLES2Renderer::render(const DisplayList::SharedPtr &dl, const Rect &area) const
++{
++    Surface::SharedPtr surface = dl->flatten();
++    OpenGLContext* context = OpenGLContext::context();
++    OpenGLState* state = context->state();
++
++    if(!mShader) {
++        const GLchar* vertex[] = {
++            "uniform mat4 u_projectionMatrix;\n"
++            "attribute vec4 a_position;\n"
++            "attribute vec2 a_texCoord;\n"
++            "varying vec2   v_texCoord;\n"
++            "void main()\n"
++            "{\n"
++            "  gl_Position = u_projectionMatrix * a_position;\n"
++            "  v_texCoord = a_texCoord;\n"
++            "}\n"
++        };
++
++        const GLchar* fragment[] = {
++            "#ifdef GL_ES\n"
++            "precision highp float;\n"
++            "#endif\n"
++            "uniform sampler2D s_texture;\n"
++            "uniform vec3 u_color;\n"
++            "varying vec2 v_texCoord;\n"
++            "void main(void)\n"
++            "{\n"
++            "   vec3 weights = vec3(0.3, 0.59, 0.11);\n"
++            "   vec4 src = texture2D(s_texture, vec2(v_texCoord.x, v_texCoord.y));\n"
++            "   float luminance = dot(src.rgb, weights);\n"
++            "   float dr = clamp(luminance * u_color.r + src.r * (1.0 - u_color.r), 0.0, 1.0);\n"
++            "   float dg = clamp(luminance * u_color.g + src.g * (1.0 - u_color.g), 0.0, 1.0);\n"
++            "   float db = clamp(luminance * u_color.b + src.b * (1.0 - u_color.b), 0.0, 1.0);\n"
++            "   gl_FragColor = vec4(dr, dg, db, src.a);\n"
++            "}\n"
++        };
++
++        mShader.reset(new Shader(context, vertex, fragment));
++        mShader->use();
++        mShader->defineUniform(Shader::ProjMatrix, "u_projectionMatrix");
++        mShader->defineAttribute(Shader::Position, "a_position");
++        mShader->defineAttribute(Shader::TexCoord, "a_texCoord");
++        mShader->defineUniform(Shader::Color, "u_color");
++        glUniform1i(glGetUniformLocation(mShader->program(), "s_texture"), 0);
++    }
++
++    OpenGLState::Scope stateScope(state);
++
++    const Rect resultRect(getRect(area));
++    Surface::SharedPtr result = requestSurface(resultRect.width, resultRect.height);
++    const Rect surfaceRect = Rect(0, 0, result->getWidth(), result->getHeight());
++
++    GraphicsEngine engine(result);
++    engine.clear(surfaceRect);
++
++    OpenGLShader::Scope<Shader> scope(mShader);
++
++    Transform modelViewMatrix;
++    modelViewMatrix.scale(1, -1, 1);
++
++    const float dx = (surfaceRect.width - resultRect.width) - (surface->getWidth() - area.width);
++    const float dy = (surfaceRect.height - resultRect.height) - (surface->getHeight() - area.height);
++    modelViewMatrix.translate(-dx / surfaceRect.width, dy / surfaceRect.height, 0.);
++    modelViewMatrix.scale(surface->getWidth() / surfaceRect.width, surface->getHeight() / surfaceRect.height, 1.);
++
++    glUniformMatrix4fv(mShader->variable(Shader::ProjMatrix), 1, GL_FALSE, (GLfloat*)modelViewMatrix.matrix());
++
++    mShader->bindVertexBuffer();
++    glVertexAttribPointer(mShader->variable(Shader::Position), 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
++    stateScope.enableVAA(mShader->variable(Shader::Position));
++
++    const float c[3] = { mEffect->getRed(), mEffect->getGreen(), mEffect->getBlue() };
++    glUniform3fv(mShader->variable(Shader::Color), 1, c);
++
++    mShader->bindTextureBuffer();
++    glVertexAttribPointer(mShader->variable(Shader::TexCoord), 2, GL_UNSIGNED_BYTE, GL_FALSE, 2 * sizeof(GLubyte), 0);
++    stateScope.enableVAA(mShader->variable(Shader::TexCoord));
++
++    GLuint texture = surface->getTexture();
++    if (!texture)
++        Log::warn(TRACE_GIBBON_GRAPHICS, "Bind failed %fx%f", surface->getWidth(), surface->getHeight());
++    state->bindTexture(texture);
++
++    stateScope.flush();
++
++    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, 0);
++
++    return DisplayList::SharedPtr(new DisplayList(result));
++}
++
++EffectTintGLES2::GLES2Renderer::~GLES2Renderer()
++{
++    if (mShader)
++        effectDeleteProgram(mShader->takeProgram());
++}
++
++DisplayList::SharedPtr EffectTintGLES2::GLES2Renderer::render(const DisplayList::SharedPtr &dl, const Rect &area) const
++{
++    Surface::SharedPtr surface = dl->flatten();
++    OpenGLContext* context = OpenGLContext::context();
++    OpenGLState* state = context->state();
++
++    if(!mShader) {
++        const GLchar* vertex[] = {
++            "uniform mat4 u_projectionMatrix;\n"
++            "attribute vec4 a_position;\n"
++            "attribute vec2 a_texCoord;\n"
++            "varying vec2   v_texCoord;\n"
++            "void main()\n"
++            "{\n"
++            "  gl_Position = u_projectionMatrix * a_position;\n"
++            "  v_texCoord = a_texCoord;\n"
++            "}\n"
++        };
++
++        const GLchar* fragment[] = {
++            "#ifdef GL_ES\n"
++            "precision highp float;\n"
++            "#endif\n"
++            "uniform sampler2D s_texture;\n"
++            "uniform vec3 u_color;\n"
++            "varying vec2 v_texCoord;\n"
++            "void main(void)\n"
++            "{\n"
++            "   vec4 src = texture2D(s_texture, vec2(v_texCoord.x, v_texCoord.y));\n"
++            "   gl_FragColor = src * vec4(u_color, 1);\n"
++            "}\n"
++        };
++
++        mShader.reset(new Shader(context, vertex, fragment));
++        mShader->use();
++        mShader->defineUniform(Shader::ProjMatrix, "u_projectionMatrix");
++        mShader->defineAttribute(Shader::Position, "a_position");
++        mShader->defineAttribute(Shader::TexCoord, "a_texCoord");
++        mShader->defineUniform(Shader::Color, "u_color");
++        glUniform1i(glGetUniformLocation(mShader->program(), "s_texture"), 0);
++    }
++
++    OpenGLState::Scope stateScope(state);
++
++    const Rect resultRect(getRect(area));
++    Surface::SharedPtr result = requestSurface(resultRect.width, resultRect.height);
++    const Rect surfaceRect = Rect(0, 0, result->getWidth(), result->getHeight());
++
++    GraphicsEngine engine(result);
++    engine.clear(surfaceRect);
++
++    OpenGLShader::Scope<Shader> scope(mShader);
++
++    Transform modelViewMatrix;
++    modelViewMatrix.scale(1, -1, 1);
++
++    const float dx = (surfaceRect.width - resultRect.width) - (surface->getWidth() - area.width);
++    const float dy = (surfaceRect.height - resultRect.height) - (surface->getHeight() - area.height);
++    modelViewMatrix.translate(-dx / surfaceRect.width, dy / surfaceRect.height, 0.);
++    modelViewMatrix.scale(surface->getWidth() / surfaceRect.width, surface->getHeight() / surfaceRect.height, 1.);
++
++    glUniformMatrix4fv(mShader->variable(Shader::ProjMatrix), 1, GL_FALSE, (GLfloat*)modelViewMatrix.matrix());
++
++    mShader->bindVertexBuffer();
++    glVertexAttribPointer(mShader->variable(Shader::Position), 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
++    stateScope.enableVAA(mShader->variable(Shader::Position));
++
++    const float c[3] = { mEffect->getRed(), mEffect->getGreen(), mEffect->getBlue() };
++    glUniform3fv(mShader->variable(Shader::Color), 1, c);
++
++    mShader->bindTextureBuffer();
++    glVertexAttribPointer(mShader->variable(Shader::TexCoord), 2, GL_UNSIGNED_BYTE, GL_FALSE, 2 * sizeof(GLubyte), 0);
++    stateScope.enableVAA(mShader->variable(Shader::TexCoord));
++
++    GLuint texture = surface->getTexture();
++    if (!texture)
++        Log::warn(TRACE_GIBBON_GRAPHICS, "Bind failed %fx%f", surface->getWidth(), surface->getHeight());
++    state->bindTexture(texture);
++
++    stateScope.flush();
++
++    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, 0);
++
++    return DisplayList::SharedPtr(new DisplayList(result));
++}
+diff --git a/partner/graphics/synaptics/EffectsGLES2.h b/partner/graphics/synaptics/EffectsGLES2.h
+new file mode 100644
+index 00000000..d2188c93
+--- /dev/null
++++ b/partner/graphics/synaptics/EffectsGLES2.h
+@@ -0,0 +1,134 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#ifndef __EFFECTSGLES_H__
++#define __EFFECTSGLES_H__
++
++#include <Effects.h>
++#include <OpenGLContext.h>
++#include <OpenGLState.h>
++#include <OpenGLShaders.h>
++#include <nrdbase/tr1.h>
++
++namespace netflix {
++namespace gibbon {
++
++class EffectBlurGLES2 : public EffectBlur
++{
++public:
++    EffectBlurGLES2() {}
++    virtual std::string describe() const { return "GL" + EffectBlur::describe(); }
++
++    class GLES2Renderer : public DefaultRenderer {
++    public:
++        GLES2Renderer(EffectBlur::SharedPtr e) : DefaultRenderer(e) {}
++        ~GLES2Renderer();
++        virtual DisplayList::SharedPtr render(const DisplayList::SharedPtr &dl, const Rect &rect) const;
++
++    private:
++        class Shader : public BlitShader
++        {
++        public:
++            enum { Offsets = BlitShader::Last + 1 };
++
++            template<int VertexCount, int FragmentCount>
++            Shader(OpenGLContext* ctx, const GLchar *(&vertex)[VertexCount], const GLchar *(&fragment)[FragmentCount])
++                : BlitShader(ctx, vertex, fragment)
++            {
++            }
++        };
++        mutable shared_ptr<Shader> mShader;
++    };
++    virtual Renderer::SharedPtr getDefaultRenderer() {
++        return Renderer::SharedPtr(new GLES2Renderer(static_pointer_cast<EffectBlur>(shared_from_this())));
++    }
++private:
++};
++
++class EffectTransformGLES2 : public EffectTransform
++{
++public:
++    EffectTransformGLES2() : EffectTransform() { }
++    virtual std::string describe() const { return "GL" + EffectTransform::describe(); }
++
++    class GLES2Renderer : public DefaultRenderer {
++    public:
++        GLES2Renderer(EffectTransform::SharedPtr e) : DefaultRenderer(e) {}
++        virtual DisplayList::SharedPtr render(const DisplayList::SharedPtr &dl, const Rect &rect) const;
++    };
++    virtual Renderer::SharedPtr getDefaultRenderer() {
++        return Renderer::SharedPtr(new GLES2Renderer(static_pointer_cast<EffectTransform>(shared_from_this())));
++    }
++};
++
++class EffectDesaturateGLES2 : public EffectDesaturate
++{
++public:
++    EffectDesaturateGLES2() : EffectDesaturate() { }
++    virtual std::string describe() const { return "GL" + EffectDesaturate::describe(); }
++
++    class GLES2Renderer : public DefaultRenderer {
++    public:
++        GLES2Renderer(EffectDesaturate::SharedPtr e) : DefaultRenderer(e) {}
++        ~GLES2Renderer();
++        virtual DisplayList::SharedPtr render(const DisplayList::SharedPtr &dl, const Rect &rect) const;
++
++    private:
++        class Shader : public BlitShader
++        {
++        public:
++            enum { Color = BlitShader::Last + 1 };
++
++            template<int VertexCount, int FragmentCount>
++            Shader(OpenGLContext* ctx, const GLchar *(&vertex)[VertexCount], const GLchar *(&fragment)[FragmentCount])
++                : BlitShader(ctx, vertex, fragment)
++            {
++            }
++        };
++        mutable shared_ptr<Shader> mShader;
++    };
++    virtual Renderer::SharedPtr getDefaultRenderer() {
++        return Renderer::SharedPtr(new GLES2Renderer(static_pointer_cast<EffectDesaturate>(shared_from_this())));
++    }
++};
++
++class EffectTintGLES2 : public EffectTint
++{
++public:
++    EffectTintGLES2() : EffectTint() { }
++    virtual std::string describe() const { return "GL" + EffectTint::describe(); }
++
++    class GLES2Renderer : public DefaultRenderer {
++    public:
++        GLES2Renderer(EffectTint::SharedPtr e) : DefaultRenderer(e) {}
++        ~GLES2Renderer();
++        virtual DisplayList::SharedPtr render(const DisplayList::SharedPtr &dl, const Rect &rect) const;
++
++    private:
++        class Shader : public BlitShader
++        {
++        public:
++            enum { Color = BlitShader::Last + 1 };
++
++            template<int VertexCount, int FragmentCount>
++            Shader(OpenGLContext* ctx, const GLchar *(&vertex)[VertexCount], const GLchar *(&fragment)[FragmentCount])
++                : BlitShader(ctx, vertex, fragment)
++            {
++            }
++        };
++        mutable shared_ptr<Shader> mShader;
++    };
++    virtual Renderer::SharedPtr getDefaultRenderer() {
++        return Renderer::SharedPtr(new GLES2Renderer(static_pointer_cast<EffectTint>(shared_from_this())));
++    }
++};
++
++}} // namespace netflix::gibbon
++
++#endif /* __SURFACEEFFECTSGLES_H__ */
+diff --git a/partner/graphics/synaptics/GraphicsEngineGLES2.cpp b/partner/graphics/synaptics/GraphicsEngineGLES2.cpp
+new file mode 100644
+index 00000000..dc77fe13
+--- /dev/null
++++ b/partner/graphics/synaptics/GraphicsEngineGLES2.cpp
+@@ -0,0 +1,795 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#include <GraphicsEngine.h>
++#include <Screen.h>
++#include "OpenGLContext.h"
++#include "OpenGLState.h"
++#include "OpenGLShaders.h"
++#include <nrd/AppLog.h>
++#include <gibbon/config.h>
++#include <nrdbase/Base64.h>
++#include <nrdbase/tr1.h>
++
++using namespace netflix::gibbon;
++using namespace netflix;
++
++namespace netflix {
++namespace gibbon {
++class DrawVBO : public DisplayList::Command
++{
++public:
++    class Event : public Application::Event
++    {
++    public:
++        Event(OpenGLContext* c, GLuint v) : ctx(c), vbo(v) { }
++
++        void eventFired()
++        {
++            //printf("deleted vbo %x\n", vbo);
++            ctx->state()->deleteBuffer(GL_ARRAY_BUFFER, vbo);
++        }
++    private:
++        OpenGLContext* ctx;
++        GLuint vbo;
++    };
++
++    inline DrawVBO() : Command(Type_GLVBO), ctx(0), size(0), vbo(0) {}
++    inline DrawVBO(OpenGLContext* _ctx, const Surface::SharedPtr& _surface, int _size,
++                   const Color& _color, GLuint _vbo, const std::vector<ftcache::Glyph::SharedPtr>& _glyphs)
++        : Command(Type_GLVBO), ctx(_ctx), surface(_surface), size(_size), color(_color),
++          vbo(_vbo), glyphs(_glyphs)
++    {
++    }
++    virtual ~DrawVBO()
++    {
++#if !defined(GIBBON_NO_THREADANIMATION)
++        if(!Animation::isAnimationThread()) {
++            shared_ptr<Event> event(new Event(ctx, vbo));
++            Animation::postEvent(event);
++            return;
++        }
++#endif
++        //printf("deleted vbo %x\n", vbo);
++        ctx->state()->deleteBuffer(GL_ARRAY_BUFFER, vbo);
++    }
++    virtual std::string describe() const {
++        std::ostringstream s;
++        s << "DrawVBO()";
++        return s.str();
++    }
++    virtual void apply(GraphicsEngine *graphics, State *state) const {
++        if (!surface)
++            return;
++
++        Rect viewport = graphics->targetRect();
++        //printf("rendering vbo %x with viewport %s\n", vbo, viewport.toString().c_str());
++        if (!gibbon_float_compare(graphics->mXScale, 1.0)) {
++            viewport.x /= graphics->mXScale;
++            viewport.width /= graphics->mXScale;
++        }
++        if (!gibbon_float_compare(graphics->mYScale, 1.0)) {
++            viewport.y /= graphics->mYScale;
++            viewport.height /= graphics->mYScale;
++        }
++        const float scale = graphics->mState.scale;
++
++        Transform projection;
++        projection.ortho(0, viewport.width, 0, viewport.height, -1, 1);
++        if (graphics->isScreen())
++            projection.translate(state->offsetX, viewport.height - state->offsetY, 0);
++        else
++            projection.translate(state->offsetX, state->offsetY, 0);
++
++        if(!gibbon_float_compare(scale, 1.0)) {
++            projection.translate(-1, 1, 0);
++            projection.scale(scale, scale, 1);
++            projection.translate(1, -1, 0);
++        }
++
++        //printf("rendering vbo %x\n", vbo);
++        graphics->drawVBO(surface, color, projection, vbo, size);
++    }
++
++    virtual void write(DisplayList::Writer &writer) const
++    {
++        int bytes;
++        OpenGLFloats& floats = ctx->floats();
++        ctx->readVBO(vbo, floats.ptr(), 5, size, &bytes);
++
++        const char *in = reinterpret_cast<char*>(floats.ptr());
++        std::vector<char> encoded;
++        encoded.resize(Base64::encode_reserve(bytes));
++        const char *end = Base64::encode(in, in + bytes, &encoded[0]);
++
++        writer << surface;
++        writer << size;
++        writer << color;
++        writer << std::string(&encoded[0], end - &encoded[0]);
++    }
++    virtual void read(DisplayList::Reader &reader)
++    {
++        ctx = OpenGLContext::context();
++        OpenGLFloats& floats = ctx->floats();
++
++        reader >> surface;
++        reader >> size;
++        reader >> color;
++
++        std::string encoded;
++        reader >> encoded;
++        char* out = reinterpret_cast<char*>(floats.ptr());
++        Base64::decode(encoded.c_str(), encoded.c_str() + encoded.size(), out);
++        vbo = ctx->createVBO(floats.ptr(), 5, size);
++    }
++
++    OpenGLContext* ctx;
++    Surface::SharedPtr surface;
++    int size;
++    Color color;
++    GLuint vbo;
++    std::vector<ftcache::Glyph::SharedPtr> glyphs;
++};
++
++class GraphicsGLTextData : public GibbonFreetype::TextData
++{
++public:
++    struct Data {
++        std::vector<Rect> regularSrc, regularDst;
++        std::vector<Rect> outlineSrc, outlineDst;
++        std::vector<ftcache::Glyph::SharedPtr> regularGlyphs, outlineGlyphs;
++        Surface::SharedPtr surface;
++        bool hasRegularColor, hasOutlineColor;
++        Color regularColor, outlineColor;
++    };
++    std::vector<Data> datas;
++    OpenGLContext* glContext;
++    const DisplayList::SharedPtr& displayList;
++
++    GraphicsGLTextData(OpenGLContext* ctx, const DisplayList::SharedPtr& list) : glContext(ctx), displayList(list) { }
++    virtual ~GraphicsGLTextData();
++
++    virtual void clear() { datas.clear(); }
++
++    virtual void addEntry(Type type, const ftcache::Glyph::SharedPtr& glyph, int tx, int ty, const Surface::SharedPtr& surface, const Color& color)
++    {
++        Data* d = datas.empty() ? 0 : &datas.back();
++        if (datas.empty() || d->surface != surface
++            || (type == GraphicsGLTextData::Regular && ((d->hasRegularColor && d->regularColor != color) || d->regularGlyphs.size() >= 1024))
++            || (type == GraphicsGLTextData::Outline && d->hasOutlineColor && d->outlineColor != color)) {
++            Data nd;
++            nd.surface = surface;
++            if (type == GraphicsGLTextData::Regular) {
++                nd.hasOutlineColor = false;
++                nd.hasRegularColor = true;
++                nd.regularColor = color;
++            } else {
++                nd.hasRegularColor = false;
++                nd.hasOutlineColor = true;
++                nd.outlineColor = color;
++            }
++            datas.push_back(nd);
++            d = &datas.back();
++        } else if (type == GraphicsGLTextData::Regular && !d->hasRegularColor) {
++            d->hasRegularColor = true;
++            d->regularColor = color;
++        } else if (type == GraphicsGLTextData::Outline && !d->hasOutlineColor) {
++            d->hasOutlineColor = true;
++            d->outlineColor = color;
++        }
++
++        const rectpacker::Rect& adjusted = GibbonFreetype::adjustRect(glyph->glyphNode->rect);
++
++        const Rect srcRect(adjusted.x, adjusted.y, (adjusted.right - adjusted.x) + 1, (adjusted.bottom - adjusted.y) + 1);
++        const Rect dstRect(tx, ty, srcRect.width, srcRect.height);
++        if(type == GibbonFreetype::TextData::Regular) {
++            d->regularSrc.push_back(srcRect);
++            d->regularDst.push_back(dstRect);
++            d->regularGlyphs.push_back(glyph);
++        } else {
++            d->outlineSrc.push_back(srcRect);
++            d->outlineDst.push_back(dstRect);
++            d->outlineGlyphs.push_back(glyph);
++        }
++    }
++};
++
++GraphicsGLTextData::~GraphicsGLTextData()
++{
++    OpenGLFloats& floats = glContext->floats();
++
++    const size_t dataSize = datas.size();
++    for (size_t dataIdx = 0; dataIdx < dataSize; ++dataIdx) {
++        const GraphicsGLTextData::Data& d = datas[dataIdx];
++
++        const Surface::SharedPtr& surface = d.surface;
++        assert(surface && surface->isValid());
++
++        const GLfloat cw = surface->getWidth();
++        const GLfloat ch = surface->getHeight();
++
++        struct {
++            const std::vector<Rect>& src;
++            const std::vector<Rect>& dst;
++            const std::vector<ftcache::Glyph::SharedPtr>& glp;
++            const Color& color;
++        } rects[] =
++              { { d.outlineSrc, d.outlineDst, d.outlineGlyphs, d.outlineColor },
++                { d.regularSrc, d.regularDst, d.regularGlyphs, d.regularColor } };
++        for (int i = 0; i < 2; ++i) {
++            const std::vector<Rect>& src = rects[i].src;
++            const std::vector<Rect>& dst = rects[i].dst;
++            const std::vector<ftcache::Glyph::SharedPtr>& glp = rects[i].glp;
++            if (src.empty())
++                continue;
++            assert(src.size() == dst.size());
++            assert(src.size() == glp.size());
++
++            const size_t sz = src.size();
++            floats.reserve(sz * 30);
++            GLfloat* base = floats.take(0);
++
++            for (size_t j = 0; j < sz; ++j) {
++                const GLfloat tx = dst[j].x;
++                const GLfloat ty = dst[j].y;
++                const GLfloat sx1 = src[j].x;
++                const GLfloat sy1 = src[j].y;
++                const GLfloat sx2 = src[j].right() - 1;
++                const GLfloat sy2 = src[j].bottom() - 1;
++
++                GLfloat x0, y0, x1, y1;
++                x0 = tx;
++                y0 = ty;
++                x1 = tx + ((sx2 - sx1) + 1);
++                y1 = ty + ((sy2 - sy1) + 1);
++
++                const GLfloat s0 = sx1 / cw;
++                const GLfloat t0 = sy1 / ch;
++                const GLfloat s1 = (sx2 + 1) / cw;
++                const GLfloat t1 = (sy2 + 1) / ch;
++
++                GLfloat* v = floats.take(30);
++
++                *(v++) = x0;
++                *(v++) = y0;
++                *(v++) = 0;
++                *(v++) = s0;
++                *(v++) = t0;
++
++                *(v++) = x0;
++                *(v++) = y1;
++                *(v++) = 0;
++                *(v++) = s0;
++                *(v++) = t1;
++
++                *(v++) = x1;
++                *(v++) = y1;
++                *(v++) = 0;
++                *(v++) = s1;
++                *(v++) = t1;
++
++                *(v++) = x0;
++                *(v++) = y0;
++                *(v++) = 0;
++                *(v++) = s0;
++                *(v++) = t0;
++
++                *(v++) = x1;
++                *(v++) = y1;
++                *(v++) = 0;
++                *(v++) = s1;
++                *(v++) = t1;
++
++                *(v++) = x1;
++                *(v++) = y0;
++                *(v++) = 0;
++                *(v++) = s1;
++                *(v++) = t0;
++            }
++
++            floats.reset();
++
++            const GLuint vbo = glContext->createVBO(base, 5, sz);
++            displayList->appendCommand(new DrawVBO(glContext, surface, sz, rects[i].color, vbo, glp));
++        }
++    }
++    GL_CHECK;
++}
++}}
++
++void GraphicsEngine::begin_sys()
++{
++    mGLContext = OpenGLContext::context();
++    mGLTextData = 0;
++    if(mSurface)
++        mSurface->createTexture();
++    if (mSurface && !(mSurface->getFlags() & Surface::Flags_Screen)) {
++        mTargetRect = mSurface->getRect();
++        mXScale = mYScale = 1.;
++        mFbo.reset(new OpenGLFBO(mSurface));
++    } else {
++        const Rect rect = mDisplayList ? mDisplayList->getRect() : mSurface->getRect();
++        mTargetRect = GibbonApplication::instance()->getScreen()->getRect();
++        if (mDisplayList) {
++            mXScale = mYScale = 1.;
++        } else {
++            mXScale = float(rect.width) / mTargetRect.width;
++            mYScale = float(rect.height) / mTargetRect.height;
++            mTargetRect = rect;
++        }
++    }
++    assert(!mFbo || mFbo->isValid());
++
++    mGLContext->pushEngine(this);
++}
++
++void GraphicsEngine::end_sys()
++{
++    assert(!mGLTextData);
++    mFbo.reset();
++    mGLContext->popEngine();
++    mGLContext = 0;
++}
++
++static inline void makeTextureTransform(const Rect& surfaceRect, const Rect& rect, float textureTransform[4])
++{
++    if (rect != surfaceRect) {
++        textureTransform[0] = static_cast<float>(rect.x) / surfaceRect.width;
++        textureTransform[1] = static_cast<float>(rect.y) / surfaceRect.height;
++        textureTransform[2] = static_cast<float>(rect.width) / surfaceRect.width;
++        textureTransform[3] = static_cast<float>(rect.height) / surfaceRect.height;
++    } else {
++        static GLfloat noTextureTransform[4] = { 0, 0, 1, 1 };
++        memcpy(textureTransform, noTextureTransform, sizeof(noTextureTransform));
++    }
++}
++
++Rect GraphicsEngine::makeScissor(const Rect& rect)
++{
++    const Coordinate y = isScreen() ? mGLContext->screenHeight() - (rect.y * mYScale) - (rect.height * mYScale) : rect.y;
++    return Rect(mXScale * rect.x, y, ceilf(mXScale * rect.width), ceilf(mXScale * rect.height));
++}
++
++Transform GraphicsEngine::makeTransform(const Rect& dstRect, const Rect& srcRect)
++{
++    Transform modelViewMatrix;
++
++    const Size sz = mTargetRect.size();
++
++    Rect src = srcRect;
++    if (src.empty())
++        src = Rect(0, 0, sz.width, sz.height);
++
++    const float tx = ((dstRect.x + dstRect.width / 2.0f) - (sz.width / 2.0f)) / (sz.width / 2.0f);
++    const float ty = ((sz.height / 2.0f) - (dstRect.y + dstRect.height / 2.0f)) / (sz.height / 2.0f);
++
++    modelViewMatrix.translate(tx, ty, 0);
++
++    const float sx = (float(dstRect.width) / src.width) * (float(src.width) / sz.width);
++    const float sy = (float(dstRect.height) / src.height) * (float(src.height) / sz.height);
++
++    modelViewMatrix.scale(sx, sy, 1);
++
++    return modelViewMatrix;
++}
++
++void GraphicsEngine::drawVBO(const Surface::SharedPtr& surface, const Color& color, const Transform& modelview, GLuint vbo, int size)
++{
++    GL_CHECK;
++    const shared_ptr<TextShader>& textShader = mGLContext->textShader();
++    OpenGLShader::Scope<TextShader> scope(textShader);
++
++    float c[4];
++    color.normalized(c);
++    c[3] *= mState.opacity;
++    if (c[3]<1)
++    {
++        c[0] *= c[3];
++        c[1] *= c[3];
++        c[2] *= c[3];
++    }
++
++    Transform projectionMatrix;
++    if (isScreen()) {
++        projectionMatrix.scale(1, -1, 1);
++    }
++    glUniformMatrix4fv(textShader->variable(TextShader::ProjMatrix), 1, GL_FALSE, (GLfloat*)projectionMatrix.matrix());
++    glUniform4fv(textShader->variable(TextShader::Color), 1, c);
++    glUniformMatrix4fv(textShader->variable(TextShader::MVMatrix), 1, GL_FALSE, (GLfloat*)modelview.matrix());
++
++    OpenGLState* glstate = mGLContext->state();
++    OpenGLState::Scope stateScope(glstate);
++    stateScope.enableCap(GL_SCISSOR_TEST, mState.hasClip);
++    stateScope.enableCap(GL_BLEND);
++    glstate->blendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
++
++    glstate->bindBuffer(GL_ARRAY_BUFFER, vbo);
++
++    GLchar* ptr = 0;
++    stateScope.enableVAA(textShader->variable(TextShader::Vertex));
++    glVertexAttribPointer(textShader->variable(TextShader::Vertex), 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), ptr);
++
++    ptr += 3 * sizeof(GLfloat);
++    stateScope.enableVAA(textShader->variable(TextShader::TexCoord));
++    glVertexAttribPointer(textShader->variable(TextShader::TexCoord), 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), ptr);
++
++    stateScope.flush();
++
++    glstate->bindTexture(surface->getTexture());
++
++    glDrawArrays(GL_TRIANGLES, 0, size * 6);
++
++    GL_CHECK;
++}
++
++void GraphicsEngine::setScale_sys(float /*scale*/)
++{
++}
++
++void GraphicsEngine::setOpacity_sys(float /*opacity*/)
++{
++}
++
++void GraphicsEngine::setSmoothScale_sys(bool /*smooth*/)
++{
++}
++
++void GraphicsEngine::setClip_sys(const Rect *r)
++{
++    GL_CHECK;
++    const Rect scissor = makeScissor(r ? *r : mTargetRect);
++    mGLContext->state()->scissor(scissor.x, scissor.y, scissor.width, scissor.height);
++    GL_CHECK;
++}
++
++void GraphicsEngine::setCompositionMode_sys(GraphicsEngine::CompositionMode /*mode*/)
++{
++}
++
++void GraphicsEngine::blit_internal(GLuint texture, const Transform& modelView, const GLfloat texTransform[4],
++                                   bool blend, float opacity, bool smooth)
++{
++    GL_CHECK;
++    const shared_ptr<BlitShader>& blitShader = mGLContext->blitShader();
++    OpenGLShader::Scope<BlitShader> scope(blitShader);
++    glUniformMatrix4fv(blitShader->variable(BlitShader::MVMatrix), 1, GL_FALSE, modelView.matrix());
++
++    Transform projection;
++    if (!isScreen()) {
++        projection.scale(1, -1, 1);
++    }
++
++    projection.translate(-1, 1, 0);
++    projection.scale(mXScale, mYScale, 1);
++    projection.translate(1, -1, 0);
++
++    glUniformMatrix4fv(blitShader->variable(BlitShader::ProjMatrix), 1, GL_FALSE, (GLfloat*)projection.matrix());
++    glUniform4fv(blitShader->variable(BlitShader::TextureTransform), 1, texTransform);
++    glUniform1f(blitShader->variable(BlitShader::Opacity), opacity);
++
++    const GLuint pos = blitShader->variable(BlitShader::Position);
++    const GLuint tex = blitShader->variable(BlitShader::TexCoord);
++
++    OpenGLState* glstate = mGLContext->state();
++    OpenGLState::Scope stateScope(glstate);
++    stateScope.enableCap(GL_SCISSOR_TEST, mState.hasClip);
++    stateScope.enableVAA(pos);
++    stateScope.enableVAA(tex);
++    if (blend) {
++        glstate->blendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
++        stateScope.enableCap(GL_BLEND);
++    }
++
++    blitShader->bindVertexBuffer();
++    glVertexAttribPointer(pos, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
++
++    blitShader->bindTextureBuffer();
++    glVertexAttribPointer(tex, 2, GL_UNSIGNED_BYTE, GL_FALSE, 2 * sizeof(GLubyte), 0);
++
++    stateScope.flush();
++
++    glstate->bindTexture(texture);
++    glstate->setSmoothScale(smooth);
++
++    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, 0);
++
++    GL_CHECK;
++}
++
++void GraphicsEngine::blit(GLuint tex, const Transform& modelView, const GLfloat texTransform[4])
++{
++    blit_internal(tex, modelView, texTransform, true, 1., false);
++}
++
++void GraphicsEngine::blit_sys(const Surface::SharedPtr &srcSurface, const Rect &srcRect, const Rect &dstRect, const Color *)
++{
++    const bool srcAlpha = srcSurface->hasAlpha();
++    const bool srcOpacity = !gibbon_float_compare(mState.opacity, 1.0);
++    const bool blend = (getCompositionMode() == CompositionMode_SourceOver && (srcAlpha || srcOpacity));
++    Rect blitSrcRect = srcRect;
++    if (srcSurface->mMaster) {
++        blitSrcRect.x += srcSurface->getRect().x;
++        blitSrcRect.y += srcSurface->getRect().y;
++    }
++    Transform transform = makeTransform(dstRect, blitSrcRect);
++    if (!gibbon_float_compare(mState.scale, 1.0)) {
++        transform.translate(-1, 1, 0);
++        transform.scale(mState.scale, mState.scale, 1);
++        transform.translate(1, -1, 0);
++    }
++    GLfloat texTransform[4];
++    makeTextureTransform(srcSurface->getMasterRect(), blitSrcRect, texTransform);
++
++    GLuint texture = srcSurface->getTexture();
++    blit_internal(texture, transform, texTransform, blend, mState.opacity, mState.smoothScale);
++}
++
++void GraphicsEngine::drawText_sys(hb_buffer_t* text, int start, int end, const Rect& r, const Rect& dstRect, const Style::SharedPtr &style)
++{
++    drawText_internal(text, start, end, r, dstRect, style);
++}
++
++void GraphicsEngine::initCommands_sys()
++{
++    DisplayList::registerFactory<DrawVBO>(DisplayList::Command::Type_GLVBO);
++}
++
++bool GraphicsEngine::startText_sys()
++{
++    assert(!mGLTextData);
++    mGLTextData = new GraphicsGLTextData(mGLContext, mDisplayList);
++    return true;
++}
++
++bool GraphicsEngine::endText_sys()
++{
++    assert(mGLTextData);
++    delete mGLTextData;
++    mGLTextData = 0;
++    return true;
++}
++
++void GraphicsEngine::drawText_dl(hb_buffer_t *text, int start, int end, const Rect &rect, const Rect &dstRect, const Style::SharedPtr &style)
++{
++    GL_CHECK;
++    if(GibbonConfiguration::screenRenderDisplayList()) {
++        drawText_dl_internal(text, start, end, rect, dstRect, style);
++        return;
++    }
++
++    GibbonFreetype::SharedPtr freetype = style->getFont()->getFreetype();
++    bool del = mGLTextData == 0;
++    if (del)
++        mGLTextData = new GraphicsGLTextData(mGLContext, mDisplayList);
++    freetype->prepareText(text, start, end, rect, style, mGLTextData);
++    if (del) {
++        delete mGLTextData;
++        mGLTextData = 0;
++    }
++}
++
++void GraphicsEngine::clear_sys(const Rect &rect)
++{
++    GL_CHECK;
++    if (isScreen()
++        && Rect(0, 0, mGLContext->screenWidth(), mGLContext->screenHeight()) == rect
++        && mGLContext->renderVideo())
++        return;
++
++    Rect clip = rect.scaled(mState.scale, mState.scale);
++    if (mState.hasClip)
++        clip.intersect(mState.clip);
++    else
++        clip.intersect(mTargetRect);
++    clip = makeScissor(clip);
++    OpenGLState* glstate = mGLContext->state();
++    glstate->scissor(clip.x, clip.y, clip.width, clip.height);
++    glstate->enableCap(GL_SCISSOR_TEST);
++    glClear(GL_COLOR_BUFFER_BIT);
++    if (mState.hasClip) {
++        clip = makeScissor(mState.clip);
++        glstate->scissor(clip.x, clip.y, clip.width, clip.height);
++    } else {
++        glstate->disableCap(GL_SCISSOR_TEST);
++    }
++    GL_CHECK;
++}
++
++void GraphicsEngine::drawRect(RectMode mode, const Rect &rect, const Color &color)
++{
++    GL_CHECK;
++    shared_ptr<FillShader> shader = (mode == RectFill) ? mGLContext->fillShader() : static_pointer_cast<FillShader>(mGLContext->lineShader());
++
++    OpenGLShader::Scope<FillShader> scope(shader);
++
++    float c[4];
++    color.normalized(c);
++    if (getCompositionMode() != CompositionMode_Source && mState.opacity < 1) {
++        c[3] *= mState.opacity;
++    }
++    const bool hasAlpha = c[3] < 1;
++    if (hasAlpha) {
++        c[0] *= c[3];
++        c[1] *= c[3];
++        c[2] *= c[3];
++    }
++    glUniform4fv(shader->variable(FillShader::Color), 1, c);
++
++    Transform transform = makeTransform(rect), projection;
++    if(!gibbon_float_compare(mState.scale, 1.0)) {
++        transform.translate(-1, 1, 0);
++        transform.scale(mState.scale, mState.scale, 1);
++        transform.translate(1, -1, 0);
++    }
++    glUniformMatrix4fv(shader->variable(FillShader::MVMatrix), 1, GL_FALSE, (GLfloat*)transform.matrix());
++    if (!isScreen()) {
++        projection.scale(1, -1, 1);
++    }
++    projection.translate(-1, 1, 0);
++    projection.scale(mXScale, mYScale, 1);
++    projection.translate(1, -1, 0);
++    glUniformMatrix4fv(shader->variable(FillShader::ProjMatrix), 1, GL_FALSE, (GLfloat*)projection.matrix());
++
++    const GLuint pos = shader->variable(FillShader::Position);
++    OpenGLState* glstate = mGLContext->state();
++    OpenGLState::Scope stateScope(glstate);
++    if (hasAlpha) {
++        glstate->blendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
++        stateScope.enableCap(GL_BLEND);
++    }
++
++    shader->bindVertexBuffer();
++    glVertexAttribPointer(shader->variable(FillShader::Position), 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
++
++    stateScope.enableCap(GL_SCISSOR_TEST, mState.hasClip);
++    stateScope.enableVAA(pos);
++    stateScope.flush();
++    if (mode == RectFill) {
++        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, 0);
++    } else {
++        glDrawElements(GL_LINES, 8, GL_UNSIGNED_BYTE, 0);
++    }
++
++    GL_CHECK;
++}
++
++void GraphicsEngine::fill_sys(const Rect &rect, const Color &color)
++{
++    drawRect(RectFill, rect, color);
++}
++
++void GraphicsEngine::drawRect_sys(const Rect &rect, const Color &color)
++{
++    drawRect(RectLine, rect, color);
++}
++
++void GraphicsEngine::batchBlit_sys(const Surface::SharedPtr& surface, const std::vector<Rect>& src,
++                                   const std::vector<Rect>& dst, const Color *color)
++{
++    GL_CHECK;
++    assert(surface && surface->isValid());
++    assert(color);
++
++    OpenGLFloats& floats = mGLContext->floats();
++
++    const GLfloat cw = surface->getWidth();
++    const GLfloat ch = surface->getHeight();
++
++    if (src.empty())
++        return;
++    assert(src.size() == dst.size());
++
++    const size_t sz = src.size();
++    floats.reserve(sz * 30);
++    GLfloat* base = floats.take(0);
++
++    for (size_t j = 0; j < sz; ++j) {
++        const GLfloat tx = dst[j].x;
++        const GLfloat ty = dst[j].y;
++        const GLfloat sx1 = src[j].x;
++        const GLfloat sy1 = src[j].y;
++        const GLfloat sx2 = src[j].right() - 1;
++        const GLfloat sy2 = src[j].bottom() - 1;
++
++        GLfloat x0, y0, x1, y1;
++        x0 = tx;
++        y0 = ty;
++        x1 = tx + ((sx2 - sx1) + 1);
++        y1 = ty + ((sy2 - sy1) + 1);
++
++        const GLfloat s0 = sx1 / cw;
++        const GLfloat t0 = sy1 / ch;
++        const GLfloat s1 = (sx2 + 1) / cw;
++        const GLfloat t1 = (sy2 + 1) / ch;
++
++        GLfloat* v = floats.take(30);
++
++        *(v++) = x0;
++        *(v++) = y0;
++        *(v++) = 0;
++        *(v++) = s0;
++        *(v++) = t0;
++
++        *(v++) = x0;
++        *(v++) = y1;
++        *(v++) = 0;
++        *(v++) = s0;
++        *(v++) = t1;
++
++        *(v++) = x1;
++        *(v++) = y1;
++        *(v++) = 0;
++        *(v++) = s1;
++        *(v++) = t1;
++
++        *(v++) = x0;
++        *(v++) = y0;
++        *(v++) = 0;
++        *(v++) = s0;
++        *(v++) = t0;
++
++        *(v++) = x1;
++        *(v++) = y1;
++        *(v++) = 0;
++        *(v++) = s1;
++        *(v++) = t1;
++
++        *(v++) = x1;
++        *(v++) = y0;
++        *(v++) = 0;
++        *(v++) = s1;
++        *(v++) = t0;
++    }
++
++    floats.reset();
++
++    const GLuint vbo = mGLContext->createVBO(base, 5, sz);
++
++    Rect viewport = mTargetRect;
++    //printf("rendering vbo %x with viewport %s\n", vbo, viewport.toString().c_str());
++    if (!gibbon_float_compare(mXScale, 1.0)) {
++        viewport.x /= mXScale;
++        viewport.width /= mXScale;
++    }
++    if (!gibbon_float_compare(mYScale, 1.0)) {
++        viewport.y /= mYScale;
++        viewport.height /= mYScale;
++    }
++    const float scale = mState.scale;
++
++    Transform projection;
++    projection.ortho(0, viewport.width, 0, viewport.height, -1, 1);
++    if (isScreen())
++        projection.translate(0, viewport.height, 0);
++
++    if(!gibbon_float_compare(scale, 1.0)) {
++        projection.translate(-1, 1, 0);
++        projection.scale(scale, scale, 1);
++        projection.translate(1, -1, 0);
++    }
++
++    drawVBO(surface, *color, projection, vbo, sz);
++    mGLContext->state()->deleteBuffer(GL_ARRAY_BUFFER, vbo);
++    GL_CHECK;
++}
++
++void GraphicsEngine::flush_sys()
++{
++    glFinish();
++}
++
++void GraphicsEngine::freeSurfaces()
++{
++    if(OpenGLContext::hasContext()) {
++        GL_CHECK;
++        if (!GibbonConfiguration::uploadInDecodeThreads())
++            OpenGLContext::deleteTextures();
++        GL_CHECK;
++    }
++}
+diff --git a/partner/graphics/synaptics/OpenGLContext.cpp b/partner/graphics/synaptics/OpenGLContext.cpp
+new file mode 100644
+index 00000000..e177a550
+--- /dev/null
++++ b/partner/graphics/synaptics/OpenGLContext.cpp
+@@ -0,0 +1,579 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#include "OpenGLContext.h"
++#include "OpenGLFBO.h"
++#include "OpenGLState.h"
++#include "OpenGLShaders.h"
++#include "SurfaceCache.h"
++#include <Animation.h>
++#include <Debug.h>
++#include <GibbonConfiguration.h>
++
++#include <nrd/AppLog.h>
++#include <nrdbase/ScopedMutex.h>
++#include <nrdbase/Application.h>
++#include <nrdbase/ConditionVariable.h>
++#include <nrdbase/ObjectCount.h>
++
++#include <assert.h>
++
++using namespace netflix;
++using namespace netflix::gibbon;
++
++NRDP_DEFINE_OBJECTCOUNT(OpenGLContext);
++
++shared_ptr<OpenGLContext> OpenGLContext::sPrimary;
++std::set<shared_ptr<OpenGLContext> > OpenGLContext::sContexts;
++Mutex OpenGLContext::sMutex(UNTRACKED_MUTEX, "OpenGLContext mutex");
++Coordinate OpenGLContext::sWidth;
++Coordinate OpenGLContext::sHeight;
++std::vector<GLuint> OpenGLContext::sTexToDelete;
++bool OpenGLContext::sShutdown = false;
++ThreadLocalStore<ContextData> OpenGLContext::sContextDatas;
++
++namespace netflix {
++namespace gibbon {
++class ContextData
++{
++public:
++    ContextData() { }
++    ~ContextData()
++    {
++        ScopedMutex locker(OpenGLContext::sMutex);
++        shared_ptr<OpenGLContext> ctx = context.lock();
++        if (ctx) {
++            OpenGLContext::sContexts.erase(ctx);
++        }
++    }
++
++    weak_ptr<OpenGLContext> context;
++};
++}} // netflix::gibbon
++
++OpenGLContext::OpenGLContext(OpenGLContext* share)
++    : mPrivate(0), mState(new OpenGLState), mShared(share != 0)
++{
++    {
++        ScopedMutex locker(sMutex);
++        mWidth = sWidth;
++        mHeight = sHeight;
++
++        assert(!sShutdown);
++    }
++
++    init(share);
++
++    glDisable(GL_BLEND);
++    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
++    glPixelStorei(GL_PACK_ALIGNMENT, 1);
++    mState->viewport(0, 0, mWidth, mHeight);
++    glClearColor(0, 0, 0, 0);
++    glActiveTexture(GL_TEXTURE0);
++    glDisable(GL_DEPTH_TEST);
++    GL_CHECK;
++
++    if (!mShared) {
++        GibbonApplication::instance()->getSurfaceCache()->setAtlasPad(1, 1);
++
++        {
++            const GLchar* vertex[] = {
++                "uniform mat4   u_projectionMatrix;\n"
++                "uniform mat4   u_mvMatrix;\n"
++                "attribute vec4 a_position;\n"
++                "void main()\n"
++                "{\n"
++                "  gl_Position = (u_projectionMatrix * u_mvMatrix) * a_position;\n"
++                "}\n"
++            };
++
++            const GLchar* fragment[] = {
++                "#ifdef GL_ES\n"
++                "precision highp float;\n"
++                "#endif\n"
++                "uniform vec4 u_color;\n"
++                "void main()\n"
++                "{\n"
++                "  gl_FragColor = u_color;\n"
++                "}\n"
++            };
++
++            mFillShader.reset(new FillShader(this, vertex, fragment));
++            mFillShader->use();
++            mFillShader->defineUniform(FillShader::ProjMatrix, "u_projectionMatrix");
++            mFillShader->defineUniform(FillShader::MVMatrix, "u_mvMatrix");
++            mFillShader->defineAttribute(FillShader::Position, "a_position");
++            mFillShader->defineUniform(FillShader::Color, "u_color");
++
++            mLineShader.reset(new LineShader(this, vertex, fragment));
++            mLineShader->use();
++            mLineShader->defineUniform(LineShader::ProjMatrix, "u_projectionMatrix");
++            mLineShader->defineUniform(LineShader::MVMatrix, "u_mvMatrix");
++            mLineShader->defineAttribute(LineShader::Position, "a_position");
++            mLineShader->defineUniform(LineShader::Color, "u_color");
++        }
++
++        {
++            const GLchar* vertex[] = {
++                "uniform mat4   u_projectionMatrix;\n"
++                "uniform mat4   u_mvMatrix;\n"
++                "uniform vec4   u_ts;\n"
++                "attribute vec4 a_position;\n"
++                "attribute vec2 a_texCoord;\n"
++                "varying vec2   v_texCoord;\n"
++                "void main()\n"
++                "{\n"
++                "  gl_Position = (u_projectionMatrix * u_mvMatrix) * a_position;\n"
++                "  v_texCoord.x = (a_texCoord.x * u_ts.z) + u_ts.x;\n"
++                "  v_texCoord.y = (a_texCoord.y * u_ts.w) + u_ts.y;\n"
++                "}\n"
++            };
++
++            const GLchar* fragment[] = {
++                "#ifdef GL_ES\n"
++                "precision highp float;\n"
++                "#endif\n"
++                "varying vec2      v_texCoord;\n"
++                "uniform float     u_opacity;\n"
++                "uniform sampler2D s_texture;\n"
++                "void main()\n"
++                "{\n"
++                "  gl_FragColor = texture2D(s_texture, v_texCoord) * u_opacity;\n"
++                "}\n"
++            };
++
++            mBlitShader.reset(new BlitShader(this, vertex, fragment));
++            mBlitShader->use();
++            mBlitShader->defineUniform(BlitShader::ProjMatrix, "u_projectionMatrix");
++            mBlitShader->defineUniform(BlitShader::MVMatrix, "u_mvMatrix");
++            mBlitShader->defineUniform(BlitShader::TextureTransform, "u_ts");
++            mBlitShader->defineAttribute(BlitShader::Position, "a_position");
++            mBlitShader->defineAttribute(BlitShader::TexCoord, "a_texCoord");
++            mBlitShader->defineUniform(BlitShader::Opacity, "u_opacity");
++
++            glUniform1i(glGetUniformLocation(mBlitShader->program(), "s_texture"), 0);
++        }
++        {
++            const GLchar* vertex[] = {
++                "uniform mat4 projection;\n"
++                "uniform mat4 modelview;\n"
++
++                "varying vec2 textureCoordinate;\n"
++
++                "attribute vec4 vertex;\n"
++                "attribute vec2 texCoord;\n"
++
++                "void main()\n"
++                "{\n"
++                "  textureCoordinate = texCoord;\n"
++                "  gl_Position       = (modelview * projection) * vertex;\n"
++                "}\n"
++            };
++
++            const GLchar* fragment[] = {
++                "#ifdef GL_ES\n"
++                "precision highp float;\n"
++                "#endif\n"
++
++                "uniform sampler2D texture;\n"
++                "uniform vec4 color;\n"
++
++                "varying vec2 textureCoordinate;\n"
++
++                "void main()\n"
++                "{\n"
++                "  float a = texture2D(texture, textureCoordinate).a;\n"
++                "  gl_FragColor = color.rgba * a;\n"
++                "}\n"
++            };
++
++            mTextShader.reset(new TextShader(this, vertex, fragment));
++            mTextShader->use();
++            mTextShader->defineUniform(TextShader::ProjMatrix, "projection");
++            mTextShader->defineUniform(TextShader::MVMatrix, "modelview");
++            mTextShader->defineAttribute(TextShader::Vertex, "vertex");
++            mTextShader->defineAttribute(TextShader::TexCoord, "texCoord");
++            mTextShader->defineUniform(TextShader::Color, "color");
++
++            glUniform1i(glGetUniformLocation(mTextShader->program(), "texture"), 0);
++        }
++    }
++
++    NRDP_OBJECTCOUNT_REF(OpenGLContext, this);
++}
++
++OpenGLContext::~OpenGLContext()
++{
++    mFillShader.reset();
++    cleanup();
++    delete mState;
++    ScopedMutex locker(sMutex);
++    if (sPrimary.get() == this)
++        sPrimary.reset();
++    NRDP_OBJECTCOUNT_DEREF(OpenGLContext, this);
++}
++
++void OpenGLContext::shutdown()
++{
++    ScopedMutex locker(sMutex);
++    sShutdown = true;
++    sContexts.clear();
++    sPrimary.reset();
++}
++
++void OpenGLContext::setScreenSize(Coordinate width, Coordinate height)
++{
++    ScopedMutex locker(sMutex);
++    sWidth = width;
++    sHeight = height;
++    sShutdown = false;
++}
++
++OpenGLContext* OpenGLContext::primary()
++{
++    ScopedMutex locker(sMutex);
++    return sPrimary.get();
++}
++
++OpenGLContext* OpenGLContext::context()
++{
++    ContextData* data = sContextDatas.get();
++    if (!data) {
++        data = new ContextData;
++        sContextDatas.set(data);
++    }
++    ScopedMutex locker(sMutex);
++    shared_ptr<OpenGLContext> ctx = data->context.lock();
++    if (!ctx) {
++        if (!sPrimary) {
++            ctx.reset(new OpenGLContext);
++            data->context = ctx;
++            sPrimary = ctx;
++            sContexts.insert(ctx);
++        } else {
++            ctx.reset(new OpenGLContext(sPrimary.get()));
++            data->context = ctx;
++            sContexts.insert(ctx);
++        }
++    }
++    assert(ctx);
++    return ctx.get();
++}
++
++bool OpenGLContext::hasContext()
++{
++    return (sContextDatas.get() != 0);
++}
++
++GLuint OpenGLContext::createTexture(GLenum format, Coordinate width, Coordinate height)
++{
++    GL_CHECK;
++    GLuint texture = 0;
++    {
++        static Mutex textureMutex(ZERO_MUTEX, "GL texture mutex");
++        ScopedMutex locker(textureMutex);
++        glGenTextures(1, &texture);
++        mState->bindTexture(texture);
++    }
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, 0);
++    GL_CHECK;
++    return texture;
++}
++
++bool OpenGLContext::readPixels(const Surface::SharedPtr& surface, unsigned char* data)
++{
++    OpenGLFBO::SharedPtr oldFbo;
++    {
++        if (!mEngines.empty())
++            oldFbo = mEngines.back()->fbo();
++    }
++    OpenGLFBO fbo(surface);
++    if (!fbo.isValid())
++        return false;
++    glReadPixels(0, 0, surface->getWidth(), surface->getHeight(), (surface->bytesPerPixel() == 1 ? GL_ALPHA : GL_RGBA), GL_UNSIGNED_BYTE, data);
++    const GLuint fboid = oldFbo ? oldFbo->fbo() : 0;
++    glBindFramebuffer(GL_FRAMEBUFFER, fboid);
++    GL_CHECK;
++    return true;
++}
++
++GLuint OpenGLContext::createVBO(GLfloat* floats, int per, int size)
++{
++    GL_CHECK;
++    GLuint vbo;
++    glGenBuffers(1, &vbo);
++
++    mState->bindBuffer(GL_ARRAY_BUFFER, vbo);
++    glBufferData(GL_ARRAY_BUFFER, ((per * 6) * sizeof(GLfloat)) * size, floats, GL_STATIC_DRAW);
++
++    GL_CHECK;
++    return vbo;
++}
++
++void OpenGLContext::readVBO(GLuint vbo, GLfloat* floats, int per, int size, int* bytes)
++{
++    GL_CHECK;
++#ifdef GIBBON_GRAPHICSENGINE_GLES2_EGL
++    if(bytes)
++        *bytes = 0;
++#else
++    mState->bindBuffer(GL_ARRAY_BUFFER, vbo);
++    glGetBufferSubData(GL_ARRAY_BUFFER, 0, ((per * 6) * sizeof(GLfloat)) * size, floats);
++    if (bytes)
++        *bytes = ((per * 6) * sizeof(GLfloat)) * size;
++#endif
++    GL_CHECK;
++}
++
++void OpenGLContext::addTextureToDelete(GLuint tex)
++{
++    ScopedMutex locker(sMutex);
++    sTexToDelete.push_back(tex);
++}
++
++void OpenGLContext::deleteTextures()
++{
++    std::vector<GLuint> del;
++    {
++        ScopedMutex locker(sMutex);
++        std::swap(del, sTexToDelete);
++    }
++    if (del.empty())
++        return;
++    GL_CHECK;
++    OpenGLContext* ctx = OpenGLContext::context();
++    for (size_t i = 0; i < del.size(); ++i) {
++        ctx->state()->unbindTexture(del[i]);
++    }
++    glDeleteTextures(del.size(), &del[0]);
++    GL_CHECK;
++}
++
++static pthread_once_t sGLExtensionOnce = PTHREAD_ONCE_INIT;
++static std::set<std::string> sGLExtensions;
++
++static void initGLExtensions()
++{
++    const std::string all = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
++    size_t prev = 0;
++    for (size_t pos = all.find(' '); pos != std::string::npos; pos = all.find(' ', pos + 1)) {
++        sGLExtensions.insert(all.substr(prev, pos - prev));
++        prev = pos + 1;
++    }
++    if (prev < all.size()) {
++        sGLExtensions.insert(all.substr(prev));
++    }
++}
++
++std::vector<std::string> OpenGLContext::extensions()
++{
++    pthread_once(&sGLExtensionOnce, initGLExtensions);
++    std::vector<std::string> result;
++    for(std::set<std::string>::const_iterator it = sGLExtensions.begin(); it != sGLExtensions.end(); ++it)
++        result.push_back((*it));
++    return result;
++}
++
++bool OpenGLContext::supportsExtension(const std::string& ext)
++{
++    pthread_once(&sGLExtensionOnce, initGLExtensions);
++    return (std::find(sGLExtensions.begin(), sGLExtensions.end(), ext) != sGLExtensions.end());
++}
++
++static pthread_once_t sSyncOnce = PTHREAD_ONCE_INIT;
++OpenGLContext::Sync::Type OpenGLContext::Sync::sType = OpenGLContext::Sync::GL_finish;
++OpenGLContext::Sync::Callbacks OpenGLContext::Sync::sCallbacks;
++
++OpenGLContext::Sync::Sync()
++{
++    pthread_once(&sSyncOnce, init);
++    switch (sType) {
++    case GL_finish:
++        glFinish();
++        break;
++    case ARB_sync:
++        mData.mGLSync = sCallbacks.glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
++        glFlush();
++        break;
++    case KHR_fence_sync:
++#ifdef GIBBON_GRAPHICSENGINE_GLES2_EGL
++        mData.mEglKhr = sCallbacks.eglCreate(static_cast<EGLDisplay>(OpenGLContext::context()->display()),
++                                             EGL_SYNC_FENCE_KHR, 0);
++        glFlush();
++#endif
++        break;
++    }
++}
++
++OpenGLContext::Sync::~Sync()
++{
++    switch (sType) {
++    case GL_finish:
++        break;
++    case ARB_sync:
++        sCallbacks.glDeleteSync(mData.mGLSync);
++        break;
++    case KHR_fence_sync:
++#ifdef GIBBON_GRAPHICSENGINE_GLES2_EGL
++        sCallbacks.eglDestroy(static_cast<EGLDisplay>(OpenGLContext::context()->display()), mData.mEglKhr);
++#endif
++        break;
++    }
++}
++
++void OpenGLContext::Sync::wait()
++{
++    switch (sType) {
++    case GL_finish:
++        break;
++    case ARB_sync: {
++        GLenum ret;
++        do {
++            // 500 ms
++            ret = sCallbacks.glClientWaitSync(mData.mGLSync, GL_SYNC_FLUSH_COMMANDS_BIT, 500000000);
++        } while (ret == GL_TIMEOUT_EXPIRED);
++        break; }
++    case KHR_fence_sync: {
++#ifdef GIBBON_GRAPHICSENGINE_GLES2_EGL
++        EGLint ret;
++        do {
++            ret = sCallbacks.eglClientWait(static_cast<EGLDisplay>(OpenGLContext::context()->display()),
++                                           mData.mEglKhr, EGL_SYNC_FLUSH_COMMANDS_BIT_KHR,
++                                           500000000);
++        } while (ret == EGL_TIMEOUT_EXPIRED_KHR);
++#endif
++        break; }
++    }
++}
++
++void OpenGLContext::Sync::init()
++{
++    if (!GibbonConfiguration::uploadInDecodeThreads())
++        return;
++#ifdef GIBBON_GRAPHICSENGINE_GLES2_EGL
++    if (OpenGLContext::supportsPlatformExtension("EGL_KHR_fence_sync")
++        && OpenGLContext::supportsExtension("GL_OES_EGL_sync")) {
++        sType = KHR_fence_sync;
++        sCallbacks.eglCreate = (PFNEGLCREATESYNCKHRPROC)OpenGLContext::procAddr("eglCreateSyncKHR");
++        sCallbacks.eglDestroy = (PFNEGLDESTROYSYNCKHRPROC)OpenGLContext::procAddr("eglDestroySyncKHR");
++        sCallbacks.eglClientWait = (PFNEGLCLIENTWAITSYNCKHRPROC)OpenGLContext::procAddr("eglClientWaitSyncKHR");
++    } else
++#endif
++    if (OpenGLContext::supportsExtension("GL_ARB_sync")) {
++        sType = ARB_sync;
++        sCallbacks.glFenceSync = (PFNGLFENCESYNCPROC)OpenGLContext::procAddr("glFenceSync");
++        sCallbacks.glIsSync = (PFNGLISSYNCPROC)OpenGLContext::procAddr("glIsSync");
++        sCallbacks.glDeleteSync = (PFNGLDELETESYNCPROC)OpenGLContext::procAddr("glDeleteSync");
++        sCallbacks.glClientWaitSync = (PFNGLCLIENTWAITSYNCPROC)OpenGLContext::procAddr("glClientWaitSync");
++        sCallbacks.glWaitSync = (PFNGLWAITSYNCPROC)OpenGLContext::procAddr("glWaitSync");
++        sCallbacks.glGetSync = (PFNGLGETSYNCIVPROC)OpenGLContext::procAddr("glGetSync");
++    }
++}
++
++void OpenGLContext::loadEngineState(GraphicsEngine* engine)
++{
++    const GraphicsEngine::State& state = engine->getState();
++    const Rect clip = engine->makeScissor(state.clip);
++    mState->scissor(clip.x, clip.y, clip.width, clip.height);
++    const OpenGLFBO::SharedPtr& fbo = engine->fbo();
++    const GLuint fboid = fbo ? fbo->fbo() : 0;
++    glBindFramebuffer(GL_FRAMEBUFFER, fboid);
++    const Rect& viewport = engine->targetRect();
++    mState->viewport(viewport.x, viewport.y, viewport.width, viewport.height);
++}
++
++void OpenGLContext::pad(const Surface::SharedPtr& surface, GLint x, GLint y, GLint width, GLint height)
++{
++    OpenGLFBO::SharedPtr oldFbo;
++    {
++        if (!mEngines.empty())
++            oldFbo = mEngines.back()->fbo();
++    }
++    {
++        OpenGLFBO::SharedPtr fbo(new OpenGLFBO(surface));
++        if (!fbo->isValid()) {
++            Log::error(TRACE_GIBBON_GRAPHICS, "Unable to create fbo for clear: %s", surface->describe().c_str());
++            return;
++        }
++        const OpenGLState::GLRect oldClip = mState->clipRect();
++        mState->scissor(x, y, width, height);
++        mState->enableCap(GL_SCISSOR_TEST);
++        glClear(GL_COLOR_BUFFER_BIT);
++        if (oldClip.width != -1 && oldClip.height != -1)
++            mState->scissor(oldClip.x, oldClip.y, oldClip.width, oldClip.height);
++    }
++    const GLuint fboid = oldFbo ? oldFbo->fbo() : 0;
++    glBindFramebuffer(GL_FRAMEBUFFER, fboid);
++}
++
++std::string OpenGLContext::version() const
++{
++    const char* ver = reinterpret_cast<const char*>(glGetString(GL_VERSION));
++    if (ver)
++        return std::string(ver);
++    return std::string();
++}
++
++#if !defined(__APPLE__)
++#if !defined(GIBBON_NO_THREADANIMATION)
++void *createEGLVideoImage(unsigned width, unsigned height);
++class CreateVideoImage : public Application::Event
++{
++public:
++    CreateVideoImage(unsigned w, unsigned h)
++        : width(w), height(h), mutex(ZERO_MUTEX, "CreateVideoImage::Mutex"), image(0), finished(false)
++    {
++    }
++
++    virtual void eventFired()
++    {
++        ScopedMutex lock(mutex);
++        image = createEGLVideoImage(width, height);
++        finished = true;
++        cond.signal();
++    }
++
++    void *wait()
++    {
++        ScopedMutex lock(mutex);
++        while (!finished)
++            cond.wait(&mutex);
++        return image;
++    }
++
++private:
++    unsigned width, height;
++    Mutex mutex;
++    void *image;
++    bool finished;
++    ConditionVariable cond;
++};
++#endif
++
++void *createEGLVideoImage(unsigned width, unsigned height)
++{
++#if !defined(GIBBON_NO_THREADANIMATION)
++    if (!Animation::isAnimationThread()) {
++        shared_ptr<CreateVideoImage> event(new CreateVideoImage(width, height));
++        if (Animation::postEvent(event))
++            return event->wait();
++    }
++#endif
++    if (void* image = OpenGLContext::context()->createEGLVideoImage(width, height)) {
++        Debug::setProperty("testAnimationNoIdle", true);
++        return image;
++    }
++    return 0;
++}
++#endif // __APPLE__
++
+diff --git a/partner/graphics/synaptics/OpenGLContext.h b/partner/graphics/synaptics/OpenGLContext.h
+new file mode 100644
+index 00000000..3c044a88
+--- /dev/null
++++ b/partner/graphics/synaptics/OpenGLContext.h
+@@ -0,0 +1,264 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#ifndef OPENGLCONTEXT_H
++#define OPENGLCONTEXT_H
++
++#include "GraphicsEngine.h"
++#include "OpenGLFloats.h"
++#include <Surface.h>
++#include <Debug.h>
++#include <Color.h>
++#include <Rect.h>
++#include <Transform.h>
++#include <nrd/AppLog.h>
++#include <nrdbase/tr1.h>
++#include <nrdbase/Mutex.h>
++#include <nrdbase/LinkedList.h>
++#include <nrdbase/ThreadLocalStore.h>
++#include <vector>
++
++#include "OpenGLExtensions.h"
++
++namespace netflix {
++inline void _glcheck(const char* function, const char* file, int line)
++{
++    if(!netflix::gibbon::Debug::DebugGLCheck)
++        return;
++    const GLenum e = glGetError();
++    if (e != GL_NO_ERROR) {
++        netflix::Log::fatal(TRACE_GIBBON_GRAPHICS)
++            << ">>> GL ERROR " << std::hex << e
++            << " AT " << function << "\n" << file << ":" << std::dec << line;
++        //abort();
++    }
++}
++#define GL_CHECK _glcheck(__PRETTY_FUNCTION__, __FILE__, __LINE__)
++
++namespace gibbon {
++
++class OpenGLContextPrivate;
++class FillShader;
++class LineShader;
++class BlitShader;
++class TextShader;
++class OpenGLState;
++class ContextData;
++
++struct Floats
++{
++public:
++    Floats()
++        : f(0), idx(0), size(0)
++    {
++        reserve(5000);
++    }
++    ~Floats()
++    {
++        free(f);
++    }
++
++    void reserve(int sz)
++    {
++        if (size >= sz)
++            return;
++        f = static_cast<GLfloat*>(realloc(f, sz * sizeof(GLfloat)));
++        idx = f;
++        size = sz;
++    }
++
++    GLfloat* take(int size)
++    {
++        GLfloat* cur = idx;
++        idx += size;
++        return cur;
++    }
++
++    void reset()
++    {
++        idx = f;
++    }
++
++private:
++    GLfloat* f;
++    GLfloat* idx;
++    int size;
++};
++
++struct GLVertex
++{
++    float x, y, z;    // position
++    float s, t;       // texture
++    float r, g, b, a; // color
++};
++
++class OpenGLContext
++{
++public:
++    ~OpenGLContext();
++
++    static void setScreenSize(Coordinate width, Coordinate height);
++    static bool hasContext();
++    static OpenGLContext* context();
++    static OpenGLContext* primary();
++    static void ensureContext() { (void)context(); }
++    static void shutdown();
++
++    std::string version() const;
++
++    bool renderVideo();
++
++    void pushEngine(GraphicsEngine* engine);
++    void popEngine();
++    GraphicsEngine* engine();
++
++    void flip();
++
++    OpenGLState* state() { return mState; }
++    const OpenGLState* state() const { return mState; }
++
++    Coordinate screenWidth() const { return mWidth; }
++    Coordinate screenHeight() const { return mHeight; }
++
++    shared_ptr<FillShader> fillShader() const { return mFillShader; }
++    shared_ptr<LineShader> lineShader() const { return mLineShader; }
++    shared_ptr<BlitShader> blitShader() const { return mBlitShader; }
++    shared_ptr<TextShader> textShader() const { return mTextShader; }
++
++    GLuint createTexture(GLenum format, Coordinate width, Coordinate height);
++    bool readPixels(const Surface::SharedPtr& surface, unsigned char* data);
++
++    GLuint createVBO(GLfloat* floats, int per, int size);
++    void readVBO(GLuint vbo, GLfloat* floats, int per, int size, int* bytes);
++
++    void pad(const Surface::SharedPtr& surface, GLint x, GLint y, GLint width, GLint height);
++
++    OpenGLFloats& floats() { return mFloats; }
++
++    class Sync
++    {
++    public:
++        typedef shared_ptr<Sync> SharedPtr;
++        typedef weak_ptr<Sync> WeakPtr;
++
++        Sync();
++        ~Sync();
++
++        void wait();
++
++    private:
++        enum Type {
++            ARB_sync,
++            KHR_fence_sync,
++            GL_finish
++        };
++        static Type sType;
++
++        struct Callbacks {
++#ifdef GIBBON_GRAPHICSENGINE_GLES2_EGL
++            PFNEGLCREATESYNCKHRPROC eglCreate;
++            PFNEGLDESTROYSYNCKHRPROC eglDestroy;
++            PFNEGLCLIENTWAITSYNCKHRPROC eglClientWait;
++#endif
++            PFNGLFENCESYNCPROC glFenceSync;
++            PFNGLISSYNCPROC glIsSync;
++            PFNGLDELETESYNCPROC glDeleteSync;
++            PFNGLCLIENTWAITSYNCPROC glClientWaitSync;
++            PFNGLWAITSYNCPROC glWaitSync;
++            PFNGLGETSYNCIVPROC glGetSync;
++        };
++        static Callbacks sCallbacks;
++
++        static void init();
++
++        struct {
++            union {
++                void* mEglKhr;
++                GLsync mGLSync;
++            };
++        } mData;
++
++        friend class OpenGLContext;
++    };
++
++    void* display();
++    void *createEGLVideoImage(unsigned width, unsigned height);
++
++    static void addTextureToDelete(GLuint tex);
++    static void deleteTextures();
++
++    inline GLint getIntegerv(GLenum e) const {
++        GLint result;
++        glGetIntegerv(e, &result);
++        if(glGetError() != GL_NO_ERROR)
++            result = 0;
++        return result;
++    }
++
++    static std::vector<std::string> extensions();
++    static bool supportsExtension(const std::string& ext);
++    static void* procAddr(const std::string& proc);
++    static bool supportsPlatformExtension(const std::string& ext);
++
++private:
++    bool init(OpenGLContext* share);
++    void cleanup();
++    void loadEngineState(GraphicsEngine* engine);
++
++    const GraphicsEngine::State& engineState() const { assert(!mEngines.empty()); return mEngines.back()->getState(); }
++
++private:
++    OpenGLContext(OpenGLContext* share = 0);
++
++    std::list<GraphicsEngine*> mEngines;
++
++    OpenGLContextPrivate* mPrivate;
++    shared_ptr<FillShader> mFillShader;
++    shared_ptr<LineShader> mLineShader;
++    shared_ptr<BlitShader> mBlitShader;
++    shared_ptr<TextShader> mTextShader;
++    OpenGLState* mState;
++    Coordinate mWidth, mHeight;
++    OpenGLFloats mFloats;
++    bool mShared;
++
++    static Mutex sMutex;
++    static std::set<shared_ptr<OpenGLContext> > sContexts;
++    static shared_ptr<OpenGLContext> sPrimary;
++    static Coordinate sWidth, sHeight;
++    static std::vector<GLuint> sTexToDelete;
++    static bool sShutdown;
++    static ThreadLocalStore<ContextData> sContextDatas;
++
++    friend class ContextData;
++};
++
++inline void OpenGLContext::pushEngine(GraphicsEngine* engine)
++{
++    mEngines.push_back(engine);
++    loadEngineState(engine);
++}
++
++inline void OpenGLContext::popEngine()
++{
++    assert(!mEngines.empty());
++    mEngines.pop_back();
++    if (!mEngines.empty())
++        loadEngineState(mEngines.back());
++}
++
++inline GraphicsEngine* OpenGLContext::engine()
++{
++    assert(!mEngines.empty());
++    return mEngines.back();
++}
++
++}} // netflix::gibbon
++
++#endif
+diff --git a/partner/graphics/synaptics/OpenGLContextEGL.cpp b/partner/graphics/synaptics/OpenGLContextEGL.cpp
+new file mode 100644
+index 00000000..f9c52369
+--- /dev/null
++++ b/partner/graphics/synaptics/OpenGLContextEGL.cpp
+@@ -0,0 +1,283 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++#include "OpenGLContext.h"
++#include "OpenGLState.h"
++#include "OpenGLContextEGL.h"
++#include <Screen.h>
++#include <gibbon/config.h>
++#include <nrd/AppLog.h>
++#include <string.h>
++#include <cstddef>
++#include <EGL/egl.h>
++
++using namespace netflix;
++using namespace netflix::gibbon;
++
++#ifndef GIBBON_EGL_NO_SWAP
++static inline void gibbonEGLSwap(EGLDisplay display, EGLSurface surface)
++{
++    eglSwapBuffers(display, surface);
++}
++#else
++extern void gibbonEGLSwap(EGLDisplay display, EGLSurface surface);
++#endif
++
++bool OpenGLContext::init(OpenGLContext* share)
++{
++    EGLint contextAttributes[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
++
++    mPrivate = new OpenGLContextPrivate;
++    memset(mPrivate, '\0', sizeof(OpenGLContextPrivate));
++    if (!share) {
++        mPrivate->type = OpenGLContextPrivate::WindowContext;
++
++        EGLint numConfigs = 0;
++        EGLint majorVersion;
++        EGLint minorVersion;
++
++        EGLNativeDisplayType display = fbGetDisplay(NULL);
++        mPrivate->display = eglGetDisplay(display);
++        assert(mPrivate->display != EGL_NO_DISPLAY);
++
++        EGLint result;
++        NRDP_UNUSED(result);
++
++        result = eglInitialize(mPrivate->display, &majorVersion, &minorVersion);
++        assert(result != EGL_FALSE);
++
++        Log::info(TRACE_GIBBON_GRAPHICS) << "EGL INITIALIZED " << majorVersion << "." << minorVersion;
++
++        result = eglGetConfigs(mPrivate->display, 0, 0, &numConfigs);
++        assert(result != EGL_FALSE);
++        assert(numConfigs > 0);
++
++        Log::info(TRACE_GIBBON_GRAPHICS) << "EGL CONFIGS ARE " << numConfigs;
++
++        const int targetSamples = Screen::getConfiguration().targetSamples;
++        int trySamples = targetSamples;
++
++        const EGLint configAttributes[] = {
++            EGL_RED_SIZE,        1,
++            EGL_GREEN_SIZE,      1,
++            EGL_BLUE_SIZE,       1,
++            EGL_ALPHA_SIZE,      1,
++            EGL_DEPTH_SIZE,      0,
++            EGL_STENCIL_SIZE,    0,
++            EGL_BUFFER_SIZE,     EGL_DONT_CARE,
++
++            EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
++            EGL_SURFACE_TYPE,    EGL_WINDOW_BIT,
++
++            EGL_SAMPLE_BUFFERS,  trySamples ? 1 : EGL_DONT_CARE,
++            EGL_SAMPLES,         trySamples ? trySamples : EGL_DONT_CARE,
++
++            EGL_NONE
++        };
++
++        for (;;) {
++            int chooseConfigs = numConfigs;
++            result = eglChooseConfig(mPrivate->display, configAttributes, &mPrivate->config, 1, &chooseConfigs);
++            if (result == EGL_TRUE && chooseConfigs) {
++                numConfigs = chooseConfigs;
++                break;
++            }
++
++            if (!trySamples)
++                break;
++            trySamples /= 2;
++        }
++
++        assert(result != EGL_FALSE);
++        assert(numConfigs > 0);
++
++        EGLint bufferSize, redSize, greenSize, blueSize, alphaSize, depthSize, stencilSize;
++
++        eglGetConfigAttrib(mPrivate->display, mPrivate->config, EGL_BUFFER_SIZE, &bufferSize);
++        eglGetConfigAttrib(mPrivate->display, mPrivate->config, EGL_RED_SIZE, &redSize);
++        eglGetConfigAttrib(mPrivate->display, mPrivate->config, EGL_GREEN_SIZE, &greenSize);
++        eglGetConfigAttrib(mPrivate->display, mPrivate->config, EGL_BLUE_SIZE, &blueSize);
++        eglGetConfigAttrib(mPrivate->display, mPrivate->config, EGL_ALPHA_SIZE, &alphaSize);
++        eglGetConfigAttrib(mPrivate->display, mPrivate->config, EGL_DEPTH_SIZE, &depthSize);
++        eglGetConfigAttrib(mPrivate->display, mPrivate->config, EGL_STENCIL_SIZE, &stencilSize);
++
++        Log::info(TRACE_GIBBON_GRAPHICS) << "EGL CONFIG HAS"
++                                         << " U=" << bufferSize
++                                         << " R=" << redSize
++                                         << " G=" << greenSize
++                                         << " B=" << blueSize
++                                         << " A=" << alphaSize
++                                         << " D=" << depthSize
++                                         << " S=" << stencilSize;
++
++         // open the screen
++        int _width,  _height;
++        fbGetDisplayGeometry(display, &_width, &_height);
++
++        EGLNativeWindowType _windowHandle = fbCreateWindow(display, 0, 0, _width, _height);
++
++        mPrivate->surface = eglCreateWindowSurface(mPrivate->display, mPrivate->config, _windowHandle, 0);
++
++        assert(EGL_NO_SURFACE != mPrivate->surface);
++
++        EGLint width, height;
++        eglQuerySurface(mPrivate->display, mPrivate->surface, EGL_WIDTH, &width);
++        eglQuerySurface(mPrivate->display, mPrivate->surface, EGL_HEIGHT, &height);
++
++        Log::info(TRACE_GIBBON_GRAPHICS) << "EGL SURFACE IS " << width << "x" << height;
++
++        mWidth = width;
++        mHeight = height;
++
++        mPrivate->context = eglCreateContext(mPrivate->display, mPrivate->config, EGL_NO_CONTEXT, contextAttributes);
++        assert(EGL_NO_CONTEXT != mPrivate->context);
++
++        result = eglMakeCurrent(mPrivate->display, mPrivate->surface, mPrivate->surface, mPrivate->context);
++        assert(EGL_FALSE != result);
++
++        result = eglSwapInterval(mPrivate->display, 1);
++        assert(EGL_FALSE != result);
++
++        Log::info(TRACE_GIBBON_GRAPHICS) << "EGL VENDOR     : " << eglQueryString(mPrivate->display, EGL_VENDOR);
++        Log::info(TRACE_GIBBON_GRAPHICS) << "EGL VERSION    : " << eglQueryString(mPrivate->display, EGL_VERSION);
++        std::string ext(reinterpret_cast< const char * >(eglQueryString(mPrivate->display, EGL_EXTENSIONS)));
++        std::replace(ext.begin(), ext.end(), ' ', '\n' );
++        Log::info(TRACE_GIBBON_GRAPHICS) << "EGL EXTENSIONS : " << "\n" << ext;
++    } else {
++        mPrivate->type = OpenGLContextPrivate::PbContext;
++        mPrivate->display = share->mPrivate->display;
++        mPrivate->config = share->mPrivate->config;
++        mWidth = share->mWidth;
++        mHeight = share->mHeight;
++
++        static EGLint pbAttribs[] = {
++            EGL_WIDTH, 1,
++            EGL_HEIGHT, 1,
++            EGL_NONE
++        };
++
++        EGLint result;
++        NRDP_UNUSED(result);
++
++        mPrivate->surface = eglCreatePbufferSurface(mPrivate->display, mPrivate->config, pbAttribs);
++        assert(EGL_NO_SURFACE != mPrivate->surface);
++        mPrivate->context = eglCreateContext(mPrivate->display, mPrivate->config, share->mPrivate->context, contextAttributes);
++        assert(EGL_NO_CONTEXT != mPrivate->context);
++
++        result = eglMakeCurrent(mPrivate->display, mPrivate->surface, mPrivate->surface, mPrivate->context);
++        assert(EGL_FALSE != result);
++
++        result = eglSwapInterval(mPrivate->display, 1);
++        assert(EGL_FALSE != result);
++}
++
++    return true;
++}
++
++void OpenGLContext::cleanup()
++{
++    eglMakeCurrent(mPrivate->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
++    if(mPrivate->videoImage) {
++        eglDestroyImage(mPrivate->display, mPrivate->videoImage);
++        glDeleteTextures(1 , &mPrivate->videoTexture );
++        mPrivate->videoImage = 0;
++    }
++    eglDestroySurface(mPrivate->display, mPrivate->surface);
++    eglDestroyContext(mPrivate->display, mPrivate->context);
++    if (mPrivate->type == OpenGLContextPrivate::WindowContext)
++        eglTerminate(mPrivate->display);
++
++    delete mPrivate;
++    mPrivate = 0;
++}
++
++void OpenGLContext::flip()
++{
++    gibbonEGLSwap(mPrivate->display, mPrivate->surface);
++}
++
++void* OpenGLContext::display()
++{
++    return mPrivate->display;
++}
++
++void *OpenGLContext::createEGLVideoImage(unsigned width, unsigned height)
++{
++    GL_CHECK;
++    OpenGLContext::ensureContext();
++    if(mPrivate->videoImage) {
++        eglDestroyImage(mPrivate->display, mPrivate->videoImage);
++        glDeleteTextures(1, &mPrivate->videoTexture);
++    }
++    glGenTextures(1, &mPrivate->videoTexture);
++    glBindTexture(GL_TEXTURE_2D, mPrivate->videoTexture);
++    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++    GL_CHECK;
++    mPrivate->videoImage = eglCreateImage(mPrivate->display, mPrivate->context, EGL_GL_TEXTURE_2D_KHR, (EGLClientBuffer)mPrivate->videoTexture, 0);
++    GL_CHECK;
++    glFinish();
++    return mPrivate->videoImage;
++}
++
++bool OpenGLContext::renderVideo()
++{
++    if(int texture = mPrivate->videoTexture) {
++        GraphicsEngine* graphics = engine();
++        Rect clip;
++        const bool clipped = graphics->getState().hasClip;
++        if(clipped) {
++            clip = graphics->getState().clip;
++            mState->disableCap(GL_SCISSOR_TEST);
++            graphics->clearClip();
++        }
++
++        Transform transform;
++        transform.scale(1, -1, 1);
++        static GLfloat texTransform[4] = { 0, 0, 1, 1 };
++        graphics->blit(texture, transform, texTransform);
++
++        if(clipped) {
++            mState->enableCap(GL_SCISSOR_TEST);
++            graphics->setClip(clip);
++        }
++        return true;
++    }
++    return false;
++}
++
++void* OpenGLContext::procAddr(const std::string& proc)
++{
++    return reinterpret_cast<void*>(eglGetProcAddress(proc.c_str()));
++}
++
++static pthread_once_t sPlatformExtensionOnce = PTHREAD_ONCE_INIT;
++static std::set<std::string> sPlatformExtensions;
++
++static void initPlatformExtensions()
++{
++    EGLDisplay dpy = static_cast<EGLDisplay>(OpenGLContext::context()->display());
++    const std::string all = reinterpret_cast<const char*>(eglQueryString(dpy, EGL_EXTENSIONS));
++    size_t prev = 0;
++    for (size_t pos = all.find(' '); pos != std::string::npos; pos = all.find(' ', pos + 1)) {
++        sPlatformExtensions.insert(all.substr(prev, pos - prev));
++        prev = pos + 1;
++    }
++    if (prev < all.size()) {
++        sPlatformExtensions.insert(all.substr(prev));
++    }
++}
++
++bool OpenGLContext::supportsPlatformExtension(const std::string& ext)
++{
++    pthread_once(&sPlatformExtensionOnce, initPlatformExtensions);
++    return (std::find(sPlatformExtensions.begin(), sPlatformExtensions.end(), ext) != sPlatformExtensions.end());
++}
+diff --git a/partner/graphics/synaptics/OpenGLContextEGL.h b/partner/graphics/synaptics/OpenGLContextEGL.h
+new file mode 100644
+index 00000000..9ad46915
+--- /dev/null
++++ b/partner/graphics/synaptics/OpenGLContextEGL.h
+@@ -0,0 +1,38 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#ifndef OPENGLCONTEXTEGL_H
++#define OPENGLCONTEXTEGL_H
++
++#include <GLES2/gl2.h>
++#include <EGL/egl.h>
++#include <EGL/eglext.h>
++
++namespace netflix {
++namespace gibbon {
++
++class OpenGLContextPrivate
++{
++public:
++    enum {
++        WindowContext,
++        PbContext
++    } type;
++
++    EGLDisplay display;
++    EGLConfig config;
++    EGLContext context;
++    EGLSurface surface;
++    GLuint videoTexture;
++    EGLImageKHR videoImage;
++};
++
++}}
++
++#endif
+diff --git a/partner/graphics/synaptics/OpenGLContextGLX.cpp b/partner/graphics/synaptics/OpenGLContextGLX.cpp
+new file mode 100644
+index 00000000..a489a51b
+--- /dev/null
++++ b/partner/graphics/synaptics/OpenGLContextGLX.cpp
+@@ -0,0 +1,255 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#include "OpenGLContext.h"
++#include "Screen.h"
++#include <GibbonConfiguration.h>
++#include <nrd/NrdConfiguration.h>
++#include <nrd/AppLog.h>
++#include <nrdbase/Mutex.h>
++#include <nrdbase/ScopedMutex.h>
++#include "OpenGLContextGLX.h"
++
++#include <string.h>
++#include <string>
++
++
++using namespace netflix;
++using namespace netflix::gibbon;
++
++static Mutex sGLXDpyMutex(GIBBON_GL_PRIVATE_MUTEX, "GLX dpy mutex");
++
++bool OpenGLContext::init(OpenGLContext* share)
++{
++    const bool useDirectContext = GibbonConfiguration::useDirectContext();
++
++    ScopedMutex locker(sGLXDpyMutex);
++
++    mPrivate = new OpenGLContextPrivate;
++    memset(mPrivate, '\0', sizeof(OpenGLContextPrivate));
++    if (!share) {
++        mWidth = GibbonConfiguration::screenWidth();
++        mHeight = GibbonConfiguration::screenHeight();
++
++        // create an X display and everything
++        XInitThreads();
++        Display* dpy = mPrivate->dpy = XOpenDisplay(0);
++        if (!dpy) {
++            Log::error(TRACE_GIBBON_GRAPHICS, "Couldn't create X display");
++            return false;
++        }
++        mPrivate->type = OpenGLContextPrivate::WindowContext;
++
++        static int visualAttribs[] = {
++            GLX_X_RENDERABLE, True,
++            GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
++            GLX_RENDER_TYPE, GLX_RGBA_BIT,
++            GLX_X_VISUAL_TYPE, GLX_TRUE_COLOR,
++            GLX_RED_SIZE, 8,
++            GLX_GREEN_SIZE, 8,
++            GLX_BLUE_SIZE, 8,
++            GLX_ALPHA_SIZE, 8,
++            GLX_DEPTH_SIZE, 24,
++            GLX_STENCIL_SIZE, 8,
++            GLX_DOUBLEBUFFER, True,
++            None
++        };
++
++        int glxMajor, glxMinor;
++        // FBConfigs were added in GLX version 1.3
++        if (!glXQueryVersion(dpy, &glxMajor, &glxMinor) ||
++            ((glxMajor == 1) && (glxMinor < 3)) || (glxMajor < 1)) {
++            Log::error(TRACE_GIBBON_GRAPHICS, "Need GLX 1.3 or higher");
++            return false;
++        }
++
++        int fbCount;
++        GLXFBConfig* fbc = glXChooseFBConfig(dpy, DefaultScreen(dpy), visualAttribs, &fbCount);
++        if (!fbc) {
++            Log::error(TRACE_GIBBON_GRAPHICS, "Couldn't get framebuffer config");
++            return false;
++        }
++
++        const int targetSamples = Screen::getConfiguration().targetSamples;
++        // Pick the FB config/visual with the most samples (up to and including targetSamples) per pixel
++        int best_fbc = -1, worst_fbc = -1, best_num_samp = -1, worst_num_samp = 999;
++        for (int i = 0; i < fbCount; ++i) {
++            XVisualInfo *vi = glXGetVisualFromFBConfig(dpy, fbc[i]);
++            if (vi) {
++                int samp_buf, samples;
++                glXGetFBConfigAttrib(dpy, fbc[i], GLX_SAMPLE_BUFFERS, &samp_buf);
++                glXGetFBConfigAttrib(dpy, fbc[i], GLX_SAMPLES, &samples);
++
++                if (best_fbc < 0 || ((samp_buf && samples > best_num_samp) && (samples <= targetSamples))) {
++                    best_fbc = i;
++                    best_num_samp = samples;
++                }
++                if (worst_fbc < 0 || !samp_buf || samples < worst_num_samp) {
++                    worst_fbc = i;
++                    worst_num_samp = samples;
++                }
++            }
++            XFree(vi);
++        }
++
++        NTRACE(TRACE_GIBBON_GRAPHICS, "Chose fbc %x with %d samples", best_fbc, best_num_samp);
++        GLXFBConfig bestFbc = mPrivate->fbc = fbc[best_fbc];
++
++        XFree(fbc);
++
++        XVisualInfo *vi = glXGetVisualFromFBConfig(dpy, bestFbc);
++
++        mPrivate->screen = vi->screen;
++
++        XSetWindowAttributes swa;
++        swa.colormap = mPrivate->cmap = XCreateColormap(dpy, RootWindow(dpy, vi->screen), vi->visual, AllocNone);
++        swa.background_pixmap = None;
++        swa.border_pixel = 0;
++        swa.event_mask = (StructureNotifyMask | ExposureMask | KeyPressMask | KeyReleaseMask |
++                          PointerMotionMask | ButtonPressMask | ButtonReleaseMask);
++
++        mPrivate->win = XCreateWindow(dpy, RootWindow(dpy, vi->screen), 0, 0, mWidth, mHeight, 0, vi->depth,
++                                      InputOutput, vi->visual, CWBorderPixel|CWColormap|CWEventMask, &swa);
++        if (!mPrivate->win) {
++            XFree(vi);
++            Log::error(TRACE_GIBBON_GRAPHICS, "Unable to create X11 window");
++            return false;
++        }
++
++        XFree(vi);
++
++        {
++            XStoreName(dpy, mPrivate->win, "Gibbon GLX");
++            XClassHint* hint = XAllocClassHint();
++            hint->res_name = strdup("netflix");
++            hint->res_class = strdup("Netflix");
++            XSetClassHint(dpy, mPrivate->win, hint);
++            free(hint->res_name);
++            free(hint->res_class);
++            XFree(hint);
++        }
++        {
++            XSizeHints hints;
++            hints.flags = PSize | PMinSize | PMaxSize;
++            hints.width = hints.max_width = hints.min_width = mWidth;
++            hints.height = hints.max_height = hints.min_height = mHeight;
++            XSetWMNormalHints(dpy, mPrivate->win, &hints);
++        }
++
++        XMapWindow(dpy, mPrivate->win);
++
++        mPrivate->ctx = glXCreateNewContext(dpy, bestFbc, GLX_RGBA_TYPE, 0, useDirectContext ? True : False);
++        glXMakeCurrent(dpy, mPrivate->win, mPrivate->ctx);
++
++        mPrivate->dpyRef = new unsigned int(1);
++    } else {
++        mPrivate->type = OpenGLContextPrivate::PbContext;
++        const GLXContext shareCtx = share->mPrivate->ctx;
++        Display* dpy = mPrivate->dpy = share->mPrivate->dpy;
++        mPrivate->fbc = share->mPrivate->fbc;
++        mPrivate->dpyRef = share->mPrivate->dpyRef;
++        mWidth = share->mWidth;
++        mHeight = share->mHeight;
++        ++(*mPrivate->dpyRef);
++        static int pbAttribs[] = {
++            GLX_PBUFFER_WIDTH, static_cast<int>(mWidth),
++            GLX_PBUFFER_HEIGHT, static_cast<int>(mHeight),
++            GLX_LARGEST_PBUFFER, False,
++            GLX_PRESERVED_CONTENTS, False,
++            None
++        };
++        mPrivate->pb = glXCreatePbuffer(dpy, mPrivate->fbc, pbAttribs);
++        if (!mPrivate->pb) {
++            Log::error(TRACE_GIBBON_GRAPHICS, "Unable to create pixel buffer");
++            return false;
++        }
++        mPrivate->ctx = glXCreateNewContext(dpy, mPrivate->fbc, GLX_RGBA_TYPE, shareCtx, useDirectContext ? True : False);
++        glXMakeCurrent(dpy, mPrivate->pb, mPrivate->ctx);
++    }
++    return true;
++}
++
++void OpenGLContext::cleanup()
++{
++    ScopedMutex locker(sGLXDpyMutex);
++
++    if (!mPrivate->dpy)
++        return;
++    if (mPrivate->ctx) {
++        glXMakeCurrent(mPrivate->dpy, None, 0);
++        glXDestroyContext(mPrivate->dpy, mPrivate->ctx);
++        switch (mPrivate->type) {
++        case OpenGLContextPrivate::WindowContext:
++            XDestroyWindow(mPrivate->dpy, mPrivate->win);
++            XFreeColormap(mPrivate->dpy, mPrivate->cmap);
++            break;
++        case OpenGLContextPrivate::PbContext:
++            glXDestroyPbuffer(mPrivate->dpy, mPrivate->pb);
++            break;
++        }
++    }
++
++    if (!--(*mPrivate->dpyRef)) {
++        XCloseDisplay(mPrivate->dpy);
++        delete mPrivate->dpyRef;
++    }
++
++    delete mPrivate;
++    mPrivate = 0;
++}
++
++void OpenGLContext::flip()
++{
++    // ### is this right?
++    assert(mPrivate->type == OpenGLContextPrivate::WindowContext);
++    glXSwapBuffers(mPrivate->dpy, mPrivate->win);
++}
++
++void* OpenGLContext::display()
++{
++    return mPrivate->dpy;
++}
++
++bool OpenGLContext::renderVideo()
++{
++    return false;
++}
++
++void *OpenGLContext::createEGLVideoImage(unsigned /*width*/, unsigned /*height*/)
++{
++    return 0;
++}
++
++void* OpenGLContext::procAddr(const std::string& proc)
++{
++    return reinterpret_cast<void*>(glXGetProcAddress(reinterpret_cast<const GLubyte*>(proc.c_str())));
++}
++
++static pthread_once_t sPlatformExtensionOnce = PTHREAD_ONCE_INIT;
++static std::set<std::string> sPlatformExtensions;
++
++static void initPlatformExtensions()
++{
++    Display* dpy = static_cast<Display*>(OpenGLContext::context()->display());
++    const std::string all = glXQueryExtensionsString(dpy, DefaultScreen(dpy));
++    size_t prev = 0;
++    for (size_t pos = all.find(' '); pos != std::string::npos; pos = all.find(' ', pos + 1)) {
++        sPlatformExtensions.insert(all.substr(prev, pos - prev));
++        prev = pos + 1;
++    }
++    if (prev < all.size()) {
++        sPlatformExtensions.insert(all.substr(prev));
++    }
++}
++
++bool OpenGLContext::supportsPlatformExtension(const std::string& ext)
++{
++    pthread_once(&sPlatformExtensionOnce, initPlatformExtensions);
++    return (sPlatformExtensions.find(ext) != sPlatformExtensions.end());
++}
+diff --git a/partner/graphics/synaptics/OpenGLContextGLX.h b/partner/graphics/synaptics/OpenGLContextGLX.h
+new file mode 100644
+index 00000000..e90a2684
+--- /dev/null
++++ b/partner/graphics/synaptics/OpenGLContextGLX.h
+@@ -0,0 +1,45 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#ifndef OPENGLCONTEXTGLX_H
++#define OPENGLCONTEXTGLX_H
++
++#include <X11/Xlib.h>
++#include <GL/gl.h>
++#include <GL/glx.h>
++#include <GL/glext.h>
++
++namespace netflix {
++namespace gibbon {
++
++class OpenGLContextPrivate
++{
++public:
++    Display* dpy;
++    Colormap cmap;
++    unsigned int* dpyRef;
++    int screen;
++
++    enum {
++        WindowContext,
++        PbContext
++    } type;
++
++    union {
++        Window win;
++        GLXPbuffer pb;
++    };
++
++    GLXContext ctx;
++    GLXFBConfig fbc;
++};
++
++}}
++
++#endif
+diff --git a/partner/graphics/synaptics/OpenGLContextOSX.h b/partner/graphics/synaptics/OpenGLContextOSX.h
+new file mode 100644
+index 00000000..13497aca
+--- /dev/null
++++ b/partner/graphics/synaptics/OpenGLContextOSX.h
+@@ -0,0 +1,28 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#ifndef OPENGLCONTEXTGLX_H
++#define OPENGLCONTEXTGLX_H
++
++#include <OpenGL/gl.h>
++#import <Cocoa/Cocoa.h>
++
++namespace netflix {
++namespace gibbon {
++
++class OpenGLContextPrivate
++{
++public:
++    NSOpenGLContext* ctx;
++    NSOpenGLPixelFormat* fmt;
++};
++
++}}
++
++#endif
+diff --git a/partner/graphics/synaptics/OpenGLContextOSX.mm b/partner/graphics/synaptics/OpenGLContextOSX.mm
+new file mode 100644
+index 00000000..311d94f0
+--- /dev/null
++++ b/partner/graphics/synaptics/OpenGLContextOSX.mm
+@@ -0,0 +1,86 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#include "OpenGLContext.h"
++#include <nrd/AppLog.h>
++#include <string.h>
++#import "OpenGLContextOSX.h"
++#import <Carbon/Carbon.h>
++
++extern NSOpenGLContext* gibbonGLContext;
++extern NSOpenGLPixelFormat* gibbonGLPixelFormat;
++
++using namespace netflix;
++using namespace netflix::gibbon;
++
++bool OpenGLContext::init(OpenGLContext* share)
++{
++    mPrivate = new OpenGLContextPrivate;
++    memset(mPrivate, '\0', sizeof(OpenGLContextPrivate));
++    if (!share) {
++        // activate the global context
++        mPrivate->ctx = gibbonGLContext;
++        mPrivate->fmt = gibbonGLPixelFormat;
++        [mPrivate->ctx retain];
++        [mPrivate->fmt retain];
++        [mPrivate->ctx makeCurrentContext];
++    } else {
++        // create a new shared context
++        mPrivate->ctx = [[[NSOpenGLContext alloc] initWithFormat:share->mPrivate->fmt shareContext:share->mPrivate->ctx] autorelease];
++        mPrivate->fmt = share->mPrivate->fmt;
++        [mPrivate->ctx retain];
++        [mPrivate->fmt retain];
++        [mPrivate->ctx makeCurrentContext];
++    }
++    return false;
++}
++
++void OpenGLContext::cleanup()
++{
++    [mPrivate->ctx release];
++    [mPrivate->fmt release];
++}
++
++void OpenGLContext::flip()
++{
++    [mPrivate->ctx flushBuffer];
++}
++
++void* OpenGLContext::display()
++{
++    return 0;
++}
++
++bool OpenGLContext::renderVideo()
++{
++    return false;
++}
++
++void* OpenGLContext::procAddr(const std::string& proc)
++{
++    static CFBundleRef openGLBundle = 0;
++    if (!openGLBundle) {
++        openGLBundle = CFBundleGetBundleWithIdentifier(CFSTR("com.apple.opengl"));
++    }
++
++    void* function = 0;
++
++    CFStringRef functionName = CFStringCreateWithCString(kCFAllocatorDefault, proc.c_str(), kCFStringEncodingASCII);
++    if (functionName) {
++        function = CFBundleGetFunctionPointerForName(openGLBundle, functionName);
++        CFRelease(functionName);
++    }
++
++    return function;
++}
++
++bool OpenGLContext::supportsPlatformExtension(const std::string& /*ext*/)
++{
++    return false;
++}
+diff --git a/partner/graphics/synaptics/OpenGLExtensions.h b/partner/graphics/synaptics/OpenGLExtensions.h
+new file mode 100644
+index 00000000..d5b9c0ee
+--- /dev/null
++++ b/partner/graphics/synaptics/OpenGLExtensions.h
+@@ -0,0 +1,69 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#ifndef OPENGLEXTENSIONS_H
++#define OPENGLEXTENSIONS_H
++
++#ifdef GIBBON_GRAPHICSENGINE_GLES2_EGL
++#ifndef APIENTRYP
++#define APIENTRYP EGLAPIENTRYP
++#define GLuint64 uint64_t
++#define GLint64 int64_t
++#endif
++typedef void* EGLSyncKHR;
++typedef EGLSyncKHR (EGLAPIENTRYP PFNEGLCREATESYNCKHRPROC) (EGLDisplay dpy, EGLenum type, const EGLint *attrib_list);
++typedef EGLBoolean (EGLAPIENTRYP PFNEGLDESTROYSYNCKHRPROC) (EGLDisplay dpy, EGLSyncKHR sync);
++typedef EGLint (EGLAPIENTRYP PFNEGLCLIENTWAITSYNCKHRPROC) (EGLDisplay dpy, EGLSyncKHR sync, EGLint flags, EGLTimeKHR timeout);
++#endif
++#ifndef APIENTRYP
++#define APIENTRYP *
++#endif
++typedef struct __GLsync *GLsync;
++typedef GLsync (APIENTRYP PFNGLFENCESYNCPROC) (GLenum condition, GLbitfield flags);
++typedef GLboolean (APIENTRYP PFNGLISSYNCPROC) (GLsync sync);
++typedef void (APIENTRYP PFNGLDELETESYNCPROC) (GLsync sync);
++typedef GLenum (APIENTRYP PFNGLCLIENTWAITSYNCPROC) (GLsync sync, GLbitfield flags, GLuint64 timeout);
++typedef void (APIENTRYP PFNGLWAITSYNCPROC) (GLsync sync, GLbitfield flags, GLuint64 timeout);
++typedef void (APIENTRYP PFNGLGETINTEGER64VPROC) (GLenum pname, GLint64 *params);
++typedef void (APIENTRYP PFNGLGETSYNCIVPROC) (GLsync sync, GLenum pname, GLsizei bufSize, GLsizei *length, GLint *values);
++
++#ifndef GL_ARB_sync
++#define GL_MAX_SERVER_WAIT_TIMEOUT        0x9111
++#define GL_OBJECT_TYPE                    0x9112
++#define GL_SYNC_CONDITION                 0x9113
++#define GL_SYNC_STATUS                    0x9114
++#define GL_SYNC_FLAGS                     0x9115
++#define GL_SYNC_FENCE                     0x9116
++#define GL_SYNC_GPU_COMMANDS_COMPLETE     0x9117
++#define GL_UNSIGNALED                     0x9118
++#define GL_SIGNALED                       0x9119
++#define GL_ALREADY_SIGNALED               0x911A
++#define GL_TIMEOUT_EXPIRED                0x911B
++#define GL_CONDITION_SATISFIED            0x911C
++#define GL_WAIT_FAILED                    0x911D
++#define GL_SYNC_FLUSH_COMMANDS_BIT        0x00000001
++#define GL_TIMEOUT_IGNORED                0xFFFFFFFFFFFFFFFFull
++#endif
++
++#ifndef EGL_SYNC_FLUSH_COMMANDS_BIT_KHR
++#define EGL_SYNC_FENCE_KHR                   0x30F9
++#define EGL_SYNC_FLUSH_COMMANDS_BIT_KHR      0x0001
++#define EGL_SYNC_TYPE_KHR                    0x30F7
++#define EGL_SYNC_STATUS_KHR                  0x30F1
++#define EGL_SYNC_CONDITION_KHR               0x30F8
++#define EGL_SIGNALED_KHR                     0x30F2
++#define EGL_UNSIGNALED_KHR                   0x30F3
++#define EGL_SYNC_PRIOR_COMMANDS_COMPLETE_KHR 0x30F0
++#define EGL_FOREVER_KHR                      0xFFFFFFFFFFFFFFFFull
++#define EGL_TIMEOUT_EXPIRED_KHR              0x30F5
++#define EGL_CONDITION_SATISFIED_KHR          0x30F6
++#define EGL_NO_SYNC_KHR                      ((void*)0)
++#endif
++
++#endif
+diff --git a/partner/graphics/synaptics/OpenGLFBO.cpp b/partner/graphics/synaptics/OpenGLFBO.cpp
+new file mode 100644
+index 00000000..9191d1e4
+--- /dev/null
++++ b/partner/graphics/synaptics/OpenGLFBO.cpp
+@@ -0,0 +1,134 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#include "OpenGLFBO.h"
++#include "OpenGLContext.h"
++#include "OpenGLState.h"
++#include <nrd/AppLog.h>
++
++using namespace netflix;
++using namespace netflix::gibbon;
++
++OpenGLFBO::OpenGLFBO(const Surface::SharedPtr& surface)
++    : mValid(true)
++{
++    const GLuint tex = surface->getTexture();
++    mRect = surface->getRect();
++    init(tex);
++}
++
++OpenGLFBO::~OpenGLFBO()
++{
++    if (!mValid)
++        return;
++
++    glDeleteFramebuffers(1, &mFbo);
++    glDeleteRenderbuffers(mRb.size(), &mRb[0]);
++}
++
++GLenum OpenGLFBO::generate(GLuint tex, Coordinate width, Coordinate height, unsigned int flags)
++{
++    OpenGLContext::context()->state()->unbindTexture(tex);
++    glGenFramebuffers(1, &mFbo);
++    glBindFramebuffer(GL_FRAMEBUFFER, mFbo);
++    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
++
++#ifdef GL_DEPTH_STENCIL
++    if (flags & DepthStencil) {
++        mRb.resize(1);
++        glGenRenderbuffers(mRb.size(), &mRb[0]);
++        glBindRenderbuffer(GL_RENDERBUFFER, mRb[0]);
++        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_STENCIL, width, height);
++        glBindRenderbuffer(GL_RENDERBUFFER, 0);
++        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, mRb[0]);
++        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, mRb[0]);
++    } else
++#endif
++    {
++        if (flags & Depth) {
++            assert(mRb.empty());
++            mRb.resize(1);
++            GLuint& rb = mRb.back();
++            glGenRenderbuffers(1, &rb);
++            glBindRenderbuffer(GL_RENDERBUFFER, rb);
++            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width, height);
++            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rb);
++        }
++        if (flags & Stencil) {
++            mRb.resize(mRb.size() + 1);
++            GLuint& rb = mRb.back();
++            glGenRenderbuffers(1, &rb);
++            glBindRenderbuffer(GL_RENDERBUFFER, rb);
++            glRenderbufferStorage(GL_RENDERBUFFER, GL_STENCIL_INDEX8, width, height);
++            glBindRenderbuffer(GL_RENDERBUFFER, 0);
++            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rb);
++        }
++    }
++
++    const GLenum fbstatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
++    if (fbstatus != GL_FRAMEBUFFER_COMPLETE) {
++        // flush any error if we got one
++        glGetError();
++
++        glBindFramebuffer(GL_FRAMEBUFFER, 0);
++        glDeleteFramebuffers(1, &mFbo);
++        glDeleteRenderbuffers(mRb.size(), &mRb[0]);
++        mFbo = 0;
++        mRb.clear();
++    }
++    return fbstatus;
++}
++
++void OpenGLFBO::init(GLuint tex)
++{
++    const Coordinate width = mRect.width;
++    const Coordinate height = mRect.height;
++
++    static unsigned int tryFlags[] = {
++#ifdef GL_DEPTH_STENCIL
++        DepthStencil,
++#endif
++        Depth | Stencil,
++        Depth,
++        Stencil,
++        0
++    };
++
++    GL_CHECK;
++    GLenum status;
++    for (size_t idx = 0; idx < sizeof(tryFlags) / sizeof(tryFlags[0]); ++idx) {
++        status = generate(tex, width, height, tryFlags[idx]);
++        if (status == GL_FRAMEBUFFER_COMPLETE)
++            break;
++    }
++    if (status != GL_FRAMEBUFFER_COMPLETE) {
++        mValid = false;
++        std::string message;
++        switch (status) {
++        case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
++            message = "Incomplete attachment";
++            break;
++        case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
++            message = "Missing attachment";
++            break;
++        case GL_FRAMEBUFFER_UNSUPPORTED:
++            message = "Unsupported framebuffer";
++            break;
++        default:
++            message = StringFormatter::sformat("Unknown status: 0x%x", status);
++            break;
++        }
++        Log::error(TRACE_GIBBON_GRAPHICS, "Couldn't create FBO: %s", message.c_str());
++        // } else {
++        //     Log::error(TRACE_GIBBON_GRAPHICS, "FBO OK!");
++    }
++
++    GL_CHECK;
++}
++
+diff --git a/partner/graphics/synaptics/OpenGLFBO.h b/partner/graphics/synaptics/OpenGLFBO.h
+new file mode 100644
+index 00000000..2c1d9c98
+--- /dev/null
++++ b/partner/graphics/synaptics/OpenGLFBO.h
+@@ -0,0 +1,55 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#ifndef OPENGLFBO_H
++#define OPENGLFBO_H
++
++#include <vector>
++#include <Surface.h>
++#include <nrdbase/tr1.h>
++
++namespace netflix {
++namespace gibbon {
++
++class OpenGLFBO : public enable_shared_from_this<OpenGLFBO>
++{
++public:
++    typedef shared_ptr<OpenGLFBO> SharedPtr;
++    typedef weak_ptr<OpenGLFBO> WeakPtr;
++
++    OpenGLFBO(const Surface::SharedPtr& surface);
++    ~OpenGLFBO();
++
++    bool isValid() const { return mValid; }
++    GLuint fbo() const { return mFbo; }
++
++private:
++    void init(GLuint tex);
++
++    enum GenerateFlags {
++#ifdef GL_DEPTH_STENCIL
++        DepthStencil = 0x1,
++#endif
++        Depth = 0x2,
++        Stencil = 0x4
++    };
++    GLenum generate(GLuint tex, Coordinate width, Coordinate height, unsigned int flags);
++
++private:
++    friend class OpenGLContext;
++
++    GLuint mFbo;
++    std::vector<GLuint> mRb;
++    Rect mRect;
++    bool mValid;
++};
++
++}} // namespace netflix::gibbon
++
++#endif
+diff --git a/partner/graphics/synaptics/OpenGLFloats.h b/partner/graphics/synaptics/OpenGLFloats.h
+new file mode 100644
+index 00000000..b2635a85
+--- /dev/null
++++ b/partner/graphics/synaptics/OpenGLFloats.h
+@@ -0,0 +1,49 @@
++#ifndef OPENGLFLOATS_H
++#define OPENGLFLOATS_H
++
++#include <Surface.h>
++#include <stdlib.h>
++
++struct OpenGLFloats
++{
++public:
++    OpenGLFloats()
++        : f(0), idx(0), size(0)
++    {
++        reserve(5000);
++    }
++    ~OpenGLFloats()
++    {
++        free(f);
++    }
++
++    void reserve(int sz)
++    {
++        if (size >= sz)
++            return;
++        f = static_cast<GLfloat*>(realloc(f, sz * sizeof(GLfloat)));
++        idx = f;
++        size = sz;
++    }
++
++    GLfloat* take(int size)
++    {
++        GLfloat* cur = idx;
++        idx += size;
++        return cur;
++    }
++
++    GLfloat* ptr() { return f; }
++
++    void reset()
++    {
++        idx = f;
++    }
++
++private:
++    GLfloat* f;
++    GLfloat* idx;
++    int size;
++};
++
++#endif
+diff --git a/partner/graphics/synaptics/OpenGLShaders.h b/partner/graphics/synaptics/OpenGLShaders.h
+new file mode 100644
+index 00000000..6fde0279
+--- /dev/null
++++ b/partner/graphics/synaptics/OpenGLShaders.h
+@@ -0,0 +1,256 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#ifndef OPENGLSHADERS_H
++#define OPENGLSHADERS_H
++
++#include <nrd/AppLog.h>
++
++namespace netflix {
++namespace gibbon {
++
++class OpenGLShader
++{
++public:
++    OpenGLShader(OpenGLContext* ctx, const GLchar* vertex, const GLchar* fragment)
++        : context(ctx)
++    {
++        const GLchar* v[] = { vertex };
++        const GLchar* f[] = { fragment };
++        init(v, f);
++    }
++
++    template<int VertexCount, int FragmentCount>
++    OpenGLShader(OpenGLContext* ctx, const GLchar* (&vertex)[VertexCount], const GLchar* (&fragment)[FragmentCount])
++        : context(ctx)
++    {
++        init(vertex, fragment);
++    }
++
++    ~OpenGLShader()
++    {
++        if (mValid) {
++            glDeleteProgram(mProgram);
++        }
++    }
++
++    template<int VertexCount, int FragmentCount>
++    void init(const GLchar* (&vertex)[VertexCount], const GLchar* (&fragment)[FragmentCount])
++    {
++        const GLuint v = compile(GL_VERTEX_SHADER, vertex, &mValid);
++        if (!mValid)
++            return;
++        const GLuint f = compile(GL_FRAGMENT_SHADER, fragment, &mValid);
++        if (!mValid)
++            return;
++        mProgram = glCreateProgram();
++        glAttachShader(mProgram, v);
++        glAttachShader(mProgram, f);
++
++        glLinkProgram(mProgram);
++
++        glDeleteShader(v);
++        glDeleteShader(f);
++    }
++
++    operator GLuint() { return mProgram; }
++    GLuint program() const { return mProgram; }
++
++    GLuint takeProgram();
++
++    void operator()() { context->state()->useProgram(mProgram); }
++    void use() { context->state()->useProgram(mProgram); }
++
++    bool isValid() const { return mValid; }
++
++    void defineVariable(size_t pos, GLuint location)
++    {
++        if (mVariables.size() <= pos) {
++            mVariables.resize(pos + 1);
++        }
++        mVariables[pos] = location;
++    }
++    void defineUniform(size_t pos, const char* name) { defineVariable(pos, glGetUniformLocation(mProgram, name)); }
++    void defineAttribute(size_t pos, const char* name) { defineVariable(pos, glGetAttribLocation(mProgram, name)); }
++    GLuint variable(size_t pos) const { assert(pos < mVariables.size()); return mVariables[pos]; }
++
++    template<typename T>
++    class Scope
++    {
++    public:
++        Scope(const shared_ptr<T>& ptr)
++            : shader(ptr)
++        {
++            shader->use();
++            shader->prepare();
++        }
++        ~Scope()
++        {
++            shader->clear();
++        }
++    private:
++        shared_ptr<T> shader;
++    };
++
++private:
++    template<int Count>
++    GLuint compile(GLuint type, const GLchar* (&source)[Count], bool* ok)
++    {
++        GLuint shader = glCreateShader(type);
++        glShaderSource(shader, Count, source, 0);
++        glCompileShader(shader);
++        GLint compiled;
++        glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
++        if (!compiled) {
++            GLint length;
++            glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
++            std::string log(length, ' ');
++            glGetShaderInfoLog(shader, length, &length, &log[0]);
++            Log::error(TRACE_GIBBON_GRAPHICS, "Shader error: %s", log.c_str());
++            *ok = false;
++            return 0;
++        }
++        *ok = true;
++        return shader;
++    }
++
++protected:
++    OpenGLContext* context;
++
++private:
++    std::vector<GLuint> mVariables;
++    GLuint mProgram;
++    bool mValid;
++};
++
++inline GLuint OpenGLShader::takeProgram()
++{
++    const GLuint prog = mProgram;
++    mProgram = 0;
++    mValid = false;
++    return prog;
++}
++
++class RectShader : public OpenGLShader
++{
++public:
++    template<int VertexCount, int FragmentCount>
++    RectShader(OpenGLContext* ctx, const GLchar* (&vertex)[VertexCount], const GLchar* (&fragment)[FragmentCount])
++        : OpenGLShader(ctx, vertex, fragment)
++    {
++        glGenBuffers(2, mVertexBuffer);
++        GLfloat vertices[12] = {
++            -1.0,  1.0, 0.0,
++            -1.0, -1.0, 0.0,
++            1.0, -1.0, 0.0,
++            1.0,  1.0, 0.0,
++        };
++        context->state()->bindBuffer(GL_ARRAY_BUFFER, mVertexBuffer[0]);
++        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
++
++        GLubyte indices[6] = {0, 1, 2, 0, 2, 3};
++        context->state()->bindBuffer(GL_ELEMENT_ARRAY_BUFFER, mVertexBuffer[1]);
++        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
++    }
++
++    void bindVertexBuffer()
++    {
++        context->state()->bindBuffer(GL_ARRAY_BUFFER, mVertexBuffer[0]);
++    }
++
++    void prepare()
++    {
++        context->state()->bindBuffer(GL_ELEMENT_ARRAY_BUFFER, mVertexBuffer[1]);
++    }
++
++    void clear()
++    {
++    }
++
++protected:
++    GLuint mVertexBuffer[2];
++};
++
++class FillShader : public RectShader
++{
++public:
++    enum { ProjMatrix, MVMatrix, Position, Color, Last = Color };
++
++    template<int VertexCount, int FragmentCount>
++    FillShader(OpenGLContext* ctx, const GLchar* (&vertex)[VertexCount], const GLchar* (&fragment)[FragmentCount])
++        : RectShader(ctx, vertex, fragment)
++    {
++    }
++};
++
++class LineShader : public FillShader
++{
++public:
++    template<int VertexCount, int FragmentCount>
++    LineShader(OpenGLContext* ctx, const GLchar* (&vertex)[VertexCount], const GLchar* (&fragment)[FragmentCount])
++        : FillShader(ctx, vertex, fragment)
++    {
++        GLubyte indices[8] = {1, 2, 2, 3, 3, 0, 0, 1};
++        context->state()->bindBuffer(GL_ELEMENT_ARRAY_BUFFER, mVertexBuffer[1]);
++        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
++    }
++};
++
++class BlitShader : public RectShader
++{
++public:
++    enum { ProjMatrix, MVMatrix, Position, TexCoord, TextureTransform, Opacity, Last = Opacity };
++
++    template<int VertexCount, int FragmentCount>
++    BlitShader(OpenGLContext* ctx, const GLchar* (&vertex)[VertexCount], const GLchar* (&fragment)[FragmentCount])
++        : RectShader(ctx, vertex, fragment)
++    {
++        glGenBuffers(1, &mTextureCoordBuffer);
++        GLubyte textureCoordinates[8] = {
++            0, 0,
++            0, 1,
++            1, 1,
++            1, 0
++        };
++        context->state()->bindBuffer(GL_ARRAY_BUFFER, mTextureCoordBuffer);
++        glBufferData(GL_ARRAY_BUFFER, sizeof(textureCoordinates), textureCoordinates, GL_STATIC_DRAW);
++    }
++
++    void bindTextureBuffer()
++    {
++        context->state()->bindBuffer(GL_ARRAY_BUFFER, mTextureCoordBuffer);
++    }
++
++private:
++    GLuint mTextureCoordBuffer;
++};
++
++class TextShader : public OpenGLShader
++{
++public:
++    enum { ProjMatrix, MVMatrix, Vertex, TexCoord, Color, Last = Color };
++
++    template<int VertexCount, int FragmentCount>
++    TextShader(OpenGLContext* ctx, const GLchar* (&vertex)[VertexCount], const GLchar* (&fragment)[FragmentCount])
++        : OpenGLShader(ctx, vertex, fragment)
++    {
++    }
++
++    void prepare()
++    {
++    }
++
++    void clear()
++    {
++    }
++};
++
++}} // netflix::gibbon
++
++#endif
+diff --git a/partner/graphics/synaptics/OpenGLState.h b/partner/graphics/synaptics/OpenGLState.h
+new file mode 100644
+index 00000000..4386d6c8
+--- /dev/null
++++ b/partner/graphics/synaptics/OpenGLState.h
+@@ -0,0 +1,292 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#ifndef OPENGLSTATE_H
++#define OPENGLSTATE_H
++
++#include <map>
++#include <set>
++#include <algorithm>
++#include <gibbon/config.h>
++
++#if defined(GIBBON_GRAPHICSENGINE_GLES2_EGL)
++#  include <GLES2/gl2.h>
++#elif defined(GIBBON_GRAPHICSENGINE_GLES2_IOS)
++#  include <OpenGLES/ES2/gl.h>
++#elif defined(GIBBON_GRAPHICSENGINE_GLES2_GLX)
++#ifndef GL_GLEXT_PROTOTYPES
++#    define GL_GLEXT_PROTOTYPES 1
++#  endif
++#  include <GL/gl.h>
++#endif
++
++namespace netflix {
++namespace gibbon {
++
++class OpenGLState
++{
++public:
++    OpenGLState();
++    ~OpenGLState();
++
++    void useProgram(GLuint program);
++    void bindBuffer(GLenum target, GLuint buffer);
++    void deleteBuffer(GLenum target, GLuint buffer);
++    void bindTexture(GLuint texture, bool force = false);
++    void unbindTexture(GLuint texture);
++    void updateTexture(GLuint texture);
++    void blendFunc(GLenum sfactor, GLenum dfactor);
++    void enableCap(GLenum cap, bool enable = true);
++    void disableCap(GLenum cap);
++    void viewport(GLint x, GLint y, GLsizei width, GLsizei height);
++    void scissor(GLfloat x, GLfloat y, GLfloat width, GLfloat height);
++
++    // per texture
++    void setSmoothScale(bool smooth);
++
++    class Scope
++    {
++    public:
++        Scope(OpenGLState* state) : s(state) { s->startScope(this); }
++        ~Scope() { s->endScope(); }
++
++        void enableCap(GLenum cap, bool enable = true);
++        void disableCap(GLenum cap);
++
++        void enableVAA(GLuint index);
++        void disableVAA(GLuint index);
++
++        void flush() { s->flushScope(); }
++
++    private:
++        OpenGLState* s;
++
++        struct State
++        {
++            std::set<GLenum> caps;
++            std::set<GLuint> vaas;
++        };
++        State state;
++
++        friend class OpenGLState;
++    };
++
++    struct GLRect
++    {
++        GLRect() : x(0), y(0), width(-1), height(-1) { }
++
++        GLint x, y;
++        GLsizei width, height;
++    };
++
++    GLRect clipRect() const { return clip; }
++
++private:
++    void startScope(Scope* scope);
++    void flushScope();
++    void endScope();
++
++private:
++    Scope* scope;
++    Scope::State state;
++    GLuint program, texture;
++    GLenum blendS, blendD;
++    std::map<GLenum, GLuint> buffers;
++
++    struct TexParams
++    {
++        TexParams() : smooth(false) { }
++
++        bool smooth;
++    };
++    std::map<GLuint, TexParams> texParams;
++
++    GLRect view, clip;
++
++    friend class Scope;
++};
++
++inline OpenGLState::OpenGLState()
++    : scope(0), program(0), texture(0), blendS(GL_INVALID_ENUM), blendD(GL_INVALID_ENUM)
++{
++}
++
++inline OpenGLState::~OpenGLState()
++{
++}
++
++inline void OpenGLState::Scope::enableCap(GLenum cap, bool enable)
++{
++    if (enable)
++        state.caps.insert(cap);
++    else
++        state.caps.erase(cap);
++}
++
++inline void OpenGLState::Scope::disableCap(GLenum cap)
++{
++    state.caps.erase(cap);
++}
++
++inline void OpenGLState::Scope::enableVAA(GLuint index)
++{
++    state.vaas.insert(index);
++}
++
++inline void OpenGLState::Scope::disableVAA(GLuint index)
++{
++    state.vaas.erase(index);
++}
++
++inline void OpenGLState::viewport(GLint x, GLint y, GLsizei width, GLsizei height)
++{
++    if (view.x == x && view.y == y && view.width == width && view.height == height)
++        return;
++    view.x = x;
++    view.y = y;
++    view.width = width;
++    view.height = height;
++    glViewport(x, y, width, height);
++}
++
++inline void OpenGLState::scissor(GLfloat x, GLfloat y, GLfloat width, GLfloat height)
++{
++    const float xx = floorf(x);
++    const float yy = floorf(y);
++    const float ww = ceilf(width + (x - xx));
++    const float hh = ceilf(height + (y - yy));
++
++    if (clip.x == xx && clip.y == yy && clip.width == ww && clip.height == hh)
++        return;
++    clip.x = xx;
++    clip.y = yy;
++    clip.width = ww;
++    clip.height = hh;
++    glScissor(clip.x, clip.y, clip.width, clip.height);
++}
++
++inline void OpenGLState::useProgram(GLuint prog)
++{
++    if (prog == program)
++        return;
++    program = prog;
++    glUseProgram(program);
++}
++
++inline void OpenGLState::bindTexture(GLuint tex, bool force)
++{
++    if (!force && tex == texture)
++        return;
++    texture = tex;
++    glBindTexture(GL_TEXTURE_2D, texture);
++}
++
++inline void OpenGLState::unbindTexture(GLuint tex)
++{
++    if (tex != texture)
++        return;
++    texture = 0;
++    glBindTexture(GL_TEXTURE_2D, 0);
++}
++
++inline void OpenGLState::setSmoothScale(bool smooth)
++{
++    TexParams& params = texParams[texture];
++    if (params.smooth != smooth) {
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (smooth ? GL_LINEAR : GL_NEAREST));
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (smooth ? GL_LINEAR : GL_NEAREST));
++        params.smooth = smooth;
++    }
++}
++
++inline void OpenGLState::updateTexture(GLuint tex)
++{
++    texture = tex;
++}
++
++inline void OpenGLState::blendFunc(GLenum sfactor, GLenum dfactor)
++{
++    if (blendS == sfactor && blendD == dfactor)
++        return;
++    blendS = sfactor;
++    blendD = dfactor;
++    glBlendFunc(sfactor, dfactor);
++}
++
++inline void OpenGLState::bindBuffer(GLenum target, GLuint buffer)
++{
++    std::map<GLenum, GLuint>::iterator entry = buffers.find(target);
++    if (entry != buffers.end()) {
++        if (entry->second == buffer)
++            return;
++        entry->second = buffer;
++    } else {
++        buffers[target] = buffer;
++    }
++    glBindBuffer(target, buffer);
++}
++
++inline void OpenGLState::deleteBuffer(GLenum target, GLuint buffer)
++{
++    glDeleteBuffers(1, &buffer);
++    buffers[target] = 0;
++}
++
++inline void OpenGLState::startScope(Scope* s)
++{
++    scope = s;
++}
++
++inline void OpenGLState::enableCap(GLenum cap, bool enable)
++{
++    if (enable && state.caps.insert(cap).second)
++        glEnable(cap);
++    else if (!enable && state.caps.erase(cap))
++        glDisable(cap);
++}
++
++inline void OpenGLState::disableCap(GLenum cap)
++{
++    if (state.caps.erase(cap))
++        glDisable(cap);
++}
++
++template<typename T>
++inline void flushEntries(const std::set<T>& s1, const std::set<T>& s2, void (*func)(T))
++{
++    std::set<T> result;
++    std::set_difference(s1.begin(), s1.end(), s2.begin(), s2.end(), std::inserter(result, result.end()));
++    typename std::set<T>::const_iterator r = result.begin();
++    const typename std::set<T>::const_iterator e = result.end();
++    while (r != e) {
++        func(*r);
++        ++r;
++    }
++}
++
++inline void OpenGLState::flushScope()
++{
++    flushEntries<GLenum>(state.caps, scope->state.caps, glDisable);
++    flushEntries<GLenum>(scope->state.caps, state.caps, glEnable);
++    flushEntries<GLuint>(state.vaas, scope->state.vaas, glDisableVertexAttribArray);
++    flushEntries<GLuint>(scope->state.vaas, state.vaas, glEnableVertexAttribArray);
++
++    state = scope->state;
++}
++
++inline void OpenGLState::endScope()
++{
++    flushScope();
++    scope = 0;
++}
++
++}
++}
++
++#endif
+diff --git a/partner/graphics/synaptics/ScreenGLES2.cpp b/partner/graphics/synaptics/ScreenGLES2.cpp
+new file mode 100644
+index 00000000..32de4845
+--- /dev/null
++++ b/partner/graphics/synaptics/ScreenGLES2.cpp
+@@ -0,0 +1,125 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#include <Screen.h>
++#include "OpenGLContext.h"
++#include "EffectsGLES2.h"
++
++using namespace netflix::gibbon;
++using namespace netflix;
++
++Screen::Configuration Screen::sConfiguration(-1);
++
++Effect::SharedPtr Screen::createEffect(Effect::Type type)
++{
++    switch (type) {
++    case Effect::Type_Transform:
++        return Effect::SharedPtr(new EffectTransformGLES2);
++    case Effect::Type_Desaturate:
++        return Effect::SharedPtr(new EffectDesaturateGLES2);
++    case Effect::Type_Blur:
++        return Effect::SharedPtr(new EffectBlurGLES2);
++    case Effect::Type_Tint:
++        return Effect::SharedPtr(new EffectTintGLES2);
++    default:
++        break;
++    }
++    return shared_ptr<Effect>();
++}
++
++Variant Screen::graphicsInfo() const
++{
++    OpenGLContext *ctx = OpenGLContext::context();
++    assert(ctx);
++
++    Variant result;
++    {
++        Variant glLibrary;
++        glLibrary["name"] = "opengl";
++        glLibrary["compiled"] = "";
++        glLibrary["runtime"] = ctx->version();
++        if(ctx->supportsExtension("GL_NVX_gpu_memory_info")) {
++            glLibrary["options"]["GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX"] = ctx->getIntegerv(0x9047);
++            glLibrary["options"]["GPU_MEMORY_INFO_TOTAL_AVAILABLE_VIDMEM_NVX"] = ctx->getIntegerv(0x9048);
++            glLibrary["options"]["GPU_MEMORY_INFO_CURRENT_VIDMEM_NVX"] = ctx->getIntegerv(0x9049);
++        }
++        glLibrary["options"]["extensions"] = ctx->extensions();
++        glLibrary["options"]["renderer"] = (char*)glGetString(GL_RENDERER);
++        glLibrary["options"]["vendor"] = (char*)glGetString(GL_VENDOR);
++        result["libraries"] = glLibrary;
++    }
++    result["opengl"]["samples"] = sConfiguration.targetSamples;
++    return result;
++}
++
++int Screen::glyphPadding() const
++{
++    const bool scaled = (GibbonConfiguration::screenWidth() != GibbonConfiguration::uiWidth()
++                         || GibbonConfiguration::screenHeight() != GibbonConfiguration::uiHeight());
++    return scaled ? 2 : 1;
++}
++
++void Screen::setConfiguration(const Configuration &config)
++{
++    shared_ptr<Screen> screen;
++    {
++        ScopedMutex screenLock(Screen::lock());
++        sConfiguration = config;
++        if(GibbonApplication::instance()) {
++            screen = GibbonApplication::instance()->getScreen();
++            if(screen) {
++                screen->mNeedsRestart = true;
++            }
++        }
++    }
++}
++
++void Screen::init()
++{
++    if (sConfiguration.targetSamples == -1)
++        sConfiguration.targetSamples = GibbonConfiguration::multisampleBuffers();
++
++    // Grab a GL context so we have one for the current thread
++    const Size size = getSize();
++    OpenGLContext::setScreenSize(size.width, size.height);
++    OpenGLContext::ensureContext();
++}
++
++void Screen::cleanup()
++{
++    OpenGLContext::shutdown();
++}
++
++void Screen::makeCurrent_sys(bool)
++{
++}
++
++bool Screen::canScaleDirectly() const
++{
++    return true;
++}
++
++void Screen::handleUpdate(const Rect &)
++{
++}
++
++void Screen::flip_sys(const Rect &/*rect*/)
++{
++    OpenGLContext::context()->flip();
++}
++
++void Screen::flip_sys(const DisplayList::SharedPtr &displayList, const Rect &rect)
++{
++    flip_internal(displayList, rect);
++}
++
++void Screen::vsync_sys()
++{
++    vsync_internal();
++}
+diff --git a/partner/graphics/synaptics/SurfaceGLES2.cpp b/partner/graphics/synaptics/SurfaceGLES2.cpp
+new file mode 100644
+index 00000000..36c09b13
+--- /dev/null
++++ b/partner/graphics/synaptics/SurfaceGLES2.cpp
+@@ -0,0 +1,260 @@
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#include <Surface.h>
++#include <Animation.h>
++#include <Screen.h>
++#include <GibbonApplication.h>
++#include <OpenGLContext.h>
++#include <OpenGLState.h>
++#include <gibbon/config.h>
++#include <assert.h>
++
++using namespace netflix;
++using namespace netflix::gibbon;
++
++namespace netflix {
++namespace gibbon {
++class GLSyncEvent : public GibbonApplication::Event
++{
++public:
++    GLSyncEvent(const Surface::SharedPtr& surface) : mSurface(surface) { }
++
++    virtual void eventFired()
++    {
++        if (Surface::SharedPtr surface = GibbonApplication::instance()->getSurfaceCache()->requestSurface(mSurface)) {
++            mSync.wait();
++            OpenGLContext::context()->state()->bindTexture(surface->getTexture(), true);
++        }
++    }
++
++private:
++    Surface::WeakPtr mSurface;
++    OpenGLContext::Sync mSync;
++};
++
++class GLReadEvent : public GibbonApplication::Event
++{
++public:
++    GLReadEvent(const Surface::SharedPtr& surface, unsigned char* data)
++        : mMutex(ZERO_MUTEX, "GLReadEvent mutex"), mDone(false),
++          mValid(false), mSurface(surface), mData(data)
++    {
++    }
++
++    virtual void eventFired()
++    {
++        assert(OpenGLContext::hasContext());
++        mValid = OpenGLContext::context()->readPixels(mSurface, mData);
++
++        ScopedMutex locker(mMutex);
++        mDone = true;
++        mCond.signal();
++    }
++    virtual void eventCanceled()
++    {
++        ScopedMutex locker(mMutex);
++        mDone = true;
++        mCond.signal();
++    }
++
++    void wait()
++    {
++        ScopedMutex locker(mMutex);
++        while (!mDone) {
++            mCond.wait(&mMutex);
++        }
++    }
++
++    bool isValid()
++    {
++        ScopedMutex locker(mMutex);
++        return mValid;
++    }
++
++private:
++    Mutex mMutex;
++    ConditionVariable mCond;
++
++    bool mDone, mValid;
++    Surface::SharedPtr mSurface;
++    unsigned char* mData;
++};
++}} // netflix::gibbon
++
++int Surface::getGraphicsMemoryUsed()
++{
++    return -1;
++}
++
++int Surface::getGraphicsMemoryCapacity()
++{
++    return -1;
++}
++
++int Surface::atlasPadding()
++{
++    return 1;
++}
++
++unsigned int Surface::calculateSize() const
++{
++    if (mode() == Subsurface)
++        return 0;
++    return estimateSize(getWidth(), getHeight(), mFlags);
++}
++
++void Surface::createTexture_internal()
++{
++    assert(!mTexture);
++    assert(!(mFlags & Flags_Screen));
++    mTexture = OpenGLContext::context()->createTexture((bytesPerPixel() == 1 ? GL_ALPHA : GL_RGBA), getWidth(), getHeight());
++}
++
++void Surface::init()
++{
++    mTexture = 0;
++    if(mFlags & Flags_Screen) {
++        mValid = true;
++    } else if (!mRect.empty()) {
++        if (mGroup == -1 && (GibbonConfiguration::uploadInDecodeThreads() || Animation::isAnimationThread()))
++            createTexture();
++        mValid = true;
++    } else {
++        mValid = false;
++    }
++}
++
++void Surface::cleanup()
++{
++    if(mValid) {
++        if (!GibbonConfiguration::uploadInDecodeThreads() && !Animation::isAnimationThread()) {
++            OpenGLContext::addTextureToDelete(mTexture);
++            mTexture = 0;
++            mValid = false;
++            return;
++        }
++        OpenGLContext::ensureContext();
++        OpenGLContext::context()->state()->unbindTexture(mTexture);
++        glDeleteTextures(1, &mTexture);
++        mTexture = 0;
++        mValid = false;
++    }
++}
++
++bool Surface::isValid() const
++{
++    return mValid;
++}
++
++bool Surface::isAccelerated() const
++{
++    return true;
++}
++
++bool Surface::matches(uint8_t flags) const
++{
++    return bytesPerPixel(flags) == bytesPerPixel();
++}
++
++void Surface::upload(int x, int y, int width, int height, const unsigned char* data, int pad)
++{
++    modify();
++
++    OpenGLContext* ctx = OpenGLContext::context();
++    createTexture();
++    if (pad)
++        ctx->pad(shared_from_this(), x, y, width + pad, height + pad);
++
++    ctx->state()->bindTexture(mTexture);
++    glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, (bytesPerPixel() == 1 ? GL_ALPHA : GL_RGBA), GL_UNSIGNED_BYTE, data);
++}
++
++void Surface::updateSubsurface_sys()
++{
++}
++
++bool Surface::Data::lockSurface(LockType type)
++{
++    if (!mSurface->isValid())
++        return false;
++    if (mSurface->bytesPerPixel() == 1)
++        mFormat = Surface::Format_AlphaOnly;
++    else
++        mFormat = GibbonApplication::instance()->getScreen()->getFormat(mSurface->hasAlpha() ? Screen::SurfaceFormat_Alpha : Screen::SurfaceFormat_Opaque);
++    const bool hasData = (mData != 0);
++    if (!hasData)
++        lock_internal();
++    assert(mData);
++
++    if (!hasData && (type & Surface::Data::ReadLock)) {
++        // we need to read back
++        //glReadPixels(0, 0, mWidth, mHeight, alphaOnly ? GL_ALPHA : GL_RGBA, GL_UNSIGNED_BYTE, mData);
++#ifdef GIBBON_NO_THREADANIMATION
++        const bool isGLThread = Application::isAppThread();
++#else
++        const bool isGLThread = Animation::isAnimationThread();
++#endif
++        if (isGLThread || GibbonConfiguration::uploadInDecodeThreads()) {
++            if (!OpenGLContext::context()->readPixels(mSurface, mData)) {
++                unlock_internal();
++                mBytesPerLine = 0;
++                return false;
++            }
++        } else {
++            // need to post an event and wait
++            shared_ptr<GLReadEvent> event(new GLReadEvent(mSurface, mData));
++#ifdef GIBBON_NO_THREADANIMATION
++            app()->postEvent(event);
++#else
++            Animation::postEvent(event);
++#endif
++            event->wait();
++            if (!event->isValid()) {
++                unlock_internal();
++                mBytesPerLine = 0;
++                return false;
++            }
++        }
++    }
++
++    mBytesPerLine = getWidth() * bytesPerPixel();
++    return true;
++}
++
++void Surface::Data::unlockSurface()
++{
++    if (mData) {
++#ifdef GIBBON_NO_THREADANIMATION
++        const bool isGLThread = Application::isAppThread();
++#else
++        const bool isGLThread = Animation::isAnimationThread();
++#endif
++        if (!GibbonConfiguration::uploadInDecodeThreads() && !isGLThread) {
++            assert(!OpenGLContext::hasContext());
++            return;
++        }
++        if (mLockType == WriteLock && mSurface->mode() == Surface::Subsurface) {
++            return;
++        }
++        if (!isGLThread)
++            OpenGLContext::ensureContext();
++        if (mSurface && (mLockType & WriteLock)) {
++            mSurface->upload(0, 0, mWidth, mHeight, mData);
++            if (!isGLThread) {
++#ifdef GIBBON_NO_THREADANIMATION
++                app()->postEvent(new GLSyncEvent(mSurface));
++#else
++                Animation::postEvent(new GLSyncEvent(mSurface));
++#endif
++            }
++        }
++        unlock_internal();
++    }
++}
+diff --git a/partner/graphics/synaptics/gibbon_graphics.cmake b/partner/graphics/synaptics/gibbon_graphics.cmake
+new file mode 100644
+index 00000000..ccf42b28
+--- /dev/null
++++ b/partner/graphics/synaptics/gibbon_graphics.cmake
+@@ -0,0 +1,37 @@
++# (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++# U.S. copyright and other applicable intellectual property laws and
++# may not be copied without the express permission of Netflix, Inc.,
++# which reserves all rights.  Reuse of any of this content for any
++# purpose without the permission of Netflix, Inc. is strictly
++# prohibited.
++
++set(GIBBON_GRAPHICSENGINE_GLES2 TRUE)
++add_definitions(-DGIBBON_SCREEN_FULLRENDER -DGIBBON_COORDINATE_FLOAT -DGIBBON_SURFACE_COPY_PINGPONG -DGIBBON_GRAPHICSENGINE_DRAWTEXT_DL -DGIBBON_SCREEN_FLIPVSYNC)
++
++get_filename_component(CURRENT_DIRECTORY ${CMAKE_CURRENT_LIST_FILE} PATH)
++include_directories(${CURRENT_DIRECTORY})
++
++gibbon_add_sources(
++    GraphicsEngineGLES2.cpp
++    ScreenGLES2.cpp
++    SurfaceGLES2.cpp
++    EffectsGLES2.cpp
++    OpenGLContext.cpp
++    OpenGLFBO.cpp
++)
++
++set(GIBBON_GRAPHICS_GL_WSYS "egl")
++message("    + Using GL: ${GIBBON_GRAPHICS_GL_WSYS}")
++
++if(GIBBON_GRAPHICS_GL_WSYS STREQUAL "egl")
++    gibbon_add_sources(OpenGLContextEGL.cpp)
++
++    set(GIBBON_GRAPHICSENGINE_GLES2_EGL TRUE)
++    gibbon_add_libraries(ampclient OSAL graphics GLESv2 EGL)
++    include_directories("$ENV{STAGING_DIR}/usr/include/marvell/osal/include")
++    include_directories("$ENV{STAGING_DIR}/usr/include/marvell/amp/inc")
++else()
++    message(FATAL_ERROR "Unrecognized GL subsystem: ${GIBBON_GRAPHICS_GL_WSYS}")
++endif()
++
++gibbon_copy_resource(graphics.xml ${APP_DATA_DIR}/etc/conf/graphics.xml "")
+diff --git a/partner/graphics/synaptics/graphics.xml b/partner/graphics/synaptics/graphics.xml
+new file mode 100644
+index 00000000..d13f7043
+--- /dev/null
++++ b/partner/graphics/synaptics/graphics.xml
+@@ -0,0 +1,24 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<config_root>
++  <config_data>
++    <alpha_format>BGRA32_PM</alpha_format>
++    <opaque_format>BGRA32_PM</opaque_format>
++    <text_format>A8</text_format>
++    <surface_atlas_enabled>true</surface_atlas_enabled>
++    <capabilities>
++      <gibbon>
++        <effects>
++          <transform>
++            <accelerated>true</accelerated>
++          </transform>
++          <blur>
++            <accelerated>true</accelerated>
++          </blur>
++          <desaturate>
++            <accelerated>true</accelerated>
++          </desaturate>
++        </effects>
++      </gibbon>
++    </capabilities>
++  </config_data>
++</config_root>
+diff --git a/partner/graphics/synaptics/test.cpp b/partner/graphics/synaptics/test.cpp
+new file mode 100644
+index 00000000..16e29c8c
+--- /dev/null
++++ b/partner/graphics/synaptics/test.cpp
+@@ -0,0 +1,534 @@
++
++#include <iostream>
++#include <sstream>
++#include <string>
++#include <cstdlib>
++#include <cassert>
++#include <cstring>
++
++#define GL_GLEXT_PROTOTYPES 1
++#include <GL/glx.h>
++using namespace netflix;
++
++
++//#define USE_PBO 1
++
++#ifdef USE_PBO
++#define GLX_DIRECT_RENDERING    GL_TRUE
++#else
++#define GLX_DIRECT_RENDERING    GL_FALSE
++#endif
++
++#define LOG(s)      (std::cout << s << std::endl)
++#define FAIL(e,s)   if (!e) { LOG(s); exit(1); }
++
++static void GL_CHECK(const std::string & s = std::string())
++{
++    GLenum e = glGetError();
++    FAIL(e == GL_NO_ERROR, "GL ERROR 0x" << std::hex << e << " : " << s);
++    LOG(s);
++}
++
++class Platform
++{
++public:
++    static Platform * initialize(unsigned width, unsigned height);
++
++    virtual ~Platform() {}
++    virtual bool hasCurrentContext() = 0;
++    virtual void setCurrentContext() = 0;
++    virtual void clearCurrentContext() = 0;
++    virtual void swap() = 0;
++    unsigned width() const { return mWidth; }
++    unsigned height() const { return mHeight; }
++protected:
++    Platform(unsigned width, unsigned height) : mWidth(width), mHeight(height) {}
++    unsigned mWidth;
++    unsigned mHeight;
++};
++
++
++
++
++class PlatformGLX : public Platform
++{
++public:
++
++    PlatformGLX( unsigned width , unsigned height )
++    :
++        Platform( width , height )
++    {
++        XInitThreads();
++
++        LOG("Opening display");
++
++        mXDisplay = XOpenDisplay(0);
++        FAIL(mXDisplay, "Failed to open display");
++        LOG("Display is good");
++
++        int screen = DefaultScreen( mXDisplay );
++
++        LOG( "GLX client "
++            << glXGetClientString( mXDisplay , GLX_VERSION )
++            << " : "
++            << glXGetClientString( mXDisplay , GLX_VENDOR ));
++
++        LOG( "GLX server "
++            << glXQueryServerString( mXDisplay , screen , GLX_VERSION )
++            << " : "
++            << glXQueryServerString( mXDisplay , screen , GLX_VENDOR ));
++
++        const int attributes[] =
++        {
++                GLX_DOUBLEBUFFER,   True,
++                GLX_STENCIL_SIZE,   1,
++                GLX_RED_SIZE,       1,
++                GLX_GREEN_SIZE,     1,
++                GLX_BLUE_SIZE,      1,
++                GLX_ALPHA_SIZE,     1,
++                GLX_DEPTH_SIZE,     1,
++                GLX_RENDER_TYPE,    GLX_RGBA_BIT,
++                GLX_DRAWABLE_TYPE,  GLX_WINDOW_BIT,
++
++                None,
++        };
++
++        int nelements = 0;
++
++        /* Find a FBConfig that uses RGBA.  Note that no attribute list is */
++        /* needed since GLX_RGBA_BIT is a default attribute.               */
++        GLXFBConfig * fbc = glXChooseFBConfig( mXDisplay , screen , attributes , &nelements );
++        FAIL(fbc, "Return value of glXChooseFBConfig is NULL");
++        FAIL(nelements, "glXChooseFBConfig returned 0 elements");
++        LOG("Got " << nelements << " FB configurations");
++
++        XVisualInfo * vi = glXGetVisualFromFBConfig( mXDisplay , fbc[0] );
++        FAIL(vi, "Got NULL visual from FB config 0");
++        LOG("Got visual from FB config");
++
++        Window root = RootWindow( mXDisplay , screen );
++        FAIL(root, "Root window is NULL");
++
++        /* Create a colormap */
++        Colormap cmap = XCreateColormap( mXDisplay , root , vi->visual , AllocNone );
++        LOG("Created color map");
++
++        /* Create a window */
++        XSetWindowAttributes swa;
++        swa.colormap = cmap;
++        swa.border_pixel = 0;
++        swa.event_mask = StructureNotifyMask | ExposureMask | KeyPressMask | KeyReleaseMask
++                | PointerMotionMask | ButtonPressMask | ButtonReleaseMask;
++
++        mXWindow = XCreateWindow( mXDisplay , root , 0, 0, width, height ,0 , vi->depth, InputOutput,
++                            vi->visual, CWBorderPixel|CWColormap|CWEventMask, &swa);
++
++        FAIL(mXWindow, "Failed to create X window");
++        LOG("Created X window");
++
++        /* Create a GLX context using the first FBConfig in the list. */
++        mGLXContext = glXCreateNewContext( mXDisplay , fbc[0] , GLX_RGBA_TYPE , 0 , GLX_DIRECT_RENDERING );
++        FAIL(mGLXContext, "Failed to create GLX context");
++        LOG("Created GLX context");
++
++        XFree( vi );
++        LOG("Freed visual");
++
++        /* Create a GLX window using the same FBConfig that we used for the */
++        /* the GLX context.                                                 */
++        mGLXWindow = glXCreateWindow( mXDisplay , fbc[0], mXWindow, 0);
++        FAIL(mGLXWindow, "Failed to create GLX window");
++        LOG("Created GLX window");
++
++        XFree( fbc );
++        LOG("Freed FB config");
++
++        Atom wmDeleteMessage = XInternAtom( mXDisplay, "WM_DELETE_WINDOW", False);
++        XSetWMProtocols( mXDisplay, mXWindow, &wmDeleteMessage, 1);
++        LOG("Set delete window protocol");
++
++        XSetStandardProperties( mXDisplay , mXWindow , "Netflix (GLX)" , "Netflix (GLX)" , None, NULL , 0 , NULL );
++        LOG("Set window standard properties");
++
++        XMapWindow( mXDisplay , mXWindow );
++        LOG("Mapping window");
++
++        LOG("Waiting for map notification");
++        XEvent event;
++        XIfEvent( mXDisplay , &event, WaitForNotify, reinterpret_cast< char* >( mXWindow )  );
++        LOG("Mapped");
++
++        /* Connect the context to the window for read and write */
++        Bool r = glXMakeContextCurrent( mXDisplay, mGLXWindow, mGLXWindow, mGLXContext );
++        FAIL(r, "Failed to make context current");
++        LOG("Context is current, initialization is done");
++    }
++
++    virtual ~PlatformGLX()
++    {
++        LOG("Destroying platform");
++        glXMakeCurrent( mXDisplay , None , NULL );
++        LOG("Destroying GLX window");
++        glXDestroyWindow( mXDisplay , mGLXWindow );
++        LOG("Destroying context");
++        glXDestroyContext( mXDisplay , mGLXContext );
++        LOG("Destroying X window");
++        XDestroyWindow( mXDisplay , mXWindow );
++        LOG("Closing display");
++        XCloseDisplay( mXDisplay );
++        LOG("Done");
++    }
++
++    virtual bool hasCurrentContext()
++    {
++        return mGLXContext == glXGetCurrentContext();
++    }
++
++    virtual void setCurrentContext()
++    {
++        glXMakeContextCurrent( mXDisplay , mGLXWindow , mGLXWindow , mGLXContext );
++    }
++
++    virtual void clearCurrentContext()
++    {
++        glXMakeCurrent( mXDisplay , None , NULL );
++    }
++
++    virtual void swap()
++    {
++        glXSwapBuffers( mXDisplay , mGLXWindow );
++    }
++
++private:
++
++    static Bool WaitForNotify( Display * , XEvent *e , char * arg )
++    {
++       return ( e->type == MapNotify ) && ( e->xmap.window == (Window) arg );
++    }
++
++    Display *   mXDisplay;
++    Window      mXWindow;
++    GLXWindow   mGLXWindow;
++    GLXContext  mGLXContext;
++};
++
++
++static GLuint createShader(GLenum type, const char * source)
++{
++    LOG("Creating " << (type == GL_VERTEX_SHADER ? "VERTEX" : "FRAGMENT") << " shader");
++
++    GLuint shader = glCreateShader( type );
++    GL_CHECK("Created shader");
++    FAIL(shader,"glCreateShader returned 0");
++    glShaderSource( shader , 1 , & source , 0 );
++    GL_CHECK("Set shader source");
++    glCompileShader( shader );
++    GL_CHECK("Compiled shader");
++    GLint status = GL_TRUE;
++    glGetShaderiv( shader , GL_COMPILE_STATUS ,  & status );
++    GL_CHECK("Got shader compile status");
++    LOG("Compile status is " << status);
++    if ( GL_FALSE == status )
++    {
++        LOG("Failed to compile shader, source follows");
++        LOG(source);
++        GLint length = 0;
++        glGetShaderiv( shader , GL_INFO_LOG_LENGTH , & length );
++        GL_CHECK("Got shader info log length");
++        if ( length <= 1 )
++        {
++            LOG("No info log available");
++        }
++        else
++        {
++            char * log = new char[ length ];
++            glGetShaderInfoLog( shader , length , 0 , log );
++            LOG("Info log is : " << log);
++            delete [] log;
++        }
++        FAIL(false,"Failed to compile shader");
++    }
++    return shader;
++}
++
++static GLuint createProgram( const char * vertexShaderSource , const char * fragmentShaderSource )
++{
++    GLuint vertexShader = createShader( GL_VERTEX_SHADER , vertexShaderSource );
++    GLuint fragmentShader = createShader( GL_FRAGMENT_SHADER , fragmentShaderSource );
++
++    GLuint program = glCreateProgram();
++    GL_CHECK("Create program");
++    glAttachShader( program , vertexShader );
++    GL_CHECK("Attach vertex shader");
++    glAttachShader( program , fragmentShader );
++    GL_CHECK("Attach fragment shader");
++    glLinkProgram( program );
++    GL_CHECK("Link program");
++
++    GLint status = GL_TRUE;
++    glGetProgramiv( program , GL_LINK_STATUS , & status );
++    GL_CHECK("Got program link status");
++    LOG("Program link status is " << status);
++    if ( GL_FALSE == status )
++    {
++        LOG("Failed to link program");
++        GLint length = 0;
++        glGetProgramiv( program , GL_INFO_LOG_LENGTH , & length );
++        GL_CHECK("Get program info log");
++        if ( length <= 1 )
++        {
++            LOG("No info log available");
++        }
++        else
++        {
++            char * log = new char[ length ];
++            glGetProgramInfoLog( program , length , 0 , log );
++            LOG("Info log is : " << log);
++            delete [] log;
++        }
++        FAIL(false, "Failed to link program");
++    }
++    return program;
++}
++
++
++int main(int argc, char * argv[] )
++{
++    const int screenWidth = 1280;
++    const int screenHeight = 720;
++
++    Platform * platform = new PlatformGLX(screenWidth, screenHeight);
++
++    FAIL(platform->hasCurrentContext(), "Platform does not have current context");
++    LOG("Platform current context is good");
++
++    GL_CHECK("After initialization");
++
++    LOG("GL vendor " << glGetString(GL_VENDOR));
++    LOG("GL renderer " << glGetString(GL_RENDERER));
++    LOG("GL version " << glGetString(GL_VERSION));
++    LOG("GLSL version " << glGetString(GL_SHADING_LANGUAGE_VERSION));
++
++    GLint maxTextureSize = 0;
++    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize);
++    LOG("Max texture size " << maxTextureSize);
++
++    //.........................................................................
++
++    GLuint  mVertexBuffer;
++    GLuint  mIndexBuffer;
++    GLuint  mTextureCoordinatesBuffer;
++
++    glBlendFunc( GL_ONE , GL_ONE_MINUS_SRC_ALPHA );
++    glDisable( GL_BLEND );
++    glPixelStorei( GL_UNPACK_ALIGNMENT, 1 );
++    glViewport( 0 , 0 , screenWidth , screenHeight );
++    glClearColor( 0 , 0 , 0 , 0 );
++    glActiveTexture( GL_TEXTURE0 );
++    glDisable( GL_DEPTH_TEST );
++
++    GL_CHECK("Initial GL state");
++
++    //.........................................................................
++    // Create the vertex and index buffers for a rectangle
++
++    glGenBuffers( 1 , & mVertexBuffer );
++    glGenBuffers( 1 , & mIndexBuffer );
++    glGenBuffers( 1 , & mTextureCoordinatesBuffer );
++
++
++    GLfloat vertices[12] =
++    {
++        -1.0,  1.0, 0.0,
++        -1.0, -1.0, 0.0,
++        1.0, -1.0, 0.0,
++        1.0,  1.0, 0.0,
++    };
++
++    glBindBuffer( GL_ARRAY_BUFFER , mVertexBuffer );
++    glBufferData( GL_ARRAY_BUFFER , sizeof( vertices ) , vertices , GL_STATIC_DRAW );
++
++    GL_CHECK("Set up vertex buffer");
++
++    GLubyte textureCoordinates[8] =
++    {
++            0, 0,
++            0, 1,
++            1, 1,
++            1, 0
++    };
++
++    glBindBuffer( GL_ARRAY_BUFFER , mTextureCoordinatesBuffer );
++    glBufferData( GL_ARRAY_BUFFER , sizeof( textureCoordinates ) , textureCoordinates , GL_STATIC_DRAW );
++
++    GL_CHECK("Set up default texture coordinate buffer");
++
++    glBindBuffer( GL_ARRAY_BUFFER , 0 );
++
++    GLubyte indices[6] = {0, 1, 2, 0, 2, 3};
++
++    glBindBuffer( GL_ELEMENT_ARRAY_BUFFER , mIndexBuffer );
++    glBufferData( GL_ELEMENT_ARRAY_BUFFER , sizeof( indices ) , indices , GL_STATIC_DRAW );
++
++    GL_CHECK("Set up index buffer");
++
++    glBindBuffer( GL_ELEMENT_ARRAY_BUFFER , 0 );
++
++    GLfloat identity[4][4];
++    memset(identity, 0x0, sizeof(identity));
++    identity[0][0] = 1.0f;
++    identity[1][1] = 1.0f;
++    identity[2][2] = 1.0f;
++    identity[3][3] = 1.0f;
++
++    const char * svertex  =
++            "uniform mat4   u_projectionMatrix;\n"
++            "uniform mat4   u_mvMatrix;\n"
++            "uniform vec4   u_ts;\n"
++            "attribute vec4 a_position;\n"
++            "attribute vec2 a_texCoord;\n"
++            "varying vec2   v_texCoord;\n"
++            "void main()\n"
++            "{\n"
++            "  gl_Position = ( u_mvMatrix * u_projectionMatrix ) * a_position;\n"
++            "  v_texCoord.x = ( a_texCoord.x * u_ts.z ) + u_ts.x;\n"
++            "  v_texCoord.y = ( a_texCoord.y * u_ts.w ) + u_ts.y;\n"
++            "}\n";
++
++
++    const char * sfragment =
++                "#ifdef GL_ES\n"
++                "precision highp float;\n"
++                "#endif\n"
++                "varying vec2 v_texCoord;\n"
++                "uniform float  u_opacity;\n"
++                "uniform sampler2D s_texture;\n"
++                "void main()\n"
++                "{\n"
++                "  gl_FragColor = texture2D( s_texture, v_texCoord ) * u_opacity;\n"
++                "}\n";
++
++    LOG( "Creating surface program" );
++    GLuint mSurfaceProgram = createProgram( svertex , sfragment );
++
++    LOG( "Getting attribute and uniform locations" );
++    GLint mSurfacePositionAttributeLocation = glGetAttribLocation( mSurfaceProgram , "a_position" );
++    GLint mSurfaceTextureCoordinatesAttributeLocation = glGetAttribLocation( mSurfaceProgram , "a_texCoord" );
++    GLint mSurfaceMatrixUniformLocation = glGetUniformLocation( mSurfaceProgram , "u_mvMatrix" );
++    GLint mSurfaceTextureTransformUniformLocation = glGetUniformLocation( mSurfaceProgram , "u_ts" );
++    GLint mSurfaceOpacityUniformLocation = glGetUniformLocation( mSurfaceProgram , "u_opacity" );
++
++    glUseProgram( mSurfaceProgram );
++    GL_CHECK( "Use surface program" );
++
++    glUniformMatrix4fv( glGetUniformLocation( mSurfaceProgram , "u_projectionMatrix" ) , 1 , GL_FALSE, & identity[0][0] );
++    glUniform1i( glGetUniformLocation( mSurfaceProgram , "s_texture" ) , 0 );
++    GL_CHECK( "Set surface uniforms" );
++
++    glUseProgram( 0 );
++    GL_CHECK( "Use no program" );
++
++    //LOG("\t\t\tIF WE GOT HERE, WE'RE IN GOOD SHAPE");
++
++    // A 2x2 red, greeN, blue, white RGB image
++    const GLubyte pixels[] = {
++        0xFF, 0x00, 0x00, 0x00, 0xFF, 0x00,
++        0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF
++    };
++
++    const size_t pixelBufferSize = sizeof(pixels) * sizeof(GLubyte);
++
++#ifdef USE_PBO
++
++    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
++    GL_CHECK("Bind no PBO");
++
++    GLuint pbo;
++    glGenBuffers(1, &pbo);
++    LOG("PBO IS " << pbo);
++    GL_CHECK("Gen PBO");
++
++    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
++    GL_CHECK("Bind PBO");
++
++    glBufferData(GL_PIXEL_UNPACK_BUFFER, pixelBufferSize, 0, GL_DYNAMIC_DRAW);
++    GL_CHECK("Reset PBO data");
++
++    void * pboMemory = glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
++    GL_CHECK("Map PBO");
++    FAIL(pboMemory, "Failed to map buffer memory");
++    memcpy(pboMemory, pixels, pixelBufferSize);
++
++    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
++    GL_CHECK("Unmap PBO");
++
++    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
++    GL_CHECK("Bind no PBO");
++
++#endif
++
++    GLuint texture;
++    glGenTextures(1, &texture);
++    GL_CHECK("Gen texture");
++
++    glBindTexture(GL_TEXTURE_2D, texture);
++    GL_CHECK("Bind texture");
++
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++
++#ifdef USE_PBO
++    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
++    GL_CHECK("Bind PBO");
++
++    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 2, 2, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
++    GL_CHECK("Upload pixels");
++
++    glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, 0);
++    GL_CHECK("Bind no PBO");
++#else
++    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 2, 2, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
++    GL_CHECK("Upload pixels directly");
++#endif
++
++    glBindTexture(GL_TEXTURE_2D, 0);
++    GL_CHECK("Bind no texture");
++
++    // Now set-up for rendering
++
++    glClearColor(0xFF, 0, 0, 0xFF);
++    glUseProgram(mSurfaceProgram);
++
++    glUniformMatrix4fv(mSurfaceMatrixUniformLocation, 1, GL_FALSE, & identity[0][0]);
++    glUniform1f(mSurfaceOpacityUniformLocation, 1);
++    const GLfloat textureTransform[4] = { 0 , 0 , 1 , 1 };
++    glUniform4fv(mSurfaceTextureTransformUniformLocation, 1, textureTransform);
++
++
++    glBindBuffer(GL_ARRAY_BUFFER, mVertexBuffer);
++    glVertexAttribPointer(mSurfacePositionAttributeLocation, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
++    glEnableVertexAttribArray(mSurfacePositionAttributeLocation);
++
++    glBindBuffer(GL_ARRAY_BUFFER, mTextureCoordinatesBuffer);
++    glVertexAttribPointer(mSurfaceTextureCoordinatesAttributeLocation, 2, GL_UNSIGNED_BYTE, GL_FALSE, 2 * sizeof(GLubyte), 0);
++    glEnableVertexAttribArray(mSurfaceTextureCoordinatesAttributeLocation);
++
++    glBindBuffer(GL_ARRAY_BUFFER, 0);
++
++    glBindTexture(GL_TEXTURE_2D, texture);
++
++    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mIndexBuffer);
++
++    while (1) {
++        glClear(GL_COLOR_BUFFER_BIT);
++        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, 0);
++
++        platform->swap();
++    }
++
++    delete platform;
++
++    return 0;
++}
+diff --git a/partner/platform/synaptics/appboot.key b/partner/platform/synaptics/appboot.key
+new file mode 120000
+index 00000000..7b4dbf47
+--- /dev/null
++++ b/partner/platform/synaptics/appboot.key
+@@ -0,0 +1 @@
++../posix/appboot.key
+\ No newline at end of file
+diff --git a/partner/platform/synaptics/main_synaptics.cpp b/partner/platform/synaptics/main_synaptics.cpp
+new file mode 100644
+index 00000000..a47e59a6
+--- /dev/null
++++ b/partner/platform/synaptics/main_synaptics.cpp
+@@ -0,0 +1,41 @@
++
++/*
++ * (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++ * U.S. copyright and other applicable intellectual property laws and
++ * may not be copied without the express permission of Netflix, Inc.,
++ * which reserves all rights.  Reuse of any of this content for any
++ * purpose without the permission of Netflix, Inc. is strictly
++ * prohibited.
++ */
++
++#include <GibbonApplication.h>
++#include <GibbonEvent.h>
++
++using namespace netflix::gibbon;
++using namespace netflix;
++
++void gibbon_oem_event(GibbonOEMEvent event, void *)
++{
++    switch(event) {
++    case GibbonOEM_Init:
++        break;
++    case GibbonOEM_Start:
++        break;
++   case GibbonOEM_Suspended:
++        break;
++    case GibbonOEM_Started:
++        break;
++    case GibbonOEM_Rendered:
++        break;
++    case GibbonOEM_Cleanup:
++        break;
++    case GibbonOEM_WatchdogNoHeartbeat:
++    case GibbonOEM_WatchdogSigChild:
++        break;
++    }
++}
++
++void gibbon_force_home() {
++    GibbonApplication::instance()->sendEvent(new KeyEvent(GibbonEvent::Type_KeyPress, KeyEvent::GIBBON_KEY(KEY_HOME)));
++    GibbonApplication::instance()->sendEvent(new KeyEvent(GibbonEvent::Type_KeyRelease, KeyEvent::GIBBON_KEY(KEY_HOME)));
++}
+diff --git a/partner/platform/synaptics/partner_signup.js b/partner/platform/synaptics/partner_signup.js
+new file mode 120000
+index 00000000..cf2140d1
+--- /dev/null
++++ b/partner/platform/synaptics/partner_signup.js
+@@ -0,0 +1 @@
++../posix/partner_signup.js
+\ No newline at end of file
+diff --git a/partner/platform/synaptics/partner_sso.js b/partner/platform/synaptics/partner_sso.js
+new file mode 120000
+index 00000000..10eff0d8
+--- /dev/null
++++ b/partner/platform/synaptics/partner_sso.js
+@@ -0,0 +1 @@
++../posix/partner_sso.js
+\ No newline at end of file
+diff --git a/partner/platform/synaptics/platform.cmake b/partner/platform/synaptics/platform.cmake
+new file mode 100644
+index 00000000..4961bf4d
+--- /dev/null
++++ b/partner/platform/synaptics/platform.cmake
+@@ -0,0 +1,16 @@
++# (c) 1997-2015 Netflix, Inc.  All content herein is protected by
++# U.S. copyright and other applicable intellectual property laws and
++# may not be copied without the express permission of Netflix, Inc.,
++# which reserves all rights.  Reuse of any of this content for any
++# purpose without the permission of Netflix, Inc. is strictly
++# prohibited.
++
++gibbon_add_sources(main_synaptics.cpp)
++gibbon_set_eventloop("posix")
++
++gibbon_add_js(partner_signup.js)
++gibbon_add_js(partner_sso.js)
++
++gibbon_add_libraries(ampclient OSAL graphics)
++include_directories("$ENV{STAGING_DIR}/usr/include/marvell/osal/include")
++include_directories("$ENV{STAGING_DIR}/usr/include/marvell/amp/inc")
+-- 
+2.17.1
+

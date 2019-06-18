@@ -1,0 +1,58 @@
+From 5765182b11843910edf3f1b6f5fe34f491cb6161 Mon Sep 17 00:00:00 2001
+From: wouterlucas <wouter@wouterlucas.com>
+Date: Thu, 7 Dec 2017 15:37:33 -0800
+Subject: [PATCH 84/97] Revert "Use char16_t instead of unsigned short for
+ JSChar" This commit throws errors on older toolchains, reverting it for now.
+ Is still available on the 4.2.3-musl-fixes branch.
+
+This reverts commit 391957771682fd6b084c23b8dabb68c6b55ffbab.
+---
+ .../JavaScriptCore/Source/JavaScriptCore/API/JSStringRef.h     | 3 +--
+ netflix/src/platform/gibbon/scriptengine/jsc/JSC.h             | 3 +--
+ 2 files changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/netflix/3rdparty/JavaScriptCore/Source/JavaScriptCore/API/JSStringRef.h b/netflix/3rdparty/JavaScriptCore/Source/JavaScriptCore/API/JSStringRef.h
+index d05fe7d1..75d73c91 100644
+--- a/netflix/3rdparty/JavaScriptCore/Source/JavaScriptCore/API/JSStringRef.h
++++ b/netflix/3rdparty/JavaScriptCore/Source/JavaScriptCore/API/JSStringRef.h
+@@ -32,7 +32,6 @@
+ #include <stdbool.h>
+ #endif
+ #include <stddef.h> /* for size_t */
+-#include <uchar.h>
+ 
+ #ifdef __cplusplus
+ extern "C" {
+@@ -44,7 +43,7 @@ extern "C" {
+ @typedef JSChar
+ @abstract A Unicode character.
+ */
+-    typedef char16_t JSChar;
++    typedef unsigned short JSChar;
+ #else
+     typedef wchar_t JSChar;
+ #endif
+diff --git a/netflix/src/platform/gibbon/scriptengine/jsc/JSC.h b/netflix/src/platform/gibbon/scriptengine/jsc/JSC.h
+index 8109fc1b..5ff73bc4 100644
+--- a/netflix/src/platform/gibbon/scriptengine/jsc/JSC.h
++++ b/netflix/src/platform/gibbon/scriptengine/jsc/JSC.h
+@@ -17,7 +17,6 @@
+ #include "GibbonApplication.h"
+ 
+ #include <API/JSValueRef.h>
+-#include <uchar.h>
+ 
+ typedef const struct OpaqueJSValue *JSValueRef;
+ typedef struct OpaqueJSValue *JSObjectRef;
+@@ -29,7 +28,7 @@ typedef struct OpaqueJSString *JSStringRef;
+ // copied from JSStringRef.h
+ #if !defined(WIN32) && !defined(_WIN32)                                 \
+     && !((defined(__CC_ARM) || defined(__ARMCC__)) && !defined(__linux__)) /* RVCT */
+-typedef char16_t JSChar;
++typedef unsigned short JSChar;
+ #else
+ typedef wchar_t JSChar;
+ #endif
+-- 
+2.17.1
+

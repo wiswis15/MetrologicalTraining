@@ -1,0 +1,197 @@
+From 099272247e161be09150a7c673c59ab55d47f2d3 Mon Sep 17 00:00:00 2001
+From: Albert Dahan <albert@dahan.nl>
+Date: Wed, 28 Sep 2016 08:48:18 +0200
+Subject: [PATCH 32/97] [Netflix] Seek-back patch (4.2.3)
+
+---
+ .../nrd/MediaControl/MediaRequestManager.cpp  | 32 +++++++++++++
+ .../nrd/MediaControl/MediaRequestManager.h    |  5 ++
+ .../MediaControl/NrdpMediaSourceBuffer.cpp    | 47 +++++++++++++++----
+ .../src/nrd/NBP/bridge/MediaRequestBridge.cpp |  3 +-
+ 4 files changed, 77 insertions(+), 10 deletions(-)
+
+diff --git a/netflix/src/nrd/MediaControl/MediaRequestManager.cpp b/netflix/src/nrd/MediaControl/MediaRequestManager.cpp
+index ab2c1fbb..97665186 100644
+--- a/netflix/src/nrd/MediaControl/MediaRequestManager.cpp
++++ b/netflix/src/nrd/MediaControl/MediaRequestManager.cpp
+@@ -161,6 +161,29 @@ protected:
+     NrdpMediaSourcePtr mMediaSource;
+ };
+ 
++
++class MediaRequestManager::EndOfStreamTask : public MediaRequestManager::MediaRequestManagerTask
++{
++public:
++    EndOfStreamTask(NrdpMediaSourcePtr mediaSource, uint32_t bufferId) 
++      :m_mediaSource(mediaSource)
++      ,m_bufferId(bufferId)
++    {}
++
++    virtual ~EndOfStreamTask() {}
++
++    virtual void invoke( MediaRequestManager* pRequestManager )
++    {
++        NRDP_UNUSED(pRequestManager);
++        NTRACE(TRACE_MEDIACONTROL, "EndOfStreamTask" );
++        m_mediaSource->endOfStream(m_bufferId);
++    }
++
++protected:
++    NrdpMediaSourcePtr m_mediaSource;
++    uint32_t m_bufferId;
++};
++
+ MediaRequestManager::MediaRequestManager(IPersistentStorePtr pStorePtr)
+                     : mMutex(NRDP_MEDIACONSUMER_MUTEX, "NrdpMediaRequestManager")
+                     , mAudioBufferMonitor( MEDIA_AUDIO )
+@@ -563,6 +586,15 @@ void MediaRequestManager::swapUrl( JsBridgeMediaRequestPtr pMediaRequest, AseUrl
+     mTaskQueue.push( pTask );
+ }
+ 
++void MediaRequestManager::endOfStream(NrdpMediaSourcePtr mediaSource, uint32_t bufferId)
++{
++    ScopedMutex scopedMutex(mMutex);
++
++    MediaRequestManagerTaskPtr pTask( new EndOfStreamTask( mediaSource, bufferId ) );
++
++    mTaskQueue.push( pTask );
++}
++
+ /** Add a media source */
+ void MediaRequestManager::addMediaSource( NrdpMediaSourcePtr pMediaSource )
+ {
+diff --git a/netflix/src/nrd/MediaControl/MediaRequestManager.h b/netflix/src/nrd/MediaControl/MediaRequestManager.h
+index c3d08042..e63b2603 100644
+--- a/netflix/src/nrd/MediaControl/MediaRequestManager.h
++++ b/netflix/src/nrd/MediaControl/MediaRequestManager.h
+@@ -143,6 +143,10 @@ public:
+     /** Schedule a request for abort */
+     void abandonMediaRequest( JsBridgeMediaRequestPtr pMediaRequest );
+ 
++
++    /** set endOfStream to mediasource */
++    void endOfStream(NrdpMediaSourcePtr mediaSource, uint32_t bufferId);
++
+     /** Add a media source */
+     void addMediaSource( NrdpMediaSourcePtr pMediaSource );
+ 
+@@ -191,6 +195,7 @@ protected:
+     class SetTimestampTask;
+     class SourceBuffersCompleteFlushTask;
+     class SourceBufferCompleteFlushTask;
++    class EndOfStreamTask;
+ 
+     typedef std::list<JsBridgeMediaRequestPtr> MediaRequestList;
+ 
+diff --git a/netflix/src/nrd/MediaControl/NrdpMediaSourceBuffer.cpp b/netflix/src/nrd/MediaControl/NrdpMediaSourceBuffer.cpp
+index 0d868a10..72d7eceb 100644
+--- a/netflix/src/nrd/MediaControl/NrdpMediaSourceBuffer.cpp
++++ b/netflix/src/nrd/MediaControl/NrdpMediaSourceBuffer.cpp
+@@ -215,8 +215,19 @@ AseTimeStamp NrdpMediaSourceBuffer::skip(ase::AseTimeStamp const& pts)
+ 
+             if ( mOutputTrackSampleIndex >= fragment.mSamples.size() )
+             {
+-                NTRACE(TRACE_MEDIACONTROL, "NrdpMediaSourceBuffer(%u)::%s: No sample in chosen fragment spanning skip pts!!", mMediaType, __func__);
+-                return AseTimeStamp();
++                if( (mOutputTrackFragmentIndex + 1) < mMediaTrackFragments[mOutputTrackId].size() ){
++                    // if not found from current fragment, set it next fragment's first sample
++                    mOutputTrackFragmentIndex++;
++                    mOutputTrackSampleIndex = 0;
++                    FragmentHeader const& nextFragment = *(mMediaTrackFragments[mPrimaryTrackId][mOutputTrackFragmentIndex]->mFragmentHeaderPtr);
++                    actual_ts = AseTimeStamp( nextFragment.mSamples[ mOutputTrackSampleIndex ].mPts, 1000 );
++                } else {
++                    mOutputTrackSampleIndex--;
++                }
++                NTRACE(TRACE_MEDIACONTROL
++                       , "NrdpMediaSourceBuffer(%u)::%s: return sample's pts (%llu) at sample index (%d), fragment index (%d)"
++                       ,mMediaType, __func__, actual_ts.getValueInMs(), mOutputTrackSampleIndex, mOutputTrackFragmentIndex);
++                return actual_ts;
+             }
+ 
+             pSample = &fragment.mSamples[ mOutputTrackSampleIndex ];
+@@ -334,14 +345,19 @@ void NrdpMediaSourceBuffer::flush(AseTimeStamp const& pts )
+         return;
+ 
+     while( !mMediaTrackFragments[mPrimaryTrackId].empty() &&
++           (mOutputTrackFragmentIndex > 0) &&
+            (pts > mMediaTrackFragments[mPrimaryTrackId].front()->getFragmentEndTime()) &&
+            ((pts - mMediaTrackFragments[mPrimaryTrackId].front()->getFragmentEndTime()).getValueInMs() > mMaxTrailingBufferDuration ) )
+     {
+-        NTRACE(TRACE_MEDIAPLAYBACK, "[%u] MEDIAFRAGMENT_DELETED for (pts %lld - %lld) remaining fragments %zu (exceeding duration limit)",
++        NTRACE(TRACE_MEDIAPLAYBACK,
++               "[%u] MEDIAFRAGMENT_DELETED (pts %lld - %lld) current pts %lld, remaining fragments %zu (exceeding duration %u), mOutputTrackFragmentIndex %u",
+                mMediaType,
+                mMediaTrackFragments[mPrimaryTrackId].front()->getFragmentStartTime().getValueInMs(),
+                mMediaTrackFragments[mPrimaryTrackId].front()->getFragmentEndTime().getValueInMs(),
+-               mMediaTrackFragments[mPrimaryTrackId].size()-1);
++               pts.getValueInMs(),
++               mMediaTrackFragments[mPrimaryTrackId].size()-1,
++               mMaxTrailingBufferDuration,
++               mOutputTrackFragmentIndex);
+ 
+         mMediaTrackFragments[mPrimaryTrackId].pop_front();
+         if( mSecondaryTrackId != INVALID_TRACKID)
+@@ -358,6 +374,7 @@ void NrdpMediaSourceBuffer::flush(AseTimeStamp const& pts )
+     uint32_t index = 0;
+ 
+     while( !mMediaTrackFragments[mPrimaryTrackId].empty() &&
++            (mOutputTrackFragmentIndex > 0) &&
+             (index < mMediaTrackFragments[mPrimaryTrackId].size()) &&
+             (mMediaTrackFragments[mPrimaryTrackId][index]->getFragmentEndTime() < pts) )
+     {
+@@ -369,11 +386,15 @@ void NrdpMediaSourceBuffer::flush(AseTimeStamp const& pts )
+ 
+         if( trailingBufferSize > mMaxTrailingBufferSize )
+         {
+-            NTRACE(TRACE_MEDIAPLAYBACK, "[%u] MEDIAFRAGMENT_DELETED for (pts %lld - %lld) remaining fragments %zu (exceeding size limit)",
++            NTRACE(TRACE_MEDIAPLAYBACK,
++                   "[%u] MEDIAFRAGMENT_DELETED (pts %lld - %lld) current pts %lld, remaining fragments %zu (exceeding size %u), mOutputTrackFragmentIndex %u",
+                    mMediaType,
+                    mMediaTrackFragments[mPrimaryTrackId].front()->getFragmentStartTime().getValueInMs(),
+                    mMediaTrackFragments[mPrimaryTrackId].front()->getFragmentEndTime().getValueInMs(),
+-                   mMediaTrackFragments[mPrimaryTrackId].size()-1);
++                   pts.getValueInMs(),
++                   mMediaTrackFragments[mPrimaryTrackId].size()-1,
++                   mMaxTrailingBufferSize,
++                   mOutputTrackFragmentIndex);
+ 
+             trailingBufferSize -= mMediaTrackFragments[mPrimaryTrackId].front()->getFragmentSizeInBuffer();
+             mMediaTrackFragments[mPrimaryTrackId].pop_front();
+@@ -611,9 +632,17 @@ bool NrdpMediaSourceBuffer::findPlaybackPosition( AseTimeStamp const& pts, uint3
+         return false;
+ 
+     index = 0;
+-    for( ; index < mMediaTrackFragments[mPrimaryTrackId].size()
+-           && (mMediaTrackFragments[mPrimaryTrackId][index]->mFragmentHeaderPtr->mStartPts) < pts
+-         ; ++index );
++    if ( mMediaType == MEDIA_VIDEO ){
++        for( ; index < mMediaTrackFragments[mPrimaryTrackId].size()
++                 && (mMediaTrackFragments[mPrimaryTrackId][index]->mFragmentHeaderPtr->mStartPts) < pts
++                 ; ++index );
++    } else {
++        // in audio case, pts coming from NrdpMediaSource::skip is next video chunck start pts
++        // in this case, find audio chunk that includes video chunk start pts
++        for( ; index < mMediaTrackFragments[mPrimaryTrackId].size()
++                 && (mMediaTrackFragments[mPrimaryTrackId][index]->mFragmentHeaderPtr->mEndPts) <= pts
++                 ; ++index );
++    }
+ 
+     if ( index == mMediaTrackFragments[mPrimaryTrackId].size() )
+         return false;
+diff --git a/netflix/src/nrd/NBP/bridge/MediaRequestBridge.cpp b/netflix/src/nrd/NBP/bridge/MediaRequestBridge.cpp
+index c253bc61..f7d07cd2 100644
+--- a/netflix/src/nrd/NBP/bridge/MediaRequestBridge.cpp
++++ b/netflix/src/nrd/NBP/bridge/MediaRequestBridge.cpp
+@@ -1155,7 +1155,8 @@ Variant MediaRequestBridge::endOfStream(Variant &result, int method, const Varia
+     }
+     else
+     {
+-        mediaSource->endOfStream(bufferId);
++        //mediaSource->endOfStream(bufferId);
++        m_mediaRequestManager->endOfStream(mediaSource, bufferId);
+ 
+         addErrorCode(result, NFErr_OK);
+     }
+-- 
+2.17.1
+

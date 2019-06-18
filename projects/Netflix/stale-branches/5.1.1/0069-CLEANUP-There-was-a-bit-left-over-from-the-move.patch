@@ -1,0 +1,43 @@
+From b5be6ef5d1901632abc4ae723df6602bbcbe3441 Mon Sep 17 00:00:00 2001
+From: Pierre Wielders <pierre@wielders.net>
+Date: Fri, 21 Jul 2017 18:35:15 +0200
+Subject: [PATCH 69/97] [CLEANUP] There was a bit left over from the move.
+
+---
+ partner/dpi/reference/drm.cmake | 15 +--------------
+ 1 file changed, 1 insertion(+), 14 deletions(-)
+
+diff --git a/partner/dpi/reference/drm.cmake b/partner/dpi/reference/drm.cmake
+index 12a92d8f..a58839ae 100644
+--- a/partner/dpi/reference/drm.cmake
++++ b/partner/dpi/reference/drm.cmake
+@@ -8,19 +8,6 @@
+ cmake_minimum_required(VERSION 2.8)
+ include("CheckIncludeFile")
+ 
+-# Converts a CMake list to a CMake string. Items in the string are separated by spaces.
+-# in  input list variable, referenced by name (so X, not S{X} or "S{X}")
+-# out resulting string variable, referenced by name (so X, not S{X} or "S{X}")
+-function(list_to_string in out)
+-    set(tmp "")
+-    foreach(VAL ${${in}})
+-        string(APPEND tmp "${VAL} ")
+-    endforeach()
+-    set(${out} "${tmp}" PARENT_SCOPE)
+-endfunction()
+-
+-find_package(PkgConfig)
+-
+ if(GIBBON_MODE STREQUAL "shared")
+     add_definitions( -DNETFLIX_AS_LIBRARY)
+ endif()
+@@ -230,4 +217,4 @@ endif()
+ 
+ if(NETFLIX_USE_PROVISION)
+     add_definitions( -DUSE_PROVISIONING )
+-endif(NETFLIX_USE_PROVISION)
+\ No newline at end of file
++endif(NETFLIX_USE_PROVISION)
+-- 
+2.17.1
+

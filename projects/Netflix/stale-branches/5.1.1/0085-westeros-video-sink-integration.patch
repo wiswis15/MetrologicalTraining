@@ -1,0 +1,185 @@
+From 6dcdbbfa571ab177537a32a87a96fd92b907535c Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Fri, 26 Jan 2018 20:21:24 +0100
+Subject: [PATCH 85/97] westeros video-sink integration.
+
+---
+ partner/dpi/gstreamer/CMakeLists.txt          |  2 +
+ partner/dpi/gstreamer/PlaybackGroupNative.cpp | 44 +++++++++++++------
+ partner/dpi/gstreamer/PlaybackGroupNative.h   |  5 ++-
+ 3 files changed, 36 insertions(+), 15 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/CMakeLists.txt b/partner/dpi/gstreamer/CMakeLists.txt
+index 0b1e8dfe..88f9061c 100644
+--- a/partner/dpi/gstreamer/CMakeLists.txt
++++ b/partner/dpi/gstreamer/CMakeLists.txt
+@@ -39,6 +39,8 @@ elseif (GST_VIDEO_RENDERING STREQUAL "horizon-fusion")
+   add_definitions(-DHORIZON_FUSION)
+ elseif (GST_VIDEO_RENDERING STREQUAL "gl")
+   add_definitions(-DGST_GL)
++elseif (GST_VIDEO_RENDERING STREQUAL "westeros")
++  add_definitions(-DWESTEROS_SINK)
+ endif()
+ 
+ set(HAVE_DPI_DIRECTORY "${NRDP_BINARY_ROOT_DIR}/lib/dpi")
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.cpp b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+index 9608b013..e5727b4b 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.cpp
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+@@ -98,7 +98,9 @@ PlaybackGroupNative::PlaybackGroupNative(ESManagerNative& ESManager, uint32_t pi
+   //  mCloseThread(false)
+   mCurrentVideoWindow(zeroRect),
+   mNewVideoWindow(false)
+-
++#if defined(WESTEROS_SINK)
++  , mSink(NULL)
++#endif
+ {
+   mPositionMonitor.reset(new PositionMonitor(this));
+ 
+@@ -139,6 +141,13 @@ PlaybackGroupNative::PlaybackGroupNative(ESManagerNative& ESManager, uint32_t pi
+     g_object_set(mGstPipeline, "video-sink", mVideoSinkGst->createVideoSink(), NULL);
+ #endif
+ 
++#if defined(WESTEROS_SINK)
++    GstElementFactory* sinkFactory(gst_element_factory_find("westerossink"));
++    mSink = gst_element_factory_create(sinkFactory, "WesterosVideoSink");
++    g_object_set(mGstPipeline, "video-sink", mSink, NULL);
++    g_object_set(mSink, "zorder",0.0f, NULL);
++#endif
++
+     ESPlayerConstants::VIDEO_REN_SCREEN_WIDTH = sConfiguration->videoRendererScreenWidth;
+     ESPlayerConstants::VIDEO_REN_SCREEN_HEIGHT = sConfiguration->videoRendererScreenHeight;
+ 
+@@ -190,6 +199,11 @@ PlaybackGroupNative::~PlaybackGroupNative()
+     if (mSource)
+         gst_object_unref(mSource);
+ 
++#if defined(WESTEROS_SINK)
++    if (mSink != NULL){
++         gst_object_unref(mSink);
++    }
++#endif
+     // stop main loop
+     if (g_main_loop_is_running(mMainLoop)){
+         g_main_loop_quit(mMainLoop);
+@@ -359,6 +373,7 @@ bool PlaybackGroupNative::setPlaybackState(PlaybackState state)
+     {
+         GstStateChangeReturn ret;
+         // stop buffer push
++
+         ret = gst_element_set_state(mGstPipeline, GST_STATE_PAUSED);
+     }
+     else if(state == PLAY)
+@@ -368,7 +383,7 @@ bool PlaybackGroupNative::setPlaybackState(PlaybackState state)
+         for(set<ESPlayerGst*>::iterator it = mStreamPlayers.begin(); it != mStreamPlayers.end(); it++) {          
+           gst_netflix_src_register_player(mSource, (void*) (*it));
+           if ((*it)->getMediaType() == VIDEO) {
+-            printf("Moving to play, attaching video sink.\n");
++              Log::info(TRACE_MEDIACONTROL, "Moving to play, attaching video sink.\n");
+             (*it)->Signal(ESPlayerGst::DATA_REQUIRED);  
+           }
+         }
+@@ -400,10 +415,9 @@ bool PlaybackGroupNative::setPlaybackState(PlaybackState state)
+         assert(0);
+     }
+ 
+-    {
+-        ScopedMutex cs(mPlaybackStateMutex);
+-        mPlaybackState = state;
+-    }
++    ScopedMutex cs(mPlaybackStateMutex);
++    mPlaybackState = state;
++
+     return true;
+ }
+ 
+@@ -439,7 +453,7 @@ void PlaybackGroupNative::flush()
+     for(it = mStreamPlayers.begin(); it != mStreamPlayers.end(); it++)
+     {
+         if ((*it)->getMediaType() == VIDEO) {
+-          printf ("Attaching Video Sink again...\n");
++            Log::info(TRACE_MEDIACONTROL, "Attaching Video Sink again...\n");
+           (*it)->Signal(ESPlayerGst::DATA_REQUIRED);
+         }
+     }
+@@ -450,7 +464,7 @@ void PlaybackGroupNative::firstVideo(llong pts, llong dts)
+   for(set<ESPlayerGst*>::iterator it = mStreamPlayers.begin(); it != mStreamPlayers.end(); it++) {
+       (*it)->setOffset(pts, dts);
+       if ((*it)->getMediaType() == AUDIO) {
+-          printf ("Attaching Audio Sink again...\n");
++          Log::info(TRACE_MEDIACONTROL, "Attaching Audio Sink again...\n");
+           (*it)->Signal(ESPlayerGst::DATA_REQUIRED);
+       }
+   }
+@@ -460,7 +474,7 @@ void PlaybackGroupNative::audioFlushed()
+ {
+ }
+ 
+-#if defined(BCM_NEXUS)
++#if defined(BCM_NEXUS) || defined(WESTEROS_SINK)
+ // utility function for bcm nexus seek functionality
+ static GstElement* findElement(GstElement *element, const char* targetName)
+ {
+@@ -613,8 +627,10 @@ void PlaybackGroupNative::updateVideoRectangle()
+   g_object_get(mGstPipeline, "video-sink", &videoDec, NULL);
+ #elif defined(BCM_NEXUS)
+   videoDec = findElement(mGstPipeline, "brcmvideosink");
++#elif defined(WESTEROS_SINK)
++  videoDec = findElement(mGstPipeline, "westerossink");
+ #else
+-  return;
++    return;
+ #endif
+ 
+   if (!videoDec || !GST_IS_ELEMENT(videoDec))
+@@ -736,7 +752,7 @@ gboolean PlaybackGroupNative::handleGstMessage(GstMessage* message)
+   switch (GST_MESSAGE_TYPE(message)){
+     case GST_MESSAGE_ERROR: {
+       gst_message_parse_error(message, &error, &debug);
+-      Log::warn(TRACE_MEDIAPLAYBACK, "PlaybackGroupNative::gstBusCallback() error! code: %d, %s, Debug: %s", error->code, error->message, debug);      
++      Log::warn(TRACE_MEDIAPLAYBACK, "PlaybackGroupNative::handleGstMessage() error! code: %d, %s, Debug: %s", error->code, error->message, debug);
+        g_error_free(error);
+        g_free(debug);
+       // GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(mGstPipeline), GST_DEBUG_GRAPH_SHOW_ALL, "error-pipeline");
+@@ -753,7 +769,7 @@ gboolean PlaybackGroupNative::handleGstMessage(GstMessage* message)
+     }
+     case GST_MESSAGE_WARNING:
+       gst_message_parse_warning(message, &error, &debug);
+-      Log::warn(TRACE_MEDIAPLAYBACK, "PlaybackGroupNative::gstBusCallback() warning! code: %d, %s, Debug: %s", error->code, error->message, debug);
++      Log::warn(TRACE_MEDIAPLAYBACK, "PlaybackGroupNative::handleGstMessage() warning! code: %d, %s, Debug: %s", error->code, error->message, debug);
+       g_error_free(error);
+       g_free(debug);
+       break;
+@@ -780,9 +796,9 @@ gboolean PlaybackGroupNative::handleGstMessage(GstMessage* message)
+ 
+       // get the name and state
+       if (GST_MESSAGE_SRC_NAME(message)){
+-        Log::info(TRACE_MEDIACONTROL, "PlaybackGroupNative::gstBusCallback() Got state message from %s\n", GST_MESSAGE_SRC_NAME (message));
++        Log::info(TRACE_MEDIACONTROL, "PlaybackGroupNative::handleGstMessage() Got state message from %s\n", GST_MESSAGE_SRC_NAME (message));
+       }
+-      Log::warn(TRACE_MEDIACONTROL, "PlaybackGroupNative::gstBusCallback() old_state %s, new_state %s, pending %s\n",
++      Log::warn(TRACE_MEDIACONTROL, "PlaybackGroupNative::handleGstMessage() old_state %s, new_state %s, pending %s\n",
+                 gst_element_state_get_name (oldstate), gst_element_state_get_name (newstate), gst_element_state_get_name (pending));
+ 
+       if (oldstate == GST_STATE_NULL && newstate == GST_STATE_READY) {
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.h b/partner/dpi/gstreamer/PlaybackGroupNative.h
+index 9b774b0a..88e8799c 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.h
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.h
+@@ -173,8 +173,11 @@ private:
+ #if defined(GST_GL)
+     shared_ptr<VideoSinkGStreamer> mVideoSinkGst;
+ #endif
+-};
+ 
++#if defined(WESTEROS_SINK)
++    GstElement* mSink;
++#endif
++};
+ } // namespace esplayer
+ } // device
+ } // namespace netflix
+-- 
+2.17.1
+

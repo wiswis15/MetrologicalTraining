@@ -1,0 +1,25 @@
+From c6e8bb0d36024c8da535d7d048a8edcc4aca4423 Mon Sep 17 00:00:00 2001
+From: Sander van der Maar <sandervandermaar@gmail.com>
+Date: Tue, 21 Mar 2017 09:15:05 +0100
+Subject: [PATCH 51/97] Links to WPEFramework libraries
+
+---
+ partner/dpi/reference/drm.cmake | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/partner/dpi/reference/drm.cmake b/partner/dpi/reference/drm.cmake
+index 2b359317..97731b45 100644
+--- a/partner/dpi/reference/drm.cmake
++++ b/partner/dpi/reference/drm.cmake
+@@ -195,7 +195,7 @@ elseif(DPI_REFERENCE_DRM STREQUAL "playready")
+ 
+ if(NETFLIX_USE_PROVISION)
+     add_definitions( -DUSE_PROVISIONING )
+-    target_link_libraries(nrddpi playready provisionproxy generics)
++    target_link_libraries(nrddpi playready provisionproxy WPEFrameworkCore)
+ else()
+     target_link_libraries(nrddpi playready)
+ endif(NETFLIX_USE_PROVISION)
+-- 
+2.17.1
+

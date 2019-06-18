@@ -1,0 +1,242 @@
+From a2102b7f8fe163d7d514dd7378ffa686884087bd Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Wed, 6 Sep 2017 17:29:44 +0200
+Subject: [PATCH 76/97] [wpeframework] Added cflags from pkgconfig wayland-egl
+
+---
+ netflix/cmake/FindProvisionProxy.cmake        | 39 +++++++++++++++++++
+ netflix/src/platform/gibbon/CMakeLists.txt    | 31 +++++++--------
+ netflix/src/platform/gibbon/gibbon.cmake      | 13 ++++++-
+ .../wpeframework/OpenGLContextEGL.cpp         | 11 +++++-
+ .../graphics/wpeframework/OpenGLContextEGL.h  |  2 +-
+ .../wpeframework/gibbon_graphics.cmake        |  2 +-
+ 6 files changed, 76 insertions(+), 22 deletions(-)
+ create mode 100644 netflix/cmake/FindProvisionProxy.cmake
+
+diff --git a/netflix/cmake/FindProvisionProxy.cmake b/netflix/cmake/FindProvisionProxy.cmake
+new file mode 100644
+index 00000000..59aa53a2
+--- /dev/null
++++ b/netflix/cmake/FindProvisionProxy.cmake
+@@ -0,0 +1,39 @@
++# - Try to find Metrological ProvisionProxy.
++# Once done, this will define
++#
++#  PROVISIONPROXY_FOUND - system has Metrological ProvisionProxy.
++#  PROVISIONPROXY_INCLUDE_DIRS - the Metrological ProvisionProxy include directories
++#  PROVISIONPROXY_LIBRARIES - link these to use Metrological ProvisionProxy.
++#  PROVISIONPROXY_CFLAGS - add these to yor cflags use Metrological ProvisionProxy.
++#
++# Copyright (C) 2017 Metrological B.V.
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions
++# are met:
++# 1.  Redistributions of source code must retain the above copyright
++#     notice, this list of conditions and the following disclaimer.
++# 2.  Redistributions in binary form must reproduce the above copyright
++#     notice, this list of conditions and the following disclaimer in the
++#     documentation and/or other materials provided with the distribution.
++#
++# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND ITS CONTRIBUTORS ``AS
++# IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++# PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR ITS
++# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
++# OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
++# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
++# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
++# ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++find_package(PkgConfig)
++
++pkg_check_modules(PROVISIONPROXY REQUIRED provisionproxy)
++
++include(FindPackageHandleStandardArgs)
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(WAYLAND_EGL DEFAULT_MSG PROVISIONPROXY_FOUND)
++
++mark_as_advanced(PROVISIONPROXY_INCLUDE_DIRS PROVISIONPROXY_LIBRARIES)
+\ No newline at end of file
+diff --git a/netflix/src/platform/gibbon/CMakeLists.txt b/netflix/src/platform/gibbon/CMakeLists.txt
+index 98761d79..9b90a5ce 100644
+--- a/netflix/src/platform/gibbon/CMakeLists.txt
++++ b/netflix/src/platform/gibbon/CMakeLists.txt
+@@ -5,7 +5,7 @@
+ # purpose without the permission of Netflix, Inc. is strictly
+ # prohibited.
+ 
+-cmake_minimum_required(VERSION 2.8)
++cmake_minimum_required(VERSION 3.0)
+ 
+ include(gibbon.cmake)
+ include(CheckCSourceCompiles)
+@@ -630,22 +630,6 @@ function(list_to_string in out)
+     set(${out} "${tmp}" PARENT_SCOPE)
+ endfunction()
+ 
+-if(NETFLIX_USE_PROVISION)
+-    pkg_check_modules(PC_PROVISION REQUIRED provisionproxy)
+-
+-    if (PC_PROVISION_FOUND)
+-        add_definitions( -DUSE_PROVISIONING )
+-        set(PROVISION_NAMES ${PC_PROVISION_LIBRARIES})
+-        foreach (_library ${PROVISION_NAMES})
+-            find_library(PROVISION_LIBRARIES_${_library} ${_library}
+-                    HINTS ${PC_PROVISION_LIBDIR} ${PC_PROVISION_LIBRARY_DIRS}
+-                    )
+-            set(PROVISION_LIBRARIES ${PROVISION_LIBRARIES} ${PROVISION_LIBRARIES_${_library}})
+-        endforeach ()
+-        list_to_string(PC_PROVISION_CFLAGS_OTHER LIBPROVISION_CFLAGS_AS_STRING)
+-    endif (PC_PROVISION_FOUND)
+-endif(NETFLIX_USE_PROVISION)
+-
+ # Give the platform a chance to override the build command
+ if(COMMAND gibbon_build)
+     gibbon_build()
+@@ -712,11 +696,24 @@ else()
+ 
+ endif()
+ 
++if(NETFLIX_USE_PROVISION)
++    find_package(ProvisionProxy REQUIRED)
++    gibbon_add_libraries(${PROVISIONPROXY_LIBRARIES})
++    gibbon_add_includes(${PROVISIONPROXY_INCLUDE_DIRS})
++    gibbon_add_extra_cflags(${PROVISIONPROXY_CFLAGS})
++endif(NETFLIX_USE_PROVISION)
++
+ gibbon_get_dependencies(GIBBON_DEPENDENCIES)
+ if(NOT "${GIBBON_DEPENDENCIES}" STREQUAL "")
+     add_dependencies(gibbon ${GIBBON_DEPENDENCIES})
+ endif()
+ 
++gibbon_get_extra_cflags(GIBBON_EXTRA_CFLAGS)
++if(NOT "${GIBBON_EXTRA_CFLAGS}" STREQUAL "")
++    message("ADD CFLAGS GIBBON_EXTRA_CFLAGS: ${GIBBON_EXTRA_CFLAGS}")
++    target_compile_options(gibbon PRIVATE  ${GIBBON_EXTRA_CFLAGS})
++endif()
++
+ copy_resource(gibbon ${CMAKE_CURRENT_SOURCE_DIR}/resources/configuration/gibbon.xml ${APP_DATA_DIR}/etc/conf/gibbon.xml)
+ copy_resource(gibbon ${CMAKE_CURRENT_SOURCE_DIR}/resources/configuration/rs-server.xml ${APP_DATA_DIR}/etc/conf/rs-server.xml NON_COMPILABLE)
+ copy_resource(gibbon ${CMAKE_CURRENT_SOURCE_DIR}/resources/configuration/rs-client.xml ${APP_DATA_DIR}/etc/conf/rs-client.xml NON_COMPILABLE)
+diff --git a/netflix/src/platform/gibbon/gibbon.cmake b/netflix/src/platform/gibbon/gibbon.cmake
+index f4bbd23b..612d8797 100644
+--- a/netflix/src/platform/gibbon/gibbon.cmake
++++ b/netflix/src/platform/gibbon/gibbon.cmake
+@@ -66,6 +66,10 @@ macro(gibbon_get_dependencies variable)
+     get_property(${variable} GLOBAL PROPERTY GIBBON_DEPENDENCIES)
+ endmacro()
+ 
++macro(gibbon_get_extra_cflags variable)
++    get_property(${variable} GLOBAL PROPERTY GIBBON_EXTRA_CFLAGS)
++endmacro()
++
+ # Add libraries to link against Gibbon
+ macro(gibbon_add_libraries)
+     foreach(arg ${ARGV})
+@@ -80,6 +84,13 @@ macro(gibbon_add_dependencies)
+     endforeach()
+ endmacro()
+ 
++# Add cflags to Gibbon
++macro(gibbon_add_extra_cflags)
++    foreach(arg ${ARGV})
++        set_property(GLOBAL APPEND PROPERTY GIBBON_EXTRA_CFLAGS ${arg})
++    endforeach()
++endmacro()
++
+ # Add mocables to be processed by Qt
+ macro(gibbon_add_mocables)
+     get_filename_component(CURRENT_DIRECTORY ${CMAKE_CURRENT_LIST_FILE} PATH)
+@@ -143,7 +154,7 @@ macro(gibbon_add_keys)
+ endmacro()
+ 
+ macro(gibbon_copy_resource source target attributes)
+-    get_filename_component(CURRENT_DIRECTORY ${CMAKE_CURRENT_LIST_FILE} PATH)
++    gibbon_add_extra_cflags(CURRENT_DIRECTORY ${CMAKE_CURRENT_LIST_FILE} PATH)
+ 
+     if(NOT IS_ABSOLUTE "${source}")
+         set(file "${CURRENT_DIRECTORY}/${source}")
+diff --git a/partner/graphics/wpeframework/OpenGLContextEGL.cpp b/partner/graphics/wpeframework/OpenGLContextEGL.cpp
+index 3e32142a..068ccfda 100644
+--- a/partner/graphics/wpeframework/OpenGLContextEGL.cpp
++++ b/partner/graphics/wpeframework/OpenGLContextEGL.cpp
+@@ -49,7 +49,7 @@ static Process process;
+ static void* Processor(void* arg)
+ {
+     printf("[%s:%d] Spin-up the wayland hamster.\n", __FILE__, __LINE__);
+-    WPEFramework::Wayland::Display::Instance().Process(SIGINT, &process);
++    WPEFramework::Wayland::Display::Instance().Process(&process);
+     printf("[%s:%d] The wayland hamster left the wheel.\n", __FILE__, __LINE__);
+ }
+ 
+@@ -72,6 +72,8 @@ bool OpenGLContext::init(OpenGLContext* share)
+         printf("[Wayland Input] Error creating processor thread\n");
+     }
+ 
++    printf("\n\n[Video Texture] videoImage=%p videoTexture=%p\n\n", mPrivate->videoImage, mPrivate->videoTexture);
++
+     return WPEFramework::Display::Instance().WaylandDisplay().IsOperational();
+ }
+ 
+@@ -110,6 +112,8 @@ void* OpenGLContext::display()
+ 
+ void* OpenGLContext::createEGLVideoImage(unsigned width, unsigned height)
+ {
++    printf("\n\n[createEGLVideoImage] width=%p height=%p\n\n", width, height);
++
+     GL_CHECK;
+     OpenGLContext::ensureContext();
+     if (mPrivate->videoImage.IsValid() == true) {
+@@ -126,16 +130,19 @@ void* OpenGLContext::createEGLVideoImage(unsigned width, unsigned height)
+     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+     GL_CHECK;
+-
+     mPrivate->videoImage = WPEFramework::Display::Instance().WaylandDisplay().Create(mPrivate->videoTexture, width, height);
++    GL_CHECK;
+     glFinish();
+ 
++    printf("\n\n[Video Texture] videoImage=%p videoTexture=%p\n\n", mPrivate->videoImage, mPrivate->videoTexture);
++
+     return mPrivate->videoImage.GetImage();
+ }
+ 
+ bool OpenGLContext::renderVideo()
+ {
+     if (int texture = mPrivate->videoTexture) {
++        printf("\n\n[Video videoTexture] videoTexture=%p \n\n", mPrivate->videoTexture);
+         GraphicsEngine* graphics = engine();
+         Rect clip;
+         const bool clipped = graphics->getState().hasClip;
+diff --git a/partner/graphics/wpeframework/OpenGLContextEGL.h b/partner/graphics/wpeframework/OpenGLContextEGL.h
+index e4c84b9e..35d553e1 100644
+--- a/partner/graphics/wpeframework/OpenGLContextEGL.h
++++ b/partner/graphics/wpeframework/OpenGLContextEGL.h
+@@ -28,8 +28,8 @@ namespace gibbon {
+     public:
+         OpenGLContextPrivate()
+             : client(WPEFramework::Display::Instance().Create(GetName(), 1280, 720))
+-            , videoTexture()
+             , videoImage()
++            , videoTexture(0)
+             , redraw()
+             , mutex(ZERO_MUTEX, "GLContextMutex")
+         {
+diff --git a/partner/graphics/wpeframework/gibbon_graphics.cmake b/partner/graphics/wpeframework/gibbon_graphics.cmake
+index eeabf547..249bae95 100644
+--- a/partner/graphics/wpeframework/gibbon_graphics.cmake
++++ b/partner/graphics/wpeframework/gibbon_graphics.cmake
+@@ -34,7 +34,7 @@ if(GIBBON_GRAPHICS_GL_WSYS STREQUAL "egl")
+     find_package(WaylandEGL REQUIRED)
+     gibbon_add_libraries(${WAYLAND_EGL_LIBRARIES})
+     gibbon_add_includes(${WAYLAND_EGL_INCLUDE_DIRS})
+-
++    gibbon_add_extra_cflags(${WAYLAND_EGL_CFLAGS})
+ 
+     find_package(WaylandEGLClient)
+     if (WAYLAND_EGL_CLIENT_FOUND)
+-- 
+2.17.1
+

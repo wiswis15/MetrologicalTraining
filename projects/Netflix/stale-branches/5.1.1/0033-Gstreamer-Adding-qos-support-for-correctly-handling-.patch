@@ -1,0 +1,176 @@
+From 2e3c607cececedbba9ed05f8c47d910b4dc74e36 Mon Sep 17 00:00:00 2001
+From: Albert Dahan <albert@dahan.nl>
+Date: Wed, 28 Sep 2016 11:50:01 +0200
+Subject: [PATCH 33/97] [Gstreamer] Adding qos support for correctly handling
+ the underflow reporting
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp         | 29 ++++++--
+ partner/dpi/gstreamer/ESPlayerGst.h           |  7 ++
+ partner/dpi/gstreamer/PlaybackGroupNative.cpp | 67 ++++++++++++++++++-
+ 3 files changed, 97 insertions(+), 6 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index ab35925c..78886b1a 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -81,11 +81,6 @@ void ESPlayerGst::ProcessFrame() {
+            Log::error(TRACE_MEDIAPLAYBACK, "Input exhausted");
+            mInputExhausted = true;
+            printf("ProcessFrame::NO_AVAILABLE_SAMPLES type: %s, mReadyToPlay: %s \n", mMediaType == AUDIO ? "AUDIO" : "VIDEO", mReadyToPlay ? "true" : "false");
+-
+-           if (mMediaType == VIDEO && mPlaybackGroup->getPlaybackState() == 1 && !mEndOfStreamFlag && gst_app_src_get_current_level_bytes(GST_APP_SRC(mSrc)) == 0 && !getCallback()->reportUnderflowReceived()) {
+-            printf("ProcessFrame: reporting underflow \n");
+-            getCallback()->reportUnderflow();
+-           }
+            startWait(WAIT_FOR_VIDEO_DATA);
+            break;
+          }
+@@ -278,6 +273,30 @@ ESPlayerGst::init(const struct StreamPlayerInitData& initData,
+   return err;
+ }
+ 
++// This is called from the rendererTask thread. There's no mutex preventing the
++// playback state from changing while this is being called. That's OK. The
++// underflow event reaches the UI asynchronously anyway.
++void ESPlayerGst::qosUnderflowReporter(bool qos)
++{
++  IPlaybackGroup::PlaybackState playbackState = mPlaybackGroup->getPlaybackState();
++
++  if(playbackState == IPlaybackGroup::PLAY && (!qos && inputsAreExhausted() || qos)) {
++    // If the end of stream flag is not raised, then this could be an
++    // underflow.
++    ScopedMutex cs(mDecoderTaskMutex);
++    if(!mEndOfStreamFlag) {
++      if(!mDisabled && !mCallback->reportUnderflowReceived()) {
++        printf("ESPlayerGst::qosUnderflowReported(%s): reportUnderflow()\n", qos?"true":"false");
++        mCallback->reportUnderflow();
++      }
++    }
++    // The else case (playback completed, see
++    // ESPlayerNative::underflowReporter()) isn't handled here. It's
++    // handled in PlaybackGroupNative::handleGstMessage(), when
++    // GST_MESSAGE_EOS is received.
++  }
++}
++
+ bool ESPlayerGst::readyForPlaybackStart()
+ {
+   ScopedMutex cs(mDecoderTaskMutex);
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.h b/partner/dpi/gstreamer/ESPlayerGst.h
+index 1dd7e43b..95550656 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.h
++++ b/partner/dpi/gstreamer/ESPlayerGst.h
+@@ -62,6 +62,13 @@ public:
+     virtual void endFlush(){};
+  
+     virtual MediaType getMediaType();
++
++    virtual void underflowReporter() {
++        qosUnderflowReporter(false);
++    }
++
++    virtual void qosUnderflowReporter(bool qos);
++
+     /*
+      * This function is polled by the upper layer, return true when the decoder
+      * has enough buffer to start without an underflow.
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.cpp b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+index 46213531..1acebf98 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.cpp
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+@@ -31,6 +31,39 @@ using namespace std;
+ static GstElement* findElement(GstElement *element, const char* targetName);
+ #endif
+ 
++static void setQOSRecursively(GstElement *element, gboolean qos)
++{
++  if (GST_IS_BIN(element)) {
++    GstIterator* it = gst_bin_iterate_elements(GST_BIN(element));
++    GValue item = G_VALUE_INIT;
++    bool done = false;
++    while (!done) {
++      switch (gst_iterator_next(it, &item)) {
++        case GST_ITERATOR_OK:
++          {
++          GstElement *next = GST_ELEMENT(g_value_get_object(&item));
++          setQOSRecursively(next, qos);
++          g_value_reset (&item);
++          break;
++          }
++        case GST_ITERATOR_RESYNC:
++          gst_iterator_resync (it);
++          break;
++        case GST_ITERATOR_ERROR:
++        case GST_ITERATOR_DONE:
++          done = true;
++          break;
++      }
++    }
++    g_value_unset (&item);
++    gst_iterator_free(it);
++  } else {
++    if (g_object_class_find_property(G_OBJECT_GET_CLASS(G_OBJECT(element)), "qos") != NULL) {
++     g_object_set(G_OBJECT(element), "qos", qos, NULL);
++    }
++  }
++}
++
+ unsigned getGstPlayFlag(const char* nick)
+ {
+   static GFlagsClass* flagsClass = static_cast<GFlagsClass*>(g_type_class_ref(g_type_from_name("GstPlayFlags")));
+@@ -754,6 +787,12 @@ gboolean PlaybackGroupNative::handleGstMessage(GstMessage* message)
+       if (oldstate == GST_STATE_NULL && newstate == GST_STATE_READY) {
+       } else if (oldstate == GST_STATE_READY && newstate == GST_STATE_PAUSED) {
+         GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(mGstPipeline), GST_DEBUG_GRAPH_SHOW_ALL, "paused-pipeline");
++        GstElement* videosink = NULL;
++        g_object_get(G_OBJECT(mGstPipeline), "video-sink", &videosink, NULL);
++        if (videosink != NULL) {
++          setQOSRecursively(videosink, TRUE);
++          g_object_unref(G_OBJECT(videosink));
++        }
+       } else if (oldstate == GST_STATE_PAUSED && newstate == GST_STATE_PAUSED) {
+       } else if (oldstate == GST_STATE_PAUSED && newstate == GST_STATE_PLAYING) {
+         startPositionTimer();
+@@ -761,11 +800,37 @@ gboolean PlaybackGroupNative::handleGstMessage(GstMessage* message)
+       } else if (oldstate == GST_STATE_PLAYING && newstate == GST_STATE_PAUSED) {
+         stopPositionTimer();
+       } else if (oldstate == GST_STATE_PAUSED && newstate == GST_STATE_READY) {
++        GstElement* videosink = NULL;
++        g_object_get(G_OBJECT(mGstPipeline), "video-sink", &videosink, NULL);
++        if (videosink != NULL) {
++          setQOSRecursively(videosink, FALSE);
++          g_object_unref(G_OBJECT(videosink));
++        }
+       } else if (oldstate == GST_STATE_READY && newstate == GST_STATE_NULL) {
+       }
+       break;
++    case GST_MESSAGE_QOS:
++      {
++        gboolean live = FALSE;
++        guint64 running_time, stream_time = GST_CLOCK_TIME_NONE, timestamp, duration;
++        gint64 jitter;
++        gdouble proportion = 0;
++        gint quality;
++
++        gst_message_parse_qos(message, &live, &running_time, &stream_time, &timestamp, &duration);
++        gst_message_parse_qos_values(message, &jitter, &proportion, &quality);
++
++        Log::info(TRACE_MEDIACONTROL, "QOS message from %s: live: %s, stream_time: %" GST_TIME_FORMAT ", proportion: %f",
++          GST_MESSAGE_SRC_NAME(message),
++          (live)?"true":"false", GST_TIME_ARGS(stream_time), proportion);
++        if (mVideoPlayer) {
++          Log::info(TRACE_MEDIACONTROL, "Reporting underflow to the video player");
++          mVideoPlayer->qosUnderflowReporter(true);
++        }
++      }
++      break;
+     default:
+-        break;
++      break;
+     }
+   return true;
+ }
+-- 
+2.17.1
+

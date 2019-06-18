@@ -1,0 +1,114 @@
+From a911eea585e73a87752a520b856e2b4672cd9dd3 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Mon, 29 Jan 2018 16:14:05 +0100
+Subject: [PATCH 87/97] Initial synapics westeros support.
+
+---
+ partner/dpi/gstreamer/CMakeLists.txt          |  2 ++
+ partner/dpi/gstreamer/PlaybackGroupNative.cpp | 36 +++++++++++++++----
+ 2 files changed, 32 insertions(+), 6 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/CMakeLists.txt b/partner/dpi/gstreamer/CMakeLists.txt
+index 88f9061c..9852767a 100644
+--- a/partner/dpi/gstreamer/CMakeLists.txt
++++ b/partner/dpi/gstreamer/CMakeLists.txt
+@@ -41,6 +41,8 @@ elseif (GST_VIDEO_RENDERING STREQUAL "gl")
+   add_definitions(-DGST_GL)
+ elseif (GST_VIDEO_RENDERING STREQUAL "westeros")
+   add_definitions(-DWESTEROS_SINK)
++elseif (GST_VIDEO_RENDERING STREQUAL "synaptics")
++    add_definitions(-DSYNAPTICS)
+ endif()
+ 
+ set(HAVE_DPI_DIRECTORY "${NRDP_BINARY_ROOT_DIR}/lib/dpi")
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.cpp b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+index e5727b4b..08add103 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.cpp
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+@@ -98,7 +98,7 @@ PlaybackGroupNative::PlaybackGroupNative(ESManagerNative& ESManager, uint32_t pi
+   //  mCloseThread(false)
+   mCurrentVideoWindow(zeroRect),
+   mNewVideoWindow(false)
+-#if defined(WESTEROS_SINK)
++#if defined(WESTEROS_SINK) || defined(SYNAPTICS)
+   , mSink(NULL)
+ #endif
+ {
+@@ -122,9 +122,14 @@ PlaybackGroupNative::PlaybackGroupNative(ESManagerNative& ESManager, uint32_t pi
+     unsigned flagAudio = getGstPlayFlag("audio");
+     unsigned flagVideo = getGstPlayFlag("video");
+     unsigned flagNativeVideo = getGstPlayFlag("native-video");
++#if defined(SYNAPTICS)
++    unsigned flagNativeAudio = getGstPlayFlag("native-audio");
++#else
++    unsigned flagNativeAudio = 0x0;
++#endif
+     unsigned flagBuffering = getGstPlayFlag("buffering");
+ 
+-    g_object_set(mGstPipeline, "uri", "netflix://", "flags", flagAudio | flagVideo | flagNativeVideo | flagBuffering, NULL);
++    g_object_set(mGstPipeline, "uri", "netflix://", "flags", flagAudio | flagVideo | flagNativeVideo | flagNativeAudio | flagBuffering, NULL);
+ 
+     if (getenv("NF_GST_AUDIO_DOWNMIX")) {
+       GstElement* capsfilter = gst_element_factory_make("capsfilter", NULL);
+@@ -141,11 +146,30 @@ PlaybackGroupNative::PlaybackGroupNative(ESManagerNative& ESManager, uint32_t pi
+     g_object_set(mGstPipeline, "video-sink", mVideoSinkGst->createVideoSink(), NULL);
+ #endif
+ 
+-#if defined(WESTEROS_SINK)
++#if defined(WESTEROS_SINK) || defined(SYNAPTICS)
+     GstElementFactory* sinkFactory(gst_element_factory_find("westerossink"));
+     mSink = gst_element_factory_create(sinkFactory, "WesterosVideoSink");
+     g_object_set(mGstPipeline, "video-sink", mSink, NULL);
+     g_object_set(mSink, "zorder",0.0f, NULL);
++    // g_object_set(mSink, "opacity",0.6f, NULL);
++#endif
++
++#if defined(SYNAPTICS)
++    GstElement* audioSink = gst_element_factory_make("amparen", "AmpAudioSink");
++    g_object_set(mGstPipeline, "audio-sink", audioSink, NULL);
++
++    GstClock* clk(NULL);
++    clk = gst_element_provide_clock(audioSink);
++
++    if (clk != NULL && mSink != NULL) {
++        gst_element_set_clock(mSink, clk);
++    }
++
++    /* Native audio */
++    gint playbin_flag;
++    g_object_get (mGstPipeline, "flags", &playbin_flag, NULL);
++    playbin_flag |= 0x00000020;
++    g_object_set (mGstPipeline, "flags", playbin_flag, NULL);
+ #endif
+ 
+     ESPlayerConstants::VIDEO_REN_SCREEN_WIDTH = sConfiguration->videoRendererScreenWidth;
+@@ -199,7 +223,7 @@ PlaybackGroupNative::~PlaybackGroupNative()
+     if (mSource)
+         gst_object_unref(mSource);
+ 
+-#if defined(WESTEROS_SINK)
++#if defined(WESTEROS_SINK) || defined(SYNAPTICS)
+     if (mSink != NULL){
+          gst_object_unref(mSink);
+     }
+@@ -474,7 +498,7 @@ void PlaybackGroupNative::audioFlushed()
+ {
+ }
+ 
+-#if defined(BCM_NEXUS) || defined(WESTEROS_SINK)
++#if defined(BCM_NEXUS) || defined(WESTEROS_SINK) || defined(SYNAPTICS)
+ // utility function for bcm nexus seek functionality
+ static GstElement* findElement(GstElement *element, const char* targetName)
+ {
+@@ -627,7 +651,7 @@ void PlaybackGroupNative::updateVideoRectangle()
+   g_object_get(mGstPipeline, "video-sink", &videoDec, NULL);
+ #elif defined(BCM_NEXUS)
+   videoDec = findElement(mGstPipeline, "brcmvideosink");
+-#elif defined(WESTEROS_SINK)
++#elif defined(WESTEROS_SINK) || defined(SYNAPTICS)
+   videoDec = findElement(mGstPipeline, "westerossink");
+ #else
+     return;
+-- 
+2.17.1
+

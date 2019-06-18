@@ -1,0 +1,46 @@
+From 6f5ffcb30fbab35152282cd41ce356c1174c1791 Mon Sep 17 00:00:00 2001
+From: Wouter Meek <woutermeek@gmail.com>
+Date: Tue, 20 Sep 2016 06:47:55 -0700
+Subject: [PATCH 22/97] [DPI/Gstreamer] report error to netflix
+
+---
+ partner/dpi/gstreamer/PlaybackGroupNative.cpp | 22 ++++++++++++++-----
+ 1 file changed, 16 insertions(+), 6 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.cpp b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+index a5f3bc0f..b89a30f0 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.cpp
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+@@ -703,13 +703,23 @@ gboolean PlaybackGroupNative::handleGstMessage(GstMessage* message)
+   GError* error;
+   gchar* debug;
+   switch (GST_MESSAGE_TYPE(message)){
+-    case GST_MESSAGE_ERROR:
++    case GST_MESSAGE_ERROR: {
+       gst_message_parse_error(message, &error, &debug);
+-      Log::warn(TRACE_MEDIAPLAYBACK, "PlaybackGroupNative::gstBusCallback() error! code: %d, %s, Debug: %s", error->code, error->message, debug);
+-      g_error_free(error);
+-      g_free(debug);
+-      GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(mGstPipeline), GST_DEBUG_GRAPH_SHOW_ALL, "error-pipeline");
+-      break;
++      Log::warn(TRACE_MEDIAPLAYBACK, "PlaybackGroupNative::gstBusCallback() error! code: %d, %s, Debug: %s", error->code, error->message, debug);      
++       g_error_free(error);
++       g_free(debug);
++      // GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(mGstPipeline), GST_DEBUG_GRAPH_SHOW_ALL, "error-pipeline");
++      
++      Variant errInfo;
++      errInfo["errorDescription"] = "fusion player killed";
++      set<ESPlayerGst*>::iterator it;
++      printf("Netflix REPORT ERROR \n");
++      for(it = mStreamPlayers.begin(); it != mStreamPlayers.end(); it++) {
++        (*it)->getCallback()->reportError(new IDeviceError(DECODE_ERROR, refAppDeviceSpecific_FfmpegDecoderError, errInfo));
++        //(*it)->getCallback()->playbackCompleted();
++      }
++      break;    
++    }
+     case GST_MESSAGE_WARNING:
+       gst_message_parse_warning(message, &error, &debug);
+       Log::warn(TRACE_MEDIAPLAYBACK, "PlaybackGroupNative::gstBusCallback() warning! code: %d, %s, Debug: %s", error->code, error->message, debug);
+-- 
+2.17.1
+

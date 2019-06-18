@@ -1,0 +1,31 @@
+From 30c6feb1c0603217c77b2cc0528f6359ad7aca0f Mon Sep 17 00:00:00 2001
+From: Wouter Meek <woutermeek@gmail.com>
+Date: Fri, 16 Sep 2016 04:35:44 -0700
+Subject: [PATCH 14/97] [DPI/Gstreamer] audio stream is always readyForPlayback
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp | 8 ++------
+ 1 file changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index 762da06c..8f1d171c 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -258,12 +258,8 @@ bool ESPlayerGst::readyForPlaybackStart()
+   ScopedMutex cs(mDecoderTaskMutex);
+   // Make sure to return ready if we have already sent the last
+   // access unit.
+-  if (mEndOfStreamFlag == true) {
+-      return true;
+-  }
+-
+-  printf("bool ESPlayerGst::readyForPlaybackStart() mInputExhausted: %s mReadyToPlay: %s \n", mInputExhausted ? "TRUE" : "FALSE", mReadyToPlay ? "TRUE" : "FALSE");
+-  return !mInputExhausted && mReadyToPlay;
++  printf("bool ESPlayerGst::readyForPlaybackStart() type: %s mInputExhausted: %s mReadyToPlay: %s \n", mMediaType == AUDIO ? "AUDIO" : "VIDEO" , mInputExhausted ? "TRUE" : "FALSE", mReadyToPlay ? "TRUE" : "FALSE");  
++  return mMediaType == AUDIO || mEndOfStreamFlag || (!mInputExhausted && mReadyToPlay);
+ }
+ 
+ void ESPlayerGst::flush()
+-- 
+2.17.1
+

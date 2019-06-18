@@ -1,0 +1,128 @@
+From 1ffeaedbaccccf0c64462fc7fd2aeab41a6dc9e4 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Fri, 21 Jul 2017 17:43:30 +0200
+Subject: [PATCH 68/97] [provisioning] moved cflags for OpenSSLhandler.
+
+---
+ netflix/src/platform/gibbon/CMakeLists.txt | 44 +++++++++++++++++++++-
+ partner/dpi/reference/drm.cmake            | 26 ++-----------
+ 2 files changed, 46 insertions(+), 24 deletions(-)
+
+diff --git a/netflix/src/platform/gibbon/CMakeLists.txt b/netflix/src/platform/gibbon/CMakeLists.txt
+index 6a6d2f96..f17780b6 100644
+--- a/netflix/src/platform/gibbon/CMakeLists.txt
++++ b/netflix/src/platform/gibbon/CMakeLists.txt
+@@ -616,6 +616,35 @@ gibbon_get_js(NETFLIXBRIDGE_JS_FILES)
+ include(${COMMON_DIRECTORY}/js/js.cmake)
+ create_data_js_directory(gibbon)
+ 
++find_package(PkgConfig)
++
++# Converts a CMake list to a CMake string. Items in the string are separated by spaces.
++# in  input list variable, referenced by name (so X, not S{X} or "S{X}")
++# out resulting string variable, referenced by name (so X, not S{X} or "S{X}")
++function(list_to_string in out)
++    set(tmp "")
++    foreach(VAL ${${in}})
++        string(APPEND tmp "${VAL} ")
++    endforeach()
++    set(${out} "${tmp}" PARENT_SCOPE)
++endfunction()
++
++if(NETFLIX_USE_PROVISION)
++    pkg_check_modules(PC_PROVISION REQUIRED provisionproxy)
++
++    if (PC_PROVISION_FOUND)
++        add_definitions( -DUSE_PROVISIONING )
++        set(PROVISION_NAMES ${PC_PROVISION_LIBRARIES})
++        foreach (_library ${PROVISION_NAMES})
++            find_library(PROVISION_LIBRARIES_${_library} ${_library}
++                    HINTS ${PC_PROVISION_LIBDIR} ${PC_PROVISION_LIBRARY_DIRS}
++                    )
++            set(PROVISION_LIBRARIES ${PROVISION_LIBRARIES} ${PROVISION_LIBRARIES_${_library}})
++        endforeach ()
++        list_to_string(PC_PROVISION_CFLAGS_OTHER LIBPROVISION_CFLAGS_AS_STRING)
++    endif (PC_PROVISION_FOUND)
++endif(NETFLIX_USE_PROVISION)
++
+ # Give the platform a chance to override the build command
+ if(COMMAND gibbon_build)
+     gibbon_build()
+@@ -624,6 +653,11 @@ else()
+         add_definitions(-DGIBBON_MAIN)
+         add_executable(gibbon ${SOURCES})
+ 
++        if (LIBPROVISION_CFLAGS_AS_STRING)
++            message("Additional flags: ${LIBPROVISION_CFLAGS_AS_STRING}")
++            set_target_properties(gibbon PROPERTIES LINK_FLAGS ${LIBPROVISION_CFLAGS_AS_STRING})
++        endif ()
++
+         if(NRDP_HAS_SOCKETIZER)
+             target_link_libraries(gibbon nrdsocketizer)
+         endif()
+@@ -641,11 +675,17 @@ else()
+             endif()
+         endif()
+ 
+-        target_link_libraries(gibbon ${GIBBON_LIBS} nrd nrddpi pthread dl rt)
++        target_link_libraries(gibbon ${GIBBON_LIBS} nrd nrddpi ${PROVISION_LIBRARIES} pthread dl rt)
+ 
+     elseif(GIBBON_MODE STREQUAL "shared")
++
+         add_library(gibbon SHARED ${SOURCES})
+-        target_link_libraries(gibbon ${GIBBON_LIBS} nrd nrddpi pthread dl)
++        target_link_libraries(gibbon ${GIBBON_LIBS} nrd nrddpi ${PROVISION_LIBRARIES} pthread dl)
++
++        if (LIBPROVISION_CFLAGS_AS_STRING)
++            message("Additional flags: ${LIBPROVISION_CFLAGS_AS_STRING}")
++            set_target_properties(gibbon PROPERTIES LINK_FLAGS ${LIBPROVISION_CFLAGS_AS_STRING})
++        endif ()
+ 
+     elseif(GIBBON_MODE STREQUAL "static")
+         add_library(gibbon STATIC ${SOURCES})
+diff --git a/partner/dpi/reference/drm.cmake b/partner/dpi/reference/drm.cmake
+index b812e6c7..12a92d8f 100644
+--- a/partner/dpi/reference/drm.cmake
++++ b/partner/dpi/reference/drm.cmake
+@@ -210,29 +210,7 @@ elseif(DPI_REFERENCE_DRM STREQUAL "playready")
+ 
+     link_directories(${PLAYREADY_LIB})
+ 
+-if(NETFLIX_USE_PROVISION)
+-    pkg_check_modules(PC_PROVISION REQUIRED provisionproxy)
+-
+-    if (PC_PROVISION_FOUND)
+-        add_definitions( -DUSE_PROVISIONING )
+-        set(PROVISION_NAMES ${PC_PROVISION_LIBRARIES})
+-        foreach (_library ${PROVISION_NAMES})
+-            find_library(PROVISION_LIBRARIES_${_library} ${_library}
+-                HINTS ${PC_PROVISION_LIBDIR} ${PC_PROVISION_LIBRARY_DIRS}
+-            )
+-            set(PROVISION_LIBRARIES ${PROVISION_LIBRARIES} ${PROVISION_LIBRARIES_${_library}})
+-        endforeach ()
+-        list_to_string(PC_PROVISION_CFLAGS_OTHER LIBPROVISION_CFLAGS_AS_STRING)
+-        target_link_libraries(nrddpi playready ${PROVISION_LIBRARIES} )
+-        if (LIBPROVISION_CFLAGS_AS_STRING)
+-            message("Additional flags: ${LIBPROVISION_CFLAGS_AS_STRING}")
+-            set_target_properties(nrddpi PROPERTIES LINK_FLAGS ${LIBPROVISION_CFLAGS_AS_STRING})
+-        endif ()
+-    endif ()
+-else()
+     target_link_libraries(nrddpi playready)
+-endif(NETFLIX_USE_PROVISION)
+-
+     add_custom_command(TARGET nrddpi POST_BUILD
+         COMMAND ${CMAKE_COMMAND} -E make_directory ${HAVE_DPI_DIRECTORY}/playready
+         COMMAND ${CMAKE_COMMAND} -E make_directory ${HAVE_DPI_DIRECTORY}/playready/storage
+@@ -249,3 +227,7 @@ else()
+         set(DPI_REFERENCE_DRM "none")
+     endif()
+ endif()
++
++if(NETFLIX_USE_PROVISION)
++    add_definitions( -DUSE_PROVISIONING )
++endif(NETFLIX_USE_PROVISION)
+\ No newline at end of file
+-- 
+2.17.1
+

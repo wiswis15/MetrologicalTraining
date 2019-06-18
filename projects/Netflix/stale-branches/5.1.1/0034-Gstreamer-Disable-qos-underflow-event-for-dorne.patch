@@ -1,0 +1,127 @@
+From 336daa0184e9d4e71e88ff0a9f0edd89ddb90369 Mon Sep 17 00:00:00 2001
+From: Albert Dahan <albert@dahan.nl>
+Date: Thu, 29 Sep 2016 12:19:00 +0200
+Subject: [PATCH 34/97] [Gstreamer] Disable qos underflow event for dorne
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp         | 8 ++++++++
+ partner/dpi/gstreamer/ESPlayerGst.h           | 2 ++
+ partner/dpi/gstreamer/PlaybackGroupNative.cpp | 8 ++++++++
+ 3 files changed, 18 insertions(+)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index 78886b1a..196ea648 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -81,6 +81,12 @@ void ESPlayerGst::ProcessFrame() {
+            Log::error(TRACE_MEDIAPLAYBACK, "Input exhausted");
+            mInputExhausted = true;
+            printf("ProcessFrame::NO_AVAILABLE_SAMPLES type: %s, mReadyToPlay: %s \n", mMediaType == AUDIO ? "AUDIO" : "VIDEO", mReadyToPlay ? "true" : "false");
++#if defined(HORIZON_FUSION)
++           if (mMediaType == VIDEO && mPlaybackGroup->getPlaybackState() == 1 && !mEndOfStreamFlag && gst_app_src_get_current_level_bytes(GST_APP_SRC(mSrc)) == 0 && !mCallback->reportUnderflowReceived()) {
++             printf("ProcessFrame: reporting underflow \n");
++             mCallback->reportUnderflow();
++           }
++#endif
+            startWait(WAIT_FOR_VIDEO_DATA);
+            break;
+          }
+@@ -273,6 +279,7 @@ ESPlayerGst::init(const struct StreamPlayerInitData& initData,
+   return err;
+ }
+ 
++#if !defined(HORIZON_FUSION)
+ // This is called from the rendererTask thread. There's no mutex preventing the
+ // playback state from changing while this is being called. That's OK. The
+ // underflow event reaches the UI asynchronously anyway.
+@@ -296,6 +303,7 @@ void ESPlayerGst::qosUnderflowReporter(bool qos)
+     // GST_MESSAGE_EOS is received.
+   }
+ }
++#endif
+ 
+ bool ESPlayerGst::readyForPlaybackStart()
+ {
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.h b/partner/dpi/gstreamer/ESPlayerGst.h
+index 95550656..32494bac 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.h
++++ b/partner/dpi/gstreamer/ESPlayerGst.h
+@@ -63,11 +63,13 @@ public:
+  
+     virtual MediaType getMediaType();
+ 
++#if !defined(HORIZON_FUSION)
+     virtual void underflowReporter() {
+         qosUnderflowReporter(false);
+     }
+ 
+     virtual void qosUnderflowReporter(bool qos);
++#endif
+ 
+     /*
+      * This function is polled by the upper layer, return true when the decoder
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.cpp b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+index 1acebf98..4b54e239 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.cpp
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+@@ -31,6 +31,7 @@ using namespace std;
+ static GstElement* findElement(GstElement *element, const char* targetName);
+ #endif
+ 
++#if !defined(HORIZON_FUSION)
+ static void setQOSRecursively(GstElement *element, gboolean qos)
+ {
+   if (GST_IS_BIN(element)) {
+@@ -63,6 +64,7 @@ static void setQOSRecursively(GstElement *element, gboolean qos)
+     }
+   }
+ }
++#endif
+ 
+ unsigned getGstPlayFlag(const char* nick)
+ {
+@@ -787,12 +789,14 @@ gboolean PlaybackGroupNative::handleGstMessage(GstMessage* message)
+       if (oldstate == GST_STATE_NULL && newstate == GST_STATE_READY) {
+       } else if (oldstate == GST_STATE_READY && newstate == GST_STATE_PAUSED) {
+         GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(mGstPipeline), GST_DEBUG_GRAPH_SHOW_ALL, "paused-pipeline");
++#if !defined(HORIZON_FUSION)
+         GstElement* videosink = NULL;
+         g_object_get(G_OBJECT(mGstPipeline), "video-sink", &videosink, NULL);
+         if (videosink != NULL) {
+           setQOSRecursively(videosink, TRUE);
+           g_object_unref(G_OBJECT(videosink));
+         }
++#endif
+       } else if (oldstate == GST_STATE_PAUSED && newstate == GST_STATE_PAUSED) {
+       } else if (oldstate == GST_STATE_PAUSED && newstate == GST_STATE_PLAYING) {
+         startPositionTimer();
+@@ -800,15 +804,18 @@ gboolean PlaybackGroupNative::handleGstMessage(GstMessage* message)
+       } else if (oldstate == GST_STATE_PLAYING && newstate == GST_STATE_PAUSED) {
+         stopPositionTimer();
+       } else if (oldstate == GST_STATE_PAUSED && newstate == GST_STATE_READY) {
++#if !defined(HORIZON_FUSION)
+         GstElement* videosink = NULL;
+         g_object_get(G_OBJECT(mGstPipeline), "video-sink", &videosink, NULL);
+         if (videosink != NULL) {
+           setQOSRecursively(videosink, FALSE);
+           g_object_unref(G_OBJECT(videosink));
+         }
++#endif
+       } else if (oldstate == GST_STATE_READY && newstate == GST_STATE_NULL) {
+       }
+       break;
++#if !defined(HORIZON_FUSION)
+     case GST_MESSAGE_QOS:
+       {
+         gboolean live = FALSE;
+@@ -829,6 +836,7 @@ gboolean PlaybackGroupNative::handleGstMessage(GstMessage* message)
+         }
+       }
+       break;
++#endif
+     default:
+       break;
+     }
+-- 
+2.17.1
+

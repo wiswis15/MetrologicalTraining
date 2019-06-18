@@ -1,0 +1,25 @@
+From 77a8648c5b8b69631b668c9953bd88ee839e9931 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Wed, 6 Sep 2017 21:35:45 +0200
+Subject: [PATCH 77/97] [gibbon] ID1001-copy-past-error-fix :bowtie:
+
+---
+ netflix/src/platform/gibbon/gibbon.cmake | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/netflix/src/platform/gibbon/gibbon.cmake b/netflix/src/platform/gibbon/gibbon.cmake
+index 612d8797..e7c1f5cd 100644
+--- a/netflix/src/platform/gibbon/gibbon.cmake
++++ b/netflix/src/platform/gibbon/gibbon.cmake
+@@ -154,7 +154,7 @@ macro(gibbon_add_keys)
+ endmacro()
+ 
+ macro(gibbon_copy_resource source target attributes)
+-    gibbon_add_extra_cflags(CURRENT_DIRECTORY ${CMAKE_CURRENT_LIST_FILE} PATH)
++    get_filename_component(CURRENT_DIRECTORY ${CMAKE_CURRENT_LIST_FILE} PATH)
+ 
+     if(NOT IS_ABSOLUTE "${source}")
+         set(file "${CURRENT_DIRECTORY}/${source}")
+-- 
+2.17.1
+

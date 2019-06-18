@@ -1,0 +1,92 @@
+From 56c896e56acd6c77bee681460690fbda57274c3a Mon Sep 17 00:00:00 2001
+From: Wouter Meek <woutermeek@gmail.com>
+Date: Tue, 20 Sep 2016 03:08:40 -0700
+Subject: [PATCH 20/97] [DPI/Gstreamer] only report playbackCompleted if both
+ streams are on end of stream
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp         |  3 +--
+ partner/dpi/gstreamer/ESPlayerGst.h           |  5 ++++
+ partner/dpi/gstreamer/PlaybackGroupNative.cpp | 23 +++++++++++++++++++
+ partner/dpi/gstreamer/PlaybackGroupNative.h   |  1 +
+ 4 files changed, 30 insertions(+), 2 deletions(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index 75c3d343..53ef6e82 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -96,8 +96,7 @@ void ESPlayerGst::ProcessFrame() {
+               "getNextMediaSample returns END_OF_STREAM on stream %d", mMediaType);
+ 
+           if (!getCallback()->playbackCompletedReceived()) {
+-            printf("getCallback()->playbackCompleted(); \n");
+-            getCallback()->playbackCompleted();
++            mPlaybackGroup->streamPlaybackCompleted();
+             gst_element_post_message(mSrc, gst_message_new_eos(GST_OBJECT(mSrc)));
+           }
+           detach();
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.h b/partner/dpi/gstreamer/ESPlayerGst.h
+index 82407302..6f49a160 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.h
++++ b/partner/dpi/gstreamer/ESPlayerGst.h
+@@ -71,6 +71,11 @@ public:
+     inline GstElement* srcElement() const {
+       return (mSrc);
+     }
++
++    inline bool isEndOfStream() const {
++        return mEndOfStreamFlag;
++    }
++
+     inline void setOffset(llong pts, llong dts) { 
+       mPtsOffset = pts;
+       mDtsOffset = dts;
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.cpp b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+index 694a350e..a5f3bc0f 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.cpp
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.cpp
+@@ -634,6 +634,29 @@ void PlaybackGroupNative::pipelineTask()
+     g_main_loop_run(mMainLoop);
+ }
+ 
++
++void PlaybackGroupNative::streamPlaybackCompleted()
++{
++
++  bool allEos = true;
++  set<ESPlayerGst*>::iterator it = mStreamPlayers.begin();
++  while (allEos && it != mStreamPlayers.end()) {
++    allEos = (*it)->isEndOfStream();
++    it++;
++  }
++
++  if (allEos) {
++    it = mStreamPlayers.begin();
++    while (it != mStreamPlayers.end()) {
++      if(!(*it)->getCallback()->playbackCompletedReceived()) {
++        (*it)->getCallback()->playbackCompleted();
++      }
++      it++;
++    }
++  }
++
++}
++
+ // bool PlaybackGroupNative::closeThreadsFlagIsSet()
+ // {
+ //     ScopedMutex cs(mPipelineTaskMutex);
+diff --git a/partner/dpi/gstreamer/PlaybackGroupNative.h b/partner/dpi/gstreamer/PlaybackGroupNative.h
+index f0232b63..9b774b0a 100644
+--- a/partner/dpi/gstreamer/PlaybackGroupNative.h
++++ b/partner/dpi/gstreamer/PlaybackGroupNative.h
+@@ -91,6 +91,7 @@ public:
+     virtual void sendVideoToBack();
+ 
+     void firstVideo(llong pts, llong dts);
++    void streamPlaybackCompleted();
+     void updateVideoRectangle();
+ 
+     ESManagerNative* getESManager();
+-- 
+2.17.1
+

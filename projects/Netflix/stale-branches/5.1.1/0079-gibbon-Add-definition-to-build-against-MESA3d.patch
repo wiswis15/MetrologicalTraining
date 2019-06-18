@@ -1,0 +1,24 @@
+From 65cebdc962548d35675d561c5628307b772517d6 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Sat, 21 Oct 2017 11:49:30 +0200
+Subject: [PATCH 79/97] [gibbon] Add definition to build against MESA3d
+
+---
+ partner/graphics/gles2/gibbon_graphics.cmake | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/partner/graphics/gles2/gibbon_graphics.cmake b/partner/graphics/gles2/gibbon_graphics.cmake
+index c3313875..4c6a5e7c 100644
+--- a/partner/graphics/gles2/gibbon_graphics.cmake
++++ b/partner/graphics/gles2/gibbon_graphics.cmake
+@@ -99,6 +99,7 @@ elseif(GIBBON_GRAPHICS_GL_WSYS STREQUAL "egl")
+ 
+     set(GIBBON_GRAPHICSENGINE_GLES2_EGL TRUE)
+     gibbon_add_libraries(GLESv2 EGL)
++    add_definitions(-DMESA_EGL_NO_X11_HEADERS)
+ elseif(GIBBON_GRAPHICS_GL_WSYS STREQUAL "osx")
+     gibbon_add_sources(OpenGLContextOSX.mm)
+ 
+-- 
+2.17.1
+

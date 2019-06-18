@@ -1,0 +1,114 @@
+From 00193bb80262c2551ffaa16bea5931f832550c69 Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Tue, 27 Jun 2017 18:54:26 +0200
+Subject: [PATCH 63/97] [graphics] Add egl draw callback
+
+---
+ .../compositor-client/OpenGLContextEGL.cpp    | 40 ++++++++++++-------
+ .../compositor-client/OpenGLContextEGL.h      | 11 +++++
+ 2 files changed, 37 insertions(+), 14 deletions(-)
+
+diff --git a/partner/graphics/compositor-client/OpenGLContextEGL.cpp b/partner/graphics/compositor-client/OpenGLContextEGL.cpp
+index d1534fbf..c3aa75a3 100644
+--- a/partner/graphics/compositor-client/OpenGLContextEGL.cpp
++++ b/partner/graphics/compositor-client/OpenGLContextEGL.cpp
+@@ -18,26 +18,30 @@
+ #include <string.h>
+ #include <pthread.h>
+ 
++#include <nrdbase/ScopedMutex.h>
++
+ using namespace netflix;
+ using namespace netflix::gibbon;
+ 
+-/*
+-#ifndef GIBBON_EGL_NO_SWAP
+-static inline void gibbonEGLSwap(WPEFramework::Wayland::Display::Surface client)
++static void handle_redraw(void* data, struct wl_callback* callback, uint32_t time)
+ {
+-   client.SwapBuffers();
++    OpenGLContextPrivate* mPrivate = static_cast<OpenGLContextPrivate*>(data);
++
++    ScopedMutex lock(mPrivate->mutex);
++    mPrivate->client.Callback(nullptr);
++    mPrivate->redraw.signal();
+ }
+-#else
+-extern void gibbonEGLSwap(gibbonEGLSwap(WPEFramework::Wayland::Surface client);
+-#endif
+- */
++
++static struct wl_callback_listener frameListener = {
++    handle_redraw
++};
+ 
+ class Process : public WPEFramework::Wayland::Display::IProcess {
+- public:
+-  virtual bool Dispatch()
+-  {
+-      return true;
+-  };
++public:
++    virtual bool Dispatch()
++    {
++        return true;
++    };
+ };
+ 
+ static Process process;
+@@ -88,7 +92,15 @@ void OpenGLContext::cleanup()
+ 
+ void OpenGLContext::flip()
+ {
+-    // gibbonEGLSwap(mPrivate->client);
++    ScopedMutex lock(mPrivate->mutex);
++
++    mPrivate->client.Callback(&frameListener, mPrivate);
++
++    // wait for eglSwapBuffer to be completed or time out.
++    if (mPrivate->redraw.wait(&mPrivate->mutex, Time(500)) != NFErr_OK) {
++        printf("[%s:%d] OOOPS, redraw timed out!\n", __FILE__, __LINE__);
++    }
++
+ }
+ 
+ void* OpenGLContext::display()
+diff --git a/partner/graphics/compositor-client/OpenGLContextEGL.h b/partner/graphics/compositor-client/OpenGLContextEGL.h
+index 66a76bcd..82435b4b 100644
+--- a/partner/graphics/compositor-client/OpenGLContextEGL.h
++++ b/partner/graphics/compositor-client/OpenGLContextEGL.h
+@@ -19,6 +19,8 @@
+ #include <wayland-client-protocol.h>
+ 
+ #include <Client.h>
++#include <nrdbase/ConditionVariable.h>
++#include <nrdbase/Mutex.h>
+ 
+ namespace netflix {
+ namespace gibbon {
+@@ -29,13 +31,22 @@ namespace gibbon {
+             , client(display.Create("Netflix", 1280, 720))
+             , videoTexture()
+             , videoImage()
++            , redraw()
++            , mutex(ZERO_MUTEX, "GLContextMutex")
+         {
+         }
+ 
++        ~OpenGLContextPrivate()
++        {
++            redraw.broadcast();
++        }
++
+         WPEFramework::Wayland::Display& display;
+         WPEFramework::Wayland::Display::Surface client;
+         WPEFramework::Wayland::Display::Image videoImage;
+         GLuint videoTexture;
++        ConditionVariable redraw;
++        Mutex mutex;
+     };
+ }
+ }
+-- 
+2.17.1
+

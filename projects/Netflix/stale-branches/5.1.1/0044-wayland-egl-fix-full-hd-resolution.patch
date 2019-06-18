@@ -1,0 +1,25 @@
+From 0b0eae27564449cf4dd2233419af1bbaa39fafde Mon Sep 17 00:00:00 2001
+From: Bram Oosterhuis <bram.oosterhuis.nl@gmail.com>
+Date: Fri, 17 Mar 2017 12:28:40 +0100
+Subject: [PATCH 44/97] [wayland-egl] fix full hd resolution.
+
+---
+ partner/graphics/wayland-egl/OpenGLContextEGL.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/partner/graphics/wayland-egl/OpenGLContextEGL.cpp b/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
+index 90c7cb1e..91bf0b30 100644
+--- a/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
++++ b/partner/graphics/wayland-egl/OpenGLContextEGL.cpp
+@@ -135,7 +135,7 @@ bool OpenGLContext::init(OpenGLContext* share)
+                                          << " S=" << stencilSize;
+ 
+         // Full HD
+-        EGLint height(1280);
++        EGLint height(1080);
+         EGLint width(1920);
+ 
+         _display = wl_display_connect(NULL);
+-- 
+2.17.1
+

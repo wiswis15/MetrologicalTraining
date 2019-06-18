@@ -1,0 +1,34 @@
+From 3b65c09bea75bd085f495b5be174320410ec7fc9 Mon Sep 17 00:00:00 2001
+From: Pierre Wielders <pierre@wielders.net>
+Date: Fri, 9 Jun 2017 08:41:16 +0200
+Subject: [PATCH 59/97] [BUILD] Done. Correct list of libraries is inserted in
+ the right order.
+
+---
+ partner/dpi/reference/drm.cmake | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/partner/dpi/reference/drm.cmake b/partner/dpi/reference/drm.cmake
+index 315d601c..d979a901 100644
+--- a/partner/dpi/reference/drm.cmake
++++ b/partner/dpi/reference/drm.cmake
+@@ -12,7 +12,7 @@ find_package(PkgConfig)
+ pkg_check_modules(PC_PROVISION QUIET provisionproxy)
+ 
+ if (PC_PROVISION_FOUND)
+-    set(PROVISION_NAMES ${PC_EGL_LIBRARIES})
++    set(PROVISION_NAMES ${PC_PROVISION_LIBRARIES})
+     foreach (_library ${PROVISION_NAMES})
+         find_library(PROVISION_LIBRARIES_${_library} ${_library}
+             HINTS ${PC_PROVISION_LIBDIR} ${PC_PROVISION_LIBRARY_DIRS}
+@@ -213,6 +213,7 @@ elseif(DPI_REFERENCE_DRM STREQUAL "playready")
+ 
+ if(NETFLIX_USE_PROVISION)
+     add_definitions( -DUSE_PROVISIONING )
++    message("Additional libraries: ${PROVISION_LIBRARIES}")
+     target_link_libraries(nrddpi playready ${PROVISION_LIBRARIES} )
+ else()
+     target_link_libraries(nrddpi playready)
+-- 
+2.17.1
+

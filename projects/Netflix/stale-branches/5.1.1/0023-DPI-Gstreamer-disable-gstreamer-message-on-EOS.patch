@@ -1,0 +1,25 @@
+From e8043fb634b07422541eb379c32c981640c103b4 Mon Sep 17 00:00:00 2001
+From: Wouter Meek <woutermeek@gmail.com>
+Date: Tue, 20 Sep 2016 07:15:04 -0700
+Subject: [PATCH 23/97] [DPI/Gstreamer] disable gstreamer message on EOS
+
+---
+ partner/dpi/gstreamer/ESPlayerGst.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/partner/dpi/gstreamer/ESPlayerGst.cpp b/partner/dpi/gstreamer/ESPlayerGst.cpp
+index ae38726b..a3ffe37e 100644
+--- a/partner/dpi/gstreamer/ESPlayerGst.cpp
++++ b/partner/dpi/gstreamer/ESPlayerGst.cpp
+@@ -98,7 +98,7 @@ void ESPlayerGst::ProcessFrame() {
+ 
+           if (!getCallback()->playbackCompletedReceived()) {
+             mPlaybackGroup->streamPlaybackCompleted();
+-            gst_element_post_message(mSrc, gst_message_new_eos(GST_OBJECT(mSrc)));
++            //gst_element_post_message(mSrc, gst_message_new_eos(GST_OBJECT(mSrc)));
+           }
+           detach();
+           }
+-- 
+2.17.1
+
