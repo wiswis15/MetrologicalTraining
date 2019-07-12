@@ -1,0 +1,11 @@
+diff -ruNP a/cmake/get_architecture.cmake b/cmake/get_architecture.cmake
+--- a/cmake/get_architecture.cmake	2018-04-14 10:19:59.000000000 +0200
++++ b/cmake/get_architecture.cmake	2018-04-14 10:23:07.021675698 +0200
+@@ -1,6 +1,6 @@
+ function(get_architecture output)
+     if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
+-        set(ARCH "x86_64")
++        set(ARCH "x86")
+     elseif (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "amd64")
+         set(ARCH "x86_64")
+     elseif (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "AMD64")
