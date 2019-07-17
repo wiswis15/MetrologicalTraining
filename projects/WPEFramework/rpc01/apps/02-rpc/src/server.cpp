@@ -89,9 +89,9 @@ int main()
 
     cerr << "Server, communicator is listening: " << communicator.IsListening() << endl;
 
-    //sleep(10);
-    cerr << "Server in inifite loop" << endl;
-    while(1);
+    sleep(10);
+    
+    communicator.Close(Core::infinite);
 
     WPEFramework::Core::Singleton::Dispose();
 }
