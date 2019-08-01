@@ -29,10 +29,12 @@ if [[ $rc != 0 ]]; then
    exit $rc
 fi
 
-make install
-rc=$?
-if [[ $rc != 0 ]]; then
-   exit $rc
+if [ -z "$MAKE_NO_MAKE_INSTALL" ]; then
+   make install
+   rc=$?
+   if [[ $rc != 0 ]]; then
+      exit $rc
+   fi
 fi
 
 if [[ -v AFTER_MAKE_INSTALL_CMD ]]; then
