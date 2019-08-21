@@ -1,0 +1,11 @@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include/playready
+
+Name: playready
+Description: Microsoft Playready
+Requires:
+Version: 2.5
+Libs: -L${libdir} -lplayready
+Cflags: -I${includedir} -I${prefix}/include -I${prefix}/include/WPEFramework -I${includedir}/oem/common/inc -I${includedir}/oem/ansi/inc
+
