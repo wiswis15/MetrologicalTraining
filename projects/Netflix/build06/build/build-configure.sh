@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 BASE_DIR=$PWD
 
 STAGING="$PWD/staging/usr"
