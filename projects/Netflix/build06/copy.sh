@@ -20,8 +20,8 @@ cd $SRC_DIR/repos
 
 for dir in *
 do
-  if [ -d $dir ]; then
-     cd $dir
+  if [ -d "$dir/.git" ]; then
+     cd "$dir"
      repoHash=$(git rev-parse HEAD)
      cd ..
      echo "$dir $repoHash" >> $HASH_FILE
