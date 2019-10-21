@@ -4,11 +4,12 @@ set -e
 
 cd ../../..
 
-mkdir -p staging/persistent-path/OCDM/playready/state
+mkdir -p staging/persistent-path/OCDM
 
-ln -sf $PWD/staging/etc/playready staging/persistent-path/OCDM/playready/playready
+rm -rf staging/persistent-path/OCDM/playready
 
-mkdir -p staging/tmp
+ln -sf $PWD/staging/etc/playready staging/persistent-path/OCDM/playready
 
-ln -sf $PWD/staging/tmp staging/etc/playready/storage
+mkdir -p staging/etc/playready/storage
+mkdir -p staging/etc/playready/state
 
