@@ -93,7 +93,7 @@ public:
 
    ~ProcessThread() {
       Core::Thread::Stop();
-      m_display->QuitKeyProcess();
+      m_display->Release();
       Core::Thread::Wait(STOPPED, Core::infinite);
    }
 
@@ -136,22 +136,14 @@ public:
       Core::Thread::Wait(STOPPED, Core::infinite);
 
       eglMakeCurrent(m_dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-      fprintf(stderr, __FILE__ ":%d\n", __LINE__);
 
       eglDestroySurface(m_dpy, m_eglSurface);
-      fprintf(stderr, __FILE__ ":%d\n", __LINE__);
 
       eglDestroyContext(m_dpy, m_nativeContext);
-      fprintf(stderr, __FILE__ ":%d\n", __LINE__);
 
       eglTerminate(m_dpy);
-      fprintf(stderr, __FILE__ ":%d\n", __LINE__);
 
       m_graphicsSurface->Release();
-      fprintf(stderr, __FILE__ ":%d\n", __LINE__);
-
-      m_display->Release();
-      fprintf(stderr, __FILE__ ":%d\n", __LINE__);
 	}
 
 	virtual bool Initialize()
@@ -323,17 +315,14 @@ Plugin02::Plugin02()
    : m_skipURL(0)
    , m_renderThread(nullptr)
 {
-   cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
 }
 
 Plugin02::~Plugin02()
 {
-   cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
 }
 
 /* virtual */ const string Plugin02::Initialize(PluginHost::IShell* service)
 {
-   cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << ", callsign: " << service->Callsign() << endl;
    string result;
 
    // Setup skip URL for right offset.
@@ -349,14 +338,12 @@ Plugin02::~Plugin02()
 
 /* virtual */ void Plugin02::Deinitialize(PluginHost::IShell* service)
 {
-   cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
 
    delete m_renderThread;
 }
 
 /* virtual */ string Plugin02::Information() const
 {
-   cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
 
    // No additional info to report.
    return (string());
@@ -364,12 +351,10 @@ Plugin02::~Plugin02()
 
 /* virtual */ void Plugin02::Inbound(Web::Request& /* request */)
 {
-   cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
 }
 
 /* virtual */ Core::ProxyType<Web::Response> Plugin02::Process(const Web::Request& request)
 {
-   cerr << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ << endl;
    ASSERT(m_skipURL <= request.Path.length());
 
    // Proxy object for response type.
