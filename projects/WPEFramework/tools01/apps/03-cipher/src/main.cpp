@@ -39,15 +39,6 @@ void DecodeBase64(const char input[], uint8_t output[], uint32_t outputSize)
 	BIO_free_all(bio);
 }
 
-void AesEncrypt(const uint8_t input[], uint8_t output[], uint32_t bufferSize, uint8_t iv[16])
-{
-   uint8_t localIv[16];
-   memcpy(localIv, iv, 16);
-   AES_KEY aesKey;
-   AES_set_encrypt_key(g_key, 128, &aesKey);
-   AES_cbc_encrypt(input, output, bufferSize, &aesKey, localIv, AES_ENCRYPT);
-}
-
 void runAes(const uint8_t input[], uint8_t output[], uint32_t bufferSize, const uint8_t iv[16])
 {
    unsigned char localIv[AES_BLOCK_SIZE];
@@ -63,17 +54,6 @@ void runAes(const uint8_t input[], uint8_t output[], uint32_t bufferSize, const 
    CRYPTO_ctr128_encrypt(input, output, bufferSize, &aesKey, localIv, ecount, &num, reinterpret_cast<block128_f>(AES_encrypt));
 }
 
-/*
-void AesDecrypt(const uint8_t input[], uint8_t output[], uint32_t bufferSize, uint8_t iv[16])
-{
-   uint8_t localIv[16];
-   memcpy(localIv, iv, 16);
-   AES_KEY aesKey;
-   AES_set_decrypt_key(g_key, 128, &aesKey);
-   AES_cbc_encrypt(input, output, bufferSize, &aesKey, localIv, AES_DECRYPT);
-}
-*/
-
 // TODO: argv as array
 // TODO: better error return codes (standard linux)
 int main(int argc, const char ** argv)
@@ -85,12 +65,9 @@ int main(int argc, const char ** argv)
         return 1;
     }
 
-    // AES needs 
-    //uint32_t plainBufferSize = sizeof(NetflixData);
-    //if ()
-
     NetflixData netflixData;
 
+    // 1. Create random IV vector and salt.
     srand(time(nullptr));
     uint8_t iv[16];
     for (int i = 0; i < 16; i++) {
@@ -106,6 +83,7 @@ int main(int argc, const char ** argv)
 
     string line;
 
+    // 2. Read ESN and copy into NetflixData struct.
     std::getline(inFile, line);
     if (line.length() != g_esnSize) {
         cerr << "Expected ESN to be " << g_esnSize << " chars long, got " << line.length() << " instead." << endl;
@@ -114,6 +92,7 @@ int main(int argc, const char ** argv)
 
     strncpy(reinterpret_cast<char *>(netflixData.esn), line.c_str(), g_esnSize);
 
+    // 3. Read KPE (base 64 encoded) and store in NetflixData struct.
     const uint32_t expectedKpeB64Length = 24;
     std::getline(inFile, line);
     if (line.length() != expectedKpeB64Length) {
@@ -123,6 +102,7 @@ int main(int argc, const char ** argv)
 
     DecodeBase64(line.c_str(), netflixData.kpe, sizeof(netflixData.kpe));
 
+    // 3. Read KPH (base 64 encoded) and store in NetflixData struct.
     const uint32_t expectedKphB64Length = 44;
     std::getline(inFile, line);
     if (line.length() != expectedKphB64Length) {
@@ -132,9 +112,9 @@ int main(int argc, const char ** argv)
 
     DecodeBase64(line.c_str(), netflixData.kph, sizeof(netflixData.kph));
 
+    // 4. Encrypt NetflixData struct 
     uint8_t encryptBuffer[sizeof(NetflixData)];
     memset(encryptBuffer, 0, sizeof(encryptBuffer));
-    //AesEncrypt(reinterpret_cast<uint8_t *>(&netflixData), encryptBuffer, sizeof(NetflixData), iv);
     runAes(reinterpret_cast<uint8_t *>(&netflixData), encryptBuffer, sizeof(NetflixData), iv);
 
     ofstream outFile(argv[2], ofstream::binary);
@@ -143,8 +123,9 @@ int main(int argc, const char ** argv)
         return 6;
     }
 
+    // 5. Write IV followed by encrypted NetflixData.
     outFile.write(reinterpret_cast<const char *>(iv), sizeof(iv));
-    outFile.write(reinterpret_cast<const char *>(&netflixData), sizeof(netflixData));
+    outFile.write(reinterpret_cast<const char *>(&encryptBuffer), sizeof(netflixData));
 
     outFile.close();
     inFile.close();
@@ -152,3 +133,4 @@ int main(int argc, const char ** argv)
     cout << "SUCCESS: Written netflix fault to " << argv[2] << endl;
     return 0;
 }
+
