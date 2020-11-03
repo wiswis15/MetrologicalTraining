@@ -38,12 +38,35 @@ struct MemRange
     }
 };
 
+string GetComandLine(pid_t processId)
+{
+    char cmdPath[PATH_MAX];
+    sprintf(cmdPath, "/proc/%u/cmdline", processId);
+    FILE * cmdFile = fopen(cmdPath, "rb");
+    if (cmdFile == nullptr) {
+        return "<Failed to open cmdline file>";
+    }
+    const size_t bufferSize = 200;
+    char buffer[bufferSize];
+    size_t readChars = fread(buffer, 1, bufferSize - 1, cmdFile);
+    size_t lastNonNull = 0;
+    for (size_t i = 0; i < readChars; i++) {
+        if (buffer[i] == '\0') {
+            buffer[i] = ' ';
+        } else {
+            lastNonNull = i;
+        }
+    }
+
+    buffer[lastNonNull + 1] = '\0';
+    fclose(cmdFile);
+    return buffer;
+}
+
 // pagemap file is documented here:
 //   https://www.kernel.org/doc/Documentation/vm/pagemap.txt
 void DumpInfo(pid_t pid)
 {
-    //uint32_t pageSize = static_cast<uint32_t>(sysconf(_SC_PAGESIZE));
-
     char mapsPath[PATH_MAX];
     sprintf(mapsPath, "/proc/%u/maps", pid);
     std::ifstream is01(mapsPath);
@@ -127,14 +150,14 @@ int main()
                 char buffer[512];
                 memset(buffer, 0, sizeof(buffer));
                 int fd;
-                cout << "Process: " << pid << endl;
+                string commandLine = GetComandLine(pid);
+                cout << "Process: " << pid << " (" << commandLine << ")" << endl;
                 DumpInfo(pid);
             }
         }
 
         (void)closedir(dp);
     }
-
 
     return 0;
 }
