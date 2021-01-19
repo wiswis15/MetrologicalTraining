@@ -15,7 +15,7 @@ How to get the sources (has to be done only once):
 --
 
 ```
-./fetchall
+./fetchall.sh
 ```
 
 How to build all packages:
@@ -35,7 +35,7 @@ How to run `WPEFramework`:
 How to open UI in your browser:
 --
 
-1. Checkout output of `./wpeframework-run.sh`, you will see a line like this:
+Check output of `./wpeframework-run.sh`, you will see a line like this:
 
 ```
 [     113470 us] Accessor: http://192.168.2.21:8081/Service
@@ -56,4 +56,4 @@ How to edit package and `make install` your changes:
 3. Find your package in the `build` dir.
 4. `cd` into its `build` dir.
 5. Run `make -j4 install`.
-6. Ask yourself if your change might influence other packages. Editing headers of `Thunder`, for example, might need a remake of ThunderNanoServices.
+6. Ask yourself if your change might influence other packages. Editing headers of `Thunder`, for example, might need a remake of `ThunderNanoServices`.
