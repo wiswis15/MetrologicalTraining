@@ -1,0 +1,27 @@
+diff --git a/definitions/CMakeLists.txt b/definitions/CMakeLists.txt
+index 9c7ee91..7e90d65 100644
+--- a/definitions/CMakeLists.txt
++++ b/definitions/CMakeLists.txt
+@@ -26,7 +26,8 @@ file(GLOB INTERFACE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/../interfaces/I*.h")
+ 
+ set(PUBLIC_HEADERS "definitions.h")
+ 
+-set(GENERATOR_SEARCH_PATH ${CMAKE_SYSROOT}${CMAKE_INSTALL_PREFIX}/include/${NAMESPACE})
++#set(GENERATOR_SEARCH_PATH ${CMAKE_SYSROOT}${CMAKE_INSTALL_PREFIX}/include/${NAMESPACE})
++set(GENERATOR_SEARCH_PATH ${CMAKE_INSTALL_PREFIX}/include/${NAMESPACE})
+ JsonGenerator(CODE INPUT ${JSON_FILE} OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated" INCLUDE_PATH ${GENERATOR_SEARCH_PATH})
+ JsonGenerator(CODE INPUT ${INTERFACE_FILE} OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated" INCLUDE_PATH ${GENERATOR_SEARCH_PATH})
+ 
+diff --git a/interfaces/CMakeLists.txt b/interfaces/CMakeLists.txt
+index ec4e3e1..5f3b576 100644
+--- a/interfaces/CMakeLists.txt
++++ b/interfaces/CMakeLists.txt
+@@ -21,7 +21,7 @@ project(Interfaces)
+ 
+ set(TargetMarshalling ${NAMESPACE}Marshallings)
+ 
+-set(GENERATOR_SEARCH_PATH ${CMAKE_SYSROOT}${CMAKE_INSTALL_PREFIX}/include/${NAMESPACE})
++set(GENERATOR_SEARCH_PATH ${CMAKE_INSTALL_PREFIX}/include/${NAMESPACE})
+ ProxyStubGenerator(INPUT "${CMAKE_CURRENT_SOURCE_DIR}" OUTDIR "${CMAKE_CURRENT_BINARY_DIR}/generated" INCLUDE_PATH ${GENERATOR_SEARCH_PATH})
+ 
+ file(GLOB INTERFACES_HEADERS I*.h)
