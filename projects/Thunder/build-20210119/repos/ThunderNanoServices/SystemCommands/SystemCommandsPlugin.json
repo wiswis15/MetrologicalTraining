@@ -1,0 +1,14 @@
+{
+  "$schema": "plugin.schema.json",
+  "info": {
+    "title": "System Commands Plugin",
+    "callsign": "SystemCommands",
+    "locator": "libWPEFrameworkSystemCommands.so",
+    "status": "beta",
+    "description": "The System Commands plugin allows executing of low level actions on the system.",
+    "version": "1.0"
+  },
+  "interface": {
+    "$ref": "{interfacedir}/SystemCommands.json#"
+  }
+}

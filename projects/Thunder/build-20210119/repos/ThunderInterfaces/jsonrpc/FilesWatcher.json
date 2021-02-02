@@ -1,0 +1,108 @@
+{
+	"$schema": "interface.schema.json",
+	"jsonrpc": "2.0",
+	"info": {
+		"title": "FilesWatcher API",
+		"class": "FilesWatcher",
+		"description": "FilesWatcher API"
+	},
+	"common": {
+		"$ref": "common.json"
+	},
+	"definitions": {
+		"path": {
+			"type": "string",
+			"description": "path of the file to watch",
+			"example": "/var/log/messages"
+		},
+		"file": {
+			"type": "object",
+			"properties": {
+				"path": {
+					"$ref": "#/definitions/path"
+				}
+			},
+			"required": [
+				"path"
+			]
+		},
+		"state": {
+			"type": "string",
+			"enum": [
+				"active",
+				"inactive"
+			],
+			"enumvalues": [
+				1,
+				2
+			],
+			"enumtyped": false,
+			"description": "Files watcher plugin state",
+			"example": "active"
+		},
+		"watchedFiles": {
+			"type": "array",
+			"description": "List of watched files",
+			"items": {
+				"type": "string",
+				"example": "/var/log/messages"
+			}
+		}
+	},
+	"properties": {
+		"state": {
+			"summary": "FilesWatcher plugin state",
+			"readonly": true,
+			"params": {
+				"$ref": "#/definitions/state"
+			}
+		},
+		"listOfWatchedFiles": {
+			"summary": "list of watched files",
+			"readonly": true,
+			"params": {
+				"$ref": "#/definitions/watchedFiles"
+			}
+		}
+	},
+	"methods": {
+		"addfile": {
+			"summary": "Adds a file to the list of watched files",
+			"params": {
+				"$ref": "#/definitions/file"
+			},
+			"result": {
+				"$ref": "#/common/results/void"
+			},
+			"errors": [
+				{
+					"description": "General failure",
+					"$ref": "#/common/errors/general"
+				},
+				{
+					"description": "File does not exist",
+					"$ref": "#/common/errors/badrequest"
+				}
+			]
+		},
+		"removeFile": {
+			"summary": "Stop watching a file",
+			"params": {
+				"$ref": "#/definitions/file"
+			},
+			"result": {
+				"$ref": "#/common/results/void"
+			},
+			"errors": [
+				{
+					"description": "General failure",
+					"$ref": "#/common/errors/general"
+				},
+				{
+					"description": "File is not being watched",
+					"$ref": "#/common/errors/badrequest"
+				}
+			]
+		}
+	}
+}

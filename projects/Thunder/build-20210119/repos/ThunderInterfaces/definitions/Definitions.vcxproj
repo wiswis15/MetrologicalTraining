@@ -1,0 +1,451 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Definitions.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\interfaces\json\ExternalMetadata.h" />
+    <ClInclude Include="definitions.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="..\jsonrpc\BluetoothControl.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\BluetoothRemoteControl.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\Browser.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\Butler.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\Cobalt.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <None Include="..\jsonrpc\common.json" />
+    <CustomBuild Include="..\jsonrpc\Compositor.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\Containers.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\DeviceIdentification.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\DeviceInfo.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\DHCPServer.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\DIALServer.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\DisplayInfo.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\DTV.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\FirmwareControl.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\InputSwitch.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\IOConnector.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\IOControl.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\LocationSync.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\Messenger.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\Monitor.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\Netflix.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\NetworkControl.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\OCDM.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\Packager.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\PerformanceMonitor.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\PlayerInfo.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\Power.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\Provisioning.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\RemoteControl.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\SecureShellServer.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\SecurityAgent.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\Spark.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\StateControl.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\Streamer.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\SystemCommands.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\TestController.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\TestUtility.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\TimeSync.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\TraceControl.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <CustomBuild Include="..\jsonrpc\VolumeControl.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+    <None Include="..\jsonrpc\WebKitBrowser.json" />
+    <CustomBuild Include="..\jsonrpc\WifiControl.json">
+      <FileType>Document</FileType>
+    </CustomBuild>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>15.0</VCProjectVersion>
+    <ProjectGuid>{577A83B6-66B6-4A98-A3D6-4EBA066A1772}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>Definitions</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>definitions</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)..\artifacts\$(Configuration)\</OutDir>
+    <IntDir>$(OutDir)WebBridge\$(TargetName)\</IntDir>
+    <CustomBuildBeforeTargets>
+    </CustomBuildBeforeTargets>
+    <CustomBuildAfterTargets>
+    </CustomBuildAfterTargets>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)..\artifacts\$(Configuration)\</OutDir>
+    <IntDir>$(OutDir)WebBridge\$(TargetName)\</IntDir>
+    <CustomBuildBeforeTargets>
+    </CustomBuildBeforeTargets>
+    <CustomBuildAfterTargets>
+    </CustomBuildAfterTargets>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)..\artifacts\$(Configuration)\</OutDir>
+    <IntDir>$(OutDir)WebBridge\$(TargetName)\</IntDir>
+    <CustomBuildBeforeTargets>
+    </CustomBuildBeforeTargets>
+    <CustomBuildAfterTargets>
+    </CustomBuildAfterTargets>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)..\artifacts\$(Configuration)\</OutDir>
+    <IntDir>$(OutDir)WebBridge\$(TargetName)\</IntDir>
+    <CustomBuildBeforeTargets>
+    </CustomBuildBeforeTargets>
+    <CustomBuildAfterTargets>
+    </CustomBuildAfterTargets>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>DEFINITIONS_EXPORTS;_CRT_SECURE_NO_WARNINGS;_DEBUG;DEFINITIONS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>.;..;$(FrameworkPath);$(WindowsPath);$(WindowsPath)zlib</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(OutDir)</AdditionalLibraryDirectories>
+      <ProgramDatabaseFile>$(IntDir)$(TargetName).pdb</ProgramDatabaseFile>
+    </Link>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+      <Message>
+      </Message>
+    </PreBuildEvent>
+    <CustomBuildStep>
+      <Command>
+      </Command>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Outputs>
+      </Outputs>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Message>
+      </Message>
+    </CustomBuildStep>
+    <CustomBuild>
+      <Command>python  "$(ToolPath)\JsonGenerator\JsonGenerator.py" --keep-empty -c -o "$(projectDir)../interfaces/json" "%(FullPath)"</Command>
+    </CustomBuild>
+    <CustomBuild>
+      <Message>JSONGenerator</Message>
+    </CustomBuild>
+    <CustomBuild>
+      <Outputs>$(ProjectDir)../interfaces/json/JsonEnum_%(Filename).cpp</Outputs>
+      <OutputItemType>ClCompile</OutputItemType>
+      <TreatOutputAsContent>true</TreatOutputAsContent>
+    </CustomBuild>
+    <PostBuildEvent>
+      <Command>copy $(ProjectDir)definitions.h $(ProjectDir)..\interfaces</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>DEFINITIONS_EXPORTS;_CRT_SECURE_NO_WARNINGS;WIN32;_DEBUG;DEFINITIONS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>.;..;$(FrameworkPath);$(WindowsPath);$(WindowsPath)zlib</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(OutDir)</AdditionalLibraryDirectories>
+      <ProgramDatabaseFile>$(IntDir)$(TargetName).pdb</ProgramDatabaseFile>
+    </Link>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+      <Message>
+      </Message>
+    </PreBuildEvent>
+    <CustomBuildStep>
+      <Command>
+      </Command>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Outputs>
+      </Outputs>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Message>
+      </Message>
+    </CustomBuildStep>
+    <CustomBuild>
+      <Command>python  "$(ToolPath)\JsonGenerator\JsonGenerator.py" --keep-empty -c -o "$(projectDir)../interfaces/json" "%(FullPath)"</Command>
+    </CustomBuild>
+    <CustomBuild>
+      <Message>JSONGenerator</Message>
+    </CustomBuild>
+    <CustomBuild>
+      <Outputs>$(ProjectDir)../interfaces/json/JsonEnum_%(Filename).cpp</Outputs>
+      <OutputItemType>ClCompile</OutputItemType>
+      <TreatOutputAsContent>true</TreatOutputAsContent>
+    </CustomBuild>
+    <PostBuildEvent>
+      <Command>copy $(ProjectDir)definitions.h $(ProjectDir)..\interfaces</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>DEFINITIONS_EXPORTS;_CRT_SECURE_NO_WARNINGS;WIN32;NDEBUG;DEFINITIONS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>.;..;$(FrameworkPath);$(WindowsPath);$(WindowsPath)zlib</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(OutDir)</AdditionalLibraryDirectories>
+      <ProgramDatabaseFile>$(IntDir)$(TargetName).pdb</ProgramDatabaseFile>
+    </Link>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+      <Message>
+      </Message>
+    </PreBuildEvent>
+    <CustomBuildStep>
+      <Command>
+      </Command>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Outputs>
+      </Outputs>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Message>
+      </Message>
+    </CustomBuildStep>
+    <CustomBuild>
+      <Command>python  "$(ToolPath)\JsonGenerator\JsonGenerator.py" --keep-empty -c -o "$(projectDir)../interfaces/json" "%(FullPath)"</Command>
+    </CustomBuild>
+    <CustomBuild>
+      <Message>JSONGenerator</Message>
+    </CustomBuild>
+    <CustomBuild>
+      <Outputs>$(ProjectDir)../interfaces/json/JsonEnum_%(Filename).cpp</Outputs>
+      <OutputItemType>ClCompile</OutputItemType>
+      <TreatOutputAsContent>true</TreatOutputAsContent>
+    </CustomBuild>
+    <PostBuildEvent>
+      <Command>copy $(ProjectDir)definitions.h $(ProjectDir)..\interfaces</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>DEFINITIONS_EXPORTS;_CRT_SECURE_NO_WARNINGS;NDEBUG;DEFINITIONS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>.;..;$(FrameworkPath);$(WindowsPath);$(WindowsPath)zlib</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(OutDir)</AdditionalLibraryDirectories>
+      <ProgramDatabaseFile>$(IntDir)$(TargetName).pdb</ProgramDatabaseFile>
+    </Link>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+      <Message>
+      </Message>
+    </PreBuildEvent>
+    <CustomBuildStep>
+      <Command>
+      </Command>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Outputs>
+      </Outputs>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Message>
+      </Message>
+    </CustomBuildStep>
+    <CustomBuild>
+      <Command>python  "$(ToolPath)\JsonGenerator\JsonGenerator.py" --keep-empty -c -o "$(projectDir)../interfaces/json" "%(FullPath)"</Command>
+    </CustomBuild>
+    <CustomBuild>
+      <Message>JSONGenerator</Message>
+    </CustomBuild>
+    <CustomBuild>
+      <Outputs>$(ProjectDir)../interfaces/json/JsonEnum_%(Filename).cpp</Outputs>
+      <OutputItemType>ClCompile</OutputItemType>
+      <TreatOutputAsContent>true</TreatOutputAsContent>
+    </CustomBuild>
+    <PostBuildEvent>
+      <Command>copy $(ProjectDir)definitions.h $(ProjectDir)..\interfaces</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

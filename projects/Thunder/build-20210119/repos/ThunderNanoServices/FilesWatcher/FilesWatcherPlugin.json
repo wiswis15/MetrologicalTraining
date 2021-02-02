@@ -1,0 +1,20 @@
+{
+  "$schema": "plugin.schema.json",
+  "info": {
+    "title": "FilesWatcher Plugin",
+    "callsign": "FilesWatcher",
+    "locator": "libWPEFrameworkFilesWatcher.so",
+    "description":"The FilesWatcher gives the possibility to watch files for any change",
+    "status": "alpha",
+    "version": "1.0"
+  },
+  "configuration": {
+    "listOfFiles":[
+      "/var/log/messages",
+      "notexisting"
+    ]
+  },
+  "interface": {
+    "$ref": "{interfacedir}/FilesWatcher.json"
+  }
+}

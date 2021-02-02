@@ -1,0 +1,4 @@
+{
+ "locator":"libWPEFrameworkFilesWatcher.so",
+ "classname":"FilesWatcher"
+}
