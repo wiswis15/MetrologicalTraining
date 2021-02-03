@@ -35,7 +35,6 @@ namespace Exchange {
         virtual void Register(IFilesWatcher::INotification* sink) = 0;
         virtual void Unregister(IFilesWatcher::INotification* sink) = 0;
 
-	virtual std::unordered_set<string> GetListWatchedFiles() const = 0;
 
 
     };
