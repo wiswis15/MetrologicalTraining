@@ -28,7 +28,7 @@ namespace Plugin {
 
     void FilesWatcher::RegisterAll()
     {
-        PluginHost::JSONRPC::Register<WPEFramework::JsonData::FilesWatcher::FileInfo,void>(_T("addfile"), &FilesWatcher::endpoint_addfile, this);
+        PluginHost::JSONRPC::Register<WPEFramework::JsonData::FilesWatcher::FileInfo,void>(_T("addFile"), &FilesWatcher::endpoint_addfile, this);
         PluginHost::JSONRPC::Register<WPEFramework::JsonData::FilesWatcher::FileInfo,void>(_T("removeFile"), &FilesWatcher::endpoint_removeFile, this);
         PluginHost::JSONRPC::Property<Core::JSON::ArrayType<Core::JSON::String>>(_T("listOfWatchedFiles"), &FilesWatcher::get_listOfWatchedFiles, nullptr,this);
     }
@@ -50,8 +50,8 @@ namespace Plugin {
     //  - ERROR_BAD_REQUEST: File does not exist
     uint32_t FilesWatcher::endpoint_addfile(const WPEFramework::JsonData::FilesWatcher::FileInfo& params)
     {
-        std::string path=params.Path.Value();
-        return AddFile(path);
+        std::string pathOfNewFile=params.Path.Value();
+        return AddFile(pathOfNewFile);
     }
 
     // Method: removeFile - Stop watching a file
@@ -82,7 +82,9 @@ namespace Plugin {
     {
         for (auto& path :_listOfFiles)
         {
-            response.Add(Core::JSON::String(path));
+            Core::JSON::String jsnString ;
+            jsnString = path;
+            response.Add(jsnString);
         }
 
         return Core::ERROR_NONE;

@@ -19,73 +19,62 @@
 
 #include "FilesWatcher.h"
 #include <experimental/filesystem>
+#include <fstream>
 
-namespace WPEFramework {
-namespace Plugin {
-
-    SERVICE_REGISTRATION(FilesWatcher, 1, 0);
-
-
-    static Core::ProxyPoolType<Web::JSONBodyType<FilesWatcher::Data>> jsonBodyDataFactory(2);
-    static Core::ProxyPoolType<Web::JSONBodyType<FilesWatcher::Data>> jsonResponseFactory(4);
-
-    /* virtual */ const string FilesWatcher::Initialize(PluginHost::IShell* service)
+namespace WPEFramework
+{
+    namespace Plugin
     {
-        string message("Initializing FilesWatcher");
-  
 
-        ASSERT(_service == nullptr);
+        SERVICE_REGISTRATION(FilesWatcher, 1, 0);
 
-        // Setup skip URL for right offset.
-        _service = service;
-        _skipURL = static_cast<uint8_t>(_service->WebPrefix().length());
+        static Core::ProxyPoolType<Web::JSONBodyType<FilesWatcher::Data>> jsonBodyDataFactory(2);
+        static Core::ProxyPoolType<Web::JSONBodyType<FilesWatcher::Data>> jsonResponseFactory(4);
 
-        FilesWatcher::Config config;
+        /* virtual */ const string FilesWatcher::Initialize(PluginHost::IShell *service)
+        {
+            string message("");
 
-        config.FromString(_service->ConfigLine());
+            ASSERT(_service == nullptr);
 
-        auto index = config.ListOfWatchedFiles.Elements();
-        while(index.Next() == true) {
-            _listOfFiles.insert(index.Current().Value());
+            // Setup skip URL for right offset.
+            _service = service;
+            _skipURL = static_cast<uint8_t>(_service->WebPrefix().length());
+
+            return message;
         }
-    }
 
-       /* virtual */ void FilesWatcher::Deinitialize(PluginHost::IShell* service)
-    {
-        ASSERT(_service == service);
+        /* virtual */ void FilesWatcher::Deinitialize(PluginHost::IShell *service)
+        {
+            ASSERT(_service == service);
 
-        // No need to monitor the Process::Notification anymore, we will kill it anyway.
+            _service = nullptr;
+        }
 
+        /* virtual */ string FilesWatcher::Information() const
+        {
+            // No additional info to report.
+            return (string());
+        }
 
-   
+        /* virtual */ void FilesWatcher::Inbound(Web::Request &request)
+        {
+            if (request.Verb == Web::Request::HTTP_POST)
+                request.Body(jsonBodyDataFactory.Element());
+        }
 
-        _service = nullptr;
-    }
+        /* virtual */ Core::ProxyType<Web::Response> FilesWatcher::Process(const Web::Request &request)
+        {
+            ASSERT(_skipURL <= request.Path.length());
 
-    /* virtual */ string FilesWatcher::Information() const
-    {
-        // No additional info to report.
-        return (string());
-    }
+            Core::ProxyType<Web::Response> result(PluginHost::IFactories::Instance().Response());
+            Core::TextSegmentIterator index(
+                Core::TextFragment(request.Path, _skipURL, request.Path.length() - _skipURL), false, '/');
 
-    /* virtual */ void FilesWatcher::Inbound(Web::Request& request)
-    {
-        if (request.Verb == Web::Request::HTTP_POST)
-            request.Body(jsonBodyDataFactory.Element());
-    }
+            result->ErrorCode = Web::STATUS_BAD_REQUEST;
+            result->Message = "Unknown error";
 
-     /* virtual */ Core::ProxyType<Web::Response> FilesWatcher::Process(const Web::Request& request)
-    {
-        ASSERT(_skipURL <= request.Path.length());
-
-        Core::ProxyType<Web::Response> result(PluginHost::IFactories::Instance().Response());
-        Core::TextSegmentIterator index(
-            Core::TextFragment(request.Path, _skipURL, request.Path.length() - _skipURL), false, '/');
-
-        result->ErrorCode = Web::STATUS_BAD_REQUEST;
-        result->Message = "Unknown error";
-
-        /* if ((request.Verb == Web::Request::HTTP_GET) && ((index.Next() == true) && (index.Next() == true))) {
+            /*         if ((request.Verb == Web::Request::HTTP_GET) && ((index.Next() == true) && (index.Next() == true))) {
             result->ErrorCode = Web::STATUS_OK;
             result->Message = "OK";
             if (index.Remainder() == _T("State")) {
@@ -120,71 +109,70 @@ namespace Plugin {
             }
         } */
 
-        return result;
-    }
-
-       void FilesWatcher::Register(Exchange::IFilesWatcher::INotification* sink)
-    {
-        _adminLock.Lock();
-
-        // Make sure a sink is not registered multiple times.
-        ASSERT(std::find(_notificationClients.begin(), _notificationClients.end(), sink) == _notificationClients.end());
-
-        _notificationClients.push_back(sink);
-        sink->AddRef();
-
-        _adminLock.Unlock();
-
-        TRACE(Trace::Information, (_T("Registered a sink on the FilesWatcher")));
-    }
-
-       void FilesWatcher::Unregister(Exchange::IFilesWatcher::INotification* sink)
-    {
-        _adminLock.Lock();
-
-        std::list<Exchange::IFilesWatcher::INotification*>::iterator index(std::find(_notificationClients.begin(), _notificationClients.end(), sink));
-
-        // Make sure you do not unregister something you did not register !!!
-        ASSERT(index != _notificationClients.end());
-
-        if (index != _notificationClients.end()) {
-            (*index)->Release();
-            _notificationClients.erase(index);
-            TRACE(Trace::Information, (_T("Unregistered a sink on the power")));
+            return result;
         }
 
-        _adminLock.Unlock();
-    }
+        void FilesWatcher::Register(Exchange::IFilesWatcher::INotification *sink)
+        {
+            _adminLock.Lock();
 
+            // Make sure a sink is not registered multiple times.
+            ASSERT(std::find(_notificationClients.begin(), _notificationClients.end(), sink) == _notificationClients.end());
 
-    
-    uint32_t FilesWatcher::AddFile(const string& file)
-    {
+            _notificationClients.push_back(sink);
+            sink->AddRef();
 
-        if (std::experimental::filesystem::exists(file))
-         {
-            _listOfFiles.insert(file);
-            return Core::ERROR_NONE;
-         }
-         else return Core::ERROR_BAD_REQUEST;
+            _adminLock.Unlock();
 
-    }
+            TRACE(Trace::Information, (_T("Registered a sink on the FilesWatcher")));
+        }
 
-    uint32_t FilesWatcher::RemoveFile(const string& file)
-    {
+        void FilesWatcher::Unregister(Exchange::IFilesWatcher::INotification *sink)
+        {
+            _adminLock.Lock();
 
-        if (std::experimental::filesystem::exists(file))
-         {
-            _listOfFiles.erase(file);
-            return Core::ERROR_NONE;
-         }
-         else return Core::ERROR_BAD_REQUEST;
-    }
+            std::list<Exchange::IFilesWatcher::INotification *>::iterator index(std::find(_notificationClients.begin(), _notificationClients.end(), sink));
 
+            // Make sure you do not unregister something you did not register !!!
+            ASSERT(index != _notificationClients.end());
 
-    
+            if (index != _notificationClients.end())
+            {
+                (*index)->Release();
+                _notificationClients.erase(index);
+                TRACE(Trace::Information, (_T("Unregistered a sink on the power")));
+            }
 
+            _adminLock.Unlock();
+        }
 
+        uint32_t FilesWatcher::AddFile(const string &file)
+        {
 
-}
-}
+            std::ifstream ifile;
+            ifile.open(file);
+            if (ifile)
+            {
+                _listOfFiles.insert(file);
+                Register(file);
+                return Core::ERROR_NONE;
+            }
+            else
+                return Core::ERROR_BAD_REQUEST;
+        }
+
+        uint32_t FilesWatcher::RemoveFile(const string &file)
+        {
+
+            if (_listOfFiles.find(file) != _listOfFiles.end())
+            {
+                _listOfFiles.erase(file);
+                UnRegister(file);
+                return Core::ERROR_NONE;
+            }
+            else
+                return Core::ERROR_BAD_REQUEST;
+        }
+
+    } // namespace Plugin
+} // namespace WPEFramework
