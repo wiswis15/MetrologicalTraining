@@ -18,7 +18,6 @@
  */
 
 #include "FilesWatcher.h"
-#include <experimental/filesystem>
 #include <fstream>
 
 namespace WPEFramework
@@ -67,49 +66,7 @@ namespace WPEFramework
         {
             ASSERT(_skipURL <= request.Path.length());
 
-            Core::ProxyType<Web::Response> result(PluginHost::IFactories::Instance().Response());
-            Core::TextSegmentIterator index(
-                Core::TextFragment(request.Path, _skipURL, request.Path.length() - _skipURL), false, '/');
-
-            result->ErrorCode = Web::STATUS_BAD_REQUEST;
-            result->Message = "Unknown error";
-
-            /*         if ((request.Verb == Web::Request::HTTP_GET) && ((index.Next() == true) && (index.Next() == true))) {
-            result->ErrorCode = Web::STATUS_OK;
-            result->Message = "OK";
-            if (index.Remainder() == _T("State")) {
-                Core::ProxyType<Web::JSONBodyType<Data>> response(jsonResponseFactory.Element());
-                response->PowerState = power_get_state();
-                if (response->PowerState) {
-                    result->ContentType = Web::MIMETypes::MIME_JSON;
-                    result->Body(Core::proxy_cast<Web::IBody>(response));
-                } else {
-                    result->Message = "Invalid State";
-                }
-            } else {
-                result->ErrorCode = Web::STATUS_BAD_REQUEST;
-                result->Message = "Unknown error";
-            }
-        } else if ((request.Verb == Web::Request::HTTP_POST) && (index.Next() == true) && (index.Next() == true)) {
-            result->ErrorCode = Web::STATUS_OK;
-            result->Message = "OK";
-            if (index.Remainder() == _T("State")) {
-                uint32_t timeout = request.Body<const Data>()->Timeout.Value();
-                Exchange::IPower::PCState state = static_cast<Exchange::IPower::PCState>(request.Body<const Data>()->PowerState.Value());
-
-                ControlClients(state);
-
-                Core::ProxyType<Web::JSONBodyType<Data>> response(jsonResponseFactory.Element());
-                response->Status = SetState(state, timeout);
-                result->ContentType = Web::MIMETypes::MIME_JSON;
-                result->Body(Core::proxy_cast<Web::IBody>(response));
-            } else {
-                result->ErrorCode = Web::STATUS_BAD_REQUEST;
-                result->Message = "Unknown error";
-            }
-        } */
-
-            return result;
+            //not ready yet
         }
 
         void FilesWatcher::Register(Exchange::IFilesWatcher::INotification *sink)
@@ -151,10 +108,15 @@ namespace WPEFramework
 
             std::ifstream ifile;
             ifile.open(file);
-            if (ifile)
+            auto found = _listOfFiles.find(FileObserver(this, file)) != _listOfFiles.end();
+            if (ifile && !found)
             {
-                _listOfFiles.insert(file);
-                Register(file);
+                auto newObserver = FilesWatcher::FileObserver(this, file);
+                auto inserted = _listOfFiles.insert(FilesWatcher::FileObserver(this, file));
+                if (inserted.second)
+                {
+                    const_cast<FileObserver &>(*inserted.first).Register();
+                }
                 return Core::ERROR_NONE;
             }
             else
@@ -164,15 +126,73 @@ namespace WPEFramework
         uint32_t FilesWatcher::RemoveFile(const string &file)
         {
 
-            if (_listOfFiles.find(file) != _listOfFiles.end())
+            //auto found=std::find_if(_listOfFiles.begin(),_listOfFiles.end(),[&](const FileObserver& observer){return observer.GetPath()==file;});
+            auto found = _listOfFiles.find(FileObserver(this, file));
+            if (found != _listOfFiles.end())
             {
-                _listOfFiles.erase(file);
-                UnRegister(file);
+                const_cast<FileObserver &>(*found).UnRegister();
+                _listOfFiles.erase(found);
                 return Core::ERROR_NONE;
             }
             else
                 return Core::ERROR_BAD_REQUEST;
         }
+
+        void FilesWatcher::Updated(const string &filePath)
+        {
+            // here we receive notification from the system that the file has been changed --> fire notification for users
+            _adminLock.Lock();
+
+            std::list<Exchange::IFilesWatcher::INotification *>::iterator index(_notificationClients.begin());
+
+            while (index != _notificationClients.end())
+            {
+                //Here fire the notification
+                //(*index)->FileChanged(state);
+                index++;
+            }
+
+            _adminLock.Unlock();
+        }
+
+        /*void FilesWatcher::FileChanged(PluginHost::IShell *plugin)
+        {
+            const string callsign(plugin->Callsign());
+
+            _adminLock.Lock();
+
+            Clients::iterator index(_clients.find(callsign));
+
+            if (plugin->State() == PluginHost::IShell::ACTIVATED)
+            {
+
+                if (index == _clients.end())
+                {
+                    PluginHost::IStateControl *stateControl(plugin->QueryInterface<PluginHost::IStateControl>());
+
+                    if (stateControl != nullptr)
+                    {
+                        _clients.emplace(std::piecewise_construct,
+                                         std::forward_as_tuple(callsign),
+                                         std::forward_as_tuple(stateControl));
+                        TRACE(Trace::Information, (_T("%s plugin is add to power control list"), callsign.c_str()));
+                        stateControl->Release();
+                    }
+                }
+            }
+            else if (plugin->State() == PluginHost::IShell::DEACTIVATION)
+            {
+
+                if (index != _clients.end())
+                { // Remove from the list, if it is already there
+                    _clients.erase(index);
+                    TRACE(Trace::Information, (_T("%s plugin is removed from power control list"), plugin->Callsign().c_str()));
+                }
+            }
+
+            _adminLock.Unlock();
+        }
+        */
 
     } // namespace Plugin
 } // namespace WPEFramework

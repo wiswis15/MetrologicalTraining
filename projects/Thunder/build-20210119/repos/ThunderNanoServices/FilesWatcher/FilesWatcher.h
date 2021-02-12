@@ -24,6 +24,7 @@
 #include <interfaces/IFilesWatcher.h>
 #include <interfaces/json/JsonData_FilesWatcher.h>
 #include <../FileTransfer/FileTransfer.h>
+#include <unordered_set>
 
 namespace WPEFramework
 {
@@ -34,14 +35,77 @@ namespace WPEFramework
             : public PluginHost::IPlugin,
               public PluginHost::IWeb,
               public Exchange::IFilesWatcher,
-              public PluginHost::JSONRPC,
-              public WPEFramework::Core::FileSystemMonitor::ICallback
+              public PluginHost::JSONRPC
+
         {
 
         private:
+            class FileObserver : public WPEFramework::Core::FileSystemMonitor::ICallback
+            {
+
+            public:
+                FileObserver() = delete;
+                FileObserver(const FileObserver &) = delete;
+                FileObserver &operator=(const FileObserver &) = delete;
+                FileObserver(FileObserver &&o) noexcept : _path(std::move(o._path)),_parent(o._parent)
+                {                   
+
+                }
+
+                explicit FileObserver(FilesWatcher *parent, const string &filePath)
+                    : _path(filePath),
+                      _parent(parent)
+
+                {
+                }
+                ~FileObserver()
+                {
+                }
+
+                bool Register() 
+                {
+                    Core::FileSystemMonitor::Instance().Register(this, _path);
+                    return true;
+                }
+                bool UnRegister() 
+                {
+
+                    Core::FileSystemMonitor::Instance().Unregister(this, _path);
+                    return true;
+                }
+
+                void Updated() override
+                {
+                    _parent->Updated(_path);
+                }
+                string GetPath() const
+                {
+                    return _path;
+                }
+
+            private:
+                string _path;
+                FilesWatcher* _parent;
+            };
+
+            struct FileObserverHasher
+            {
+                size_t operator()(const FileObserver &obj) const
+                {
+                    return std::hash<std::string>()(obj.GetPath());
+                }
+            };
+
+            struct FileObserverComparator
+            {
+                bool operator()(const FileObserver &obj1, const FileObserver &obj2) const
+                {
+                    return (obj1.GetPath() == obj2.GetPath());
+                }
+            };
+
             class Notification
-                : public PluginHost::IPlugin::INotification,
-                  public PluginHost::VirtualInput::INotifier
+                : public PluginHost::IPlugin::INotification
             {
 
             public:
@@ -108,7 +172,6 @@ namespace WPEFramework
                 Core::JSON::ArrayType<Core::JSON::String> ListOfWatchedFiles;
             };
 
-        public:
             FilesWatcher(const FilesWatcher &) = delete;
             FilesWatcher &operator=(const FilesWatcher &) = delete;
 
@@ -168,14 +231,8 @@ namespace WPEFramework
             void Unregister(Exchange::IFilesWatcher::INotification *sink) override;
 
         private:
-            //void KeyEvent(const uint32_t keyCode);
-            //void StateChange(PluginHost::IShell* plugin);
-            //oid ControlClients(Exchange::IPower::PCState state);
-
             void RegisterAll();
             void UnregisterAll();
-            //inline Exchange::IPower::PCState TranslateIn(JsonData::Power::StateType value);
-            //inline JsonData::Power::StateType TranslateOut(Exchange::IPower::PCState value) const;
             uint32_t endpoint_addfile(const JsonData::FilesWatcher::FileInfo &params);
             uint32_t endpoint_removeFile(const JsonData::FilesWatcher::FileInfo &params);
             uint32_t get_listOfWatchedFiles(Core::JSON::ArrayType<Core::JSON::String> &response) const;
@@ -183,34 +240,18 @@ namespace WPEFramework
             uint32_t AddFile(const string &file);
             uint32_t RemoveFile(const string &file);
 
-            typedef std::unordered_set<string> ListOfFiles;
+            typedef std::unordered_set<FileObserver, FileObserverHasher, FileObserverComparator> ListOfObservedFiles;
 
-            void Updated() override
-            {
-                // here we receive notification from the system that the file has been changed --> fire notification for users
-                std::cout << "File changed!";
-            }
+            void Updated(const string &filePath);
 
-            bool Register(const string &filename)
-            {
-                // here we receive notification from the system that the file has been changed --> fire notification for users
-                Core::FileSystemMonitor::Instance().Register(this, filename);
-                return true;
-            }
-
-            bool UnRegister(const string &filename)
-            {
-                // here we receive notification from the system that the file has been changed --> fire notification for users
-                Core::FileSystemMonitor::Instance().Unregister(this, filename);
-                return true;
-            }
+            //void StateChange(PluginHost::IShell *plugin);
 
         private:
             Core::CriticalSection _adminLock;
             uint32_t _skipURL;
             PluginHost::IShell *_service;
             std::list<Exchange::IFilesWatcher::INotification *> _notificationClients;
-            ListOfFiles _listOfFiles;
+            ListOfObservedFiles _listOfFiles;
         };
     } //namespace Plugin
 } //namespace WPEFramework
