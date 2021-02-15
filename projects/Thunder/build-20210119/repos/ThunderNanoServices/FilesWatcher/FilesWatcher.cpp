@@ -47,6 +47,7 @@ namespace WPEFramework
         {
             ASSERT(_service == service);
 
+
             _service = nullptr;
         }
 
@@ -69,40 +70,7 @@ namespace WPEFramework
             //not ready yet
         }
 
-        void FilesWatcher::Register(Exchange::IFilesWatcher::INotification *sink)
-        {
-            _adminLock.Lock();
-
-            // Make sure a sink is not registered multiple times.
-            ASSERT(std::find(_notificationClients.begin(), _notificationClients.end(), sink) == _notificationClients.end());
-
-            _notificationClients.push_back(sink);
-            sink->AddRef();
-
-            _adminLock.Unlock();
-
-            TRACE(Trace::Information, (_T("Registered a sink on the FilesWatcher")));
-        }
-
-        void FilesWatcher::Unregister(Exchange::IFilesWatcher::INotification *sink)
-        {
-            _adminLock.Lock();
-
-            std::list<Exchange::IFilesWatcher::INotification *>::iterator index(std::find(_notificationClients.begin(), _notificationClients.end(), sink));
-
-            // Make sure you do not unregister something you did not register !!!
-            ASSERT(index != _notificationClients.end());
-
-            if (index != _notificationClients.end())
-            {
-                (*index)->Release();
-                _notificationClients.erase(index);
-                TRACE(Trace::Information, (_T("Unregistered a sink on the power")));
-            }
-
-            _adminLock.Unlock();
-        }
-
+ 
         uint32_t FilesWatcher::AddFile(const string &file)
         {
 
@@ -140,59 +108,12 @@ namespace WPEFramework
 
         void FilesWatcher::Updated(const string &filePath)
         {
+            string id="FilesWatcherFileChange";
             // here we receive notification from the system that the file has been changed --> fire notification for users
-            _adminLock.Lock();
-
-            std::list<Exchange::IFilesWatcher::INotification *>::iterator index(_notificationClients.begin());
-
-            while (index != _notificationClients.end())
-            {
-                //Here fire the notification
-                //(*index)->FileChanged(state);
-                index++;
-            }
-
-            _adminLock.Unlock();
+            event_statechange(id,filePath);
         }
 
-        /*void FilesWatcher::FileChanged(PluginHost::IShell *plugin)
-        {
-            const string callsign(plugin->Callsign());
-
-            _adminLock.Lock();
-
-            Clients::iterator index(_clients.find(callsign));
-
-            if (plugin->State() == PluginHost::IShell::ACTIVATED)
-            {
-
-                if (index == _clients.end())
-                {
-                    PluginHost::IStateControl *stateControl(plugin->QueryInterface<PluginHost::IStateControl>());
-
-                    if (stateControl != nullptr)
-                    {
-                        _clients.emplace(std::piecewise_construct,
-                                         std::forward_as_tuple(callsign),
-                                         std::forward_as_tuple(stateControl));
-                        TRACE(Trace::Information, (_T("%s plugin is add to power control list"), callsign.c_str()));
-                        stateControl->Release();
-                    }
-                }
-            }
-            else if (plugin->State() == PluginHost::IShell::DEACTIVATION)
-            {
-
-                if (index != _clients.end())
-                { // Remove from the list, if it is already there
-                    _clients.erase(index);
-                    TRACE(Trace::Information, (_T("%s plugin is removed from power control list"), plugin->Callsign().c_str()));
-                }
-            }
-
-            _adminLock.Unlock();
-        }
-        */
+  
 
     } // namespace Plugin
 } // namespace WPEFramework

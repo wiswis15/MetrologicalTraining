@@ -104,5 +104,17 @@
 				}
 			]
 		}
+	},
+	"events": {
+		"statechange": {
+			"summary": "Notifies of file  content change",
+						"id": {
+				"name": "FilesWatcherFileChange",
+				"example": "0"
+			},
+			"params": {
+				"$ref": "#/definitions/file"
+			}
+		}
 	}
 }

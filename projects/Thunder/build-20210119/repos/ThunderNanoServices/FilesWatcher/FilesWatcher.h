@@ -34,7 +34,6 @@ namespace WPEFramework
         class FilesWatcher
             : public PluginHost::IPlugin,
               public PluginHost::IWeb,
-              public Exchange::IFilesWatcher,
               public PluginHost::JSONRPC
 
         {
@@ -47,9 +46,8 @@ namespace WPEFramework
                 FileObserver() = delete;
                 FileObserver(const FileObserver &) = delete;
                 FileObserver &operator=(const FileObserver &) = delete;
-                FileObserver(FileObserver &&o) noexcept : _path(std::move(o._path)),_parent(o._parent)
-                {                   
-
+                FileObserver(FileObserver &&o) noexcept : _path(std::move(o._path)), _parent(o._parent)
+                {
                 }
 
                 explicit FileObserver(FilesWatcher *parent, const string &filePath)
@@ -62,12 +60,12 @@ namespace WPEFramework
                 {
                 }
 
-                bool Register() 
+                bool Register()
                 {
                     Core::FileSystemMonitor::Instance().Register(this, _path);
                     return true;
                 }
-                bool UnRegister() 
+                bool UnRegister()
                 {
 
                     Core::FileSystemMonitor::Instance().Unregister(this, _path);
@@ -85,7 +83,7 @@ namespace WPEFramework
 
             private:
                 string _path;
-                FilesWatcher* _parent;
+                FilesWatcher *_parent;
             };
 
             struct FileObserverHasher
@@ -104,6 +102,7 @@ namespace WPEFramework
                 }
             };
 
+        private:
             class Notification
                 : public PluginHost::IPlugin::INotification
             {
@@ -123,6 +122,7 @@ namespace WPEFramework
                 }
 
             public:
+ 
                 BEGIN_INTERFACE_MAP(Notification)
                 INTERFACE_ENTRY(PluginHost::IPlugin::INotification)
                 END_INTERFACE_MAP
@@ -179,7 +179,7 @@ namespace WPEFramework
 #pragma warning(disable : 4355)
 #endif
             FilesWatcher()
-                : _adminLock(), _skipURL(0), _service(nullptr), _notificationClients()
+                : _adminLock(), _skipURL(0), _service(nullptr)
             {
                 RegisterAll();
             }
@@ -195,7 +195,6 @@ namespace WPEFramework
             BEGIN_INTERFACE_MAP(IFilesWatcher)
             INTERFACE_ENTRY(PluginHost::IPlugin)
             INTERFACE_ENTRY(PluginHost::IWeb)
-            INTERFACE_ENTRY(Exchange::IFilesWatcher)
             INTERFACE_ENTRY(PluginHost::IDispatcher)
             END_INTERFACE_MAP
 
@@ -227,8 +226,9 @@ namespace WPEFramework
 
             //  IFilesWatcher methods
             // -------------------------------------------------------------------------------------------------------
-            void Register(Exchange::IFilesWatcher::INotification *sink) override;
-            void Unregister(Exchange::IFilesWatcher::INotification *sink) override;
+            //void Register(Exchange::IFilesWatcher::INotification *sink) override;
+            //void Unregister(Exchange::IFilesWatcher::INotification *sink) override;
+            //void FileChanged(const string);
 
         private:
             void RegisterAll();
@@ -236,6 +236,7 @@ namespace WPEFramework
             uint32_t endpoint_addfile(const JsonData::FilesWatcher::FileInfo &params);
             uint32_t endpoint_removeFile(const JsonData::FilesWatcher::FileInfo &params);
             uint32_t get_listOfWatchedFiles(Core::JSON::ArrayType<Core::JSON::String> &response) const;
+            void event_statechange(const string& id, const string& path);
 
             uint32_t AddFile(const string &file);
             uint32_t RemoveFile(const string &file);
@@ -244,13 +245,12 @@ namespace WPEFramework
 
             void Updated(const string &filePath);
 
-            //void StateChange(PluginHost::IShell *plugin);
+    
 
         private:
             Core::CriticalSection _adminLock;
             uint32_t _skipURL;
             PluginHost::IShell *_service;
-            std::list<Exchange::IFilesWatcher::INotification *> _notificationClients;
             ListOfObservedFiles _listOfFiles;
         };
     } //namespace Plugin
