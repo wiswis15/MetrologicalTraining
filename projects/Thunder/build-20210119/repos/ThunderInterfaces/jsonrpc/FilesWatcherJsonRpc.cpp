@@ -14,6 +14,7 @@
         uint32_t endpoint_removeFile(const JsonData::FilesWatcher::FileInfo& params);
         uint32_t get_state(Core::JSON::EnumType<JsonData::FilesWatcher::StateType>& response) const;
         uint32_t get_listOfWatchedFiles(Core::JSON::ArrayType<Core::JSON::String>& response) const;
+        void event_statechange(const string& id, const string& path);
 */
 
 namespace WPEFramework {
@@ -92,6 +93,18 @@ namespace Plugin {
         // response = ...
 
         return Core::ERROR_NONE;
+    }
+
+    // Event: statechange - Notifies of file  content change
+    void FilesWatcher::event_statechange(const string& id, const string& path)
+    {
+        FileInfo params;
+        params.Path = path;
+
+        Notify(_T("statechange"), params, [&](const string& designator) -> bool {
+            const string designator_id = designator.substr(0, designator.find('.'));
+            return (id == designator_id);
+        });
     }
 
 } // namespace Plugin

@@ -33,7 +33,6 @@ namespace WPEFramework
 
         class FilesWatcher
             : public PluginHost::IPlugin,
-              public PluginHost::IWeb,
               public PluginHost::JSONRPC
 
         {
@@ -102,55 +101,6 @@ namespace WPEFramework
                 }
             };
 
-        private:
-            class Notification
-                : public PluginHost::IPlugin::INotification
-            {
-
-            public:
-                Notification() = delete;
-                Notification(const Notification &) = delete;
-                Notification &operator=(const Notification &) = delete;
-
-                explicit Notification(FilesWatcher *parent)
-                    : _parent(*parent)
-                {
-                    ASSERT(parent != nullptr);
-                }
-                ~Notification()
-                {
-                }
-
-            public:
- 
-                BEGIN_INTERFACE_MAP(Notification)
-                INTERFACE_ENTRY(PluginHost::IPlugin::INotification)
-                END_INTERFACE_MAP
-
-            private:
-                FilesWatcher &_parent;
-            };
-
-            class Config : public Core::JSON::Container
-            {
-            private:
-                Config(const Config &);
-                Config &operator=(const Config &);
-
-            public:
-                Config()
-                    : Core::JSON::Container()
-                {
-                    Add(_T("listOfFiles"), &ListOfWatchedFiles);
-                }
-                ~Config()
-                {
-                }
-
-            public:
-                Core::JSON::ArrayType<Core::JSON::String> ListOfWatchedFiles;
-            };
-
         public:
             class Data : public Core::JSON::Container
             {
@@ -179,7 +129,7 @@ namespace WPEFramework
 #pragma warning(disable : 4355)
 #endif
             FilesWatcher()
-                : _adminLock(), _skipURL(0), _service(nullptr)
+                : _service(nullptr)
             {
                 RegisterAll();
             }
@@ -194,7 +144,6 @@ namespace WPEFramework
         public:
             BEGIN_INTERFACE_MAP(IFilesWatcher)
             INTERFACE_ENTRY(PluginHost::IPlugin)
-            INTERFACE_ENTRY(PluginHost::IWeb)
             INTERFACE_ENTRY(PluginHost::IDispatcher)
             END_INTERFACE_MAP
 
@@ -219,16 +168,7 @@ namespace WPEFramework
             // to this plugin. This Metadata can be used by the MetData plugin to publish this information to the ouside world.
             string Information() const override;
 
-            //  IWeb methods
-            // -------------------------------------------------------------------------------------------------------
-            void Inbound(Web::Request &request) override;
-            Core::ProxyType<Web::Response> Process(const Web::Request &request) override;
 
-            //  IFilesWatcher methods
-            // -------------------------------------------------------------------------------------------------------
-            //void Register(Exchange::IFilesWatcher::INotification *sink) override;
-            //void Unregister(Exchange::IFilesWatcher::INotification *sink) override;
-            //void FileChanged(const string);
 
         private:
             void RegisterAll();
@@ -236,7 +176,7 @@ namespace WPEFramework
             uint32_t endpoint_addfile(const JsonData::FilesWatcher::FileInfo &params);
             uint32_t endpoint_removeFile(const JsonData::FilesWatcher::FileInfo &params);
             uint32_t get_listOfWatchedFiles(Core::JSON::ArrayType<Core::JSON::String> &response) const;
-            void event_statechange(const string& id, const string& path);
+            void event_statechange(const string &id, const string &path);
 
             uint32_t AddFile(const string &file);
             uint32_t RemoveFile(const string &file);
@@ -245,10 +185,7 @@ namespace WPEFramework
 
             void Updated(const string &filePath);
 
-    
-
         private:
-            Core::CriticalSection _adminLock;
             uint32_t _skipURL;
             PluginHost::IShell *_service;
             ListOfObservedFiles _listOfFiles;

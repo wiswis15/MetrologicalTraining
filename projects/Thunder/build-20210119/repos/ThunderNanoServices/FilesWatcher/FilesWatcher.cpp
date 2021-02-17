@@ -27,9 +27,6 @@ namespace WPEFramework
 
         SERVICE_REGISTRATION(FilesWatcher, 1, 0);
 
-        static Core::ProxyPoolType<Web::JSONBodyType<FilesWatcher::Data>> jsonBodyDataFactory(2);
-        static Core::ProxyPoolType<Web::JSONBodyType<FilesWatcher::Data>> jsonResponseFactory(4);
-
         /* virtual */ const string FilesWatcher::Initialize(PluginHost::IShell *service)
         {
             string message("");
@@ -39,14 +36,12 @@ namespace WPEFramework
             // Setup skip URL for right offset.
             _service = service;
             _skipURL = static_cast<uint8_t>(_service->WebPrefix().length());
-
             return message;
         }
 
         /* virtual */ void FilesWatcher::Deinitialize(PluginHost::IShell *service)
         {
             ASSERT(_service == service);
-
 
             _service = nullptr;
         }
@@ -57,23 +52,10 @@ namespace WPEFramework
             return (string());
         }
 
-        /* virtual */ void FilesWatcher::Inbound(Web::Request &request)
-        {
-            if (request.Verb == Web::Request::HTTP_POST)
-                request.Body(jsonBodyDataFactory.Element());
-        }
 
-        /* virtual */ Core::ProxyType<Web::Response> FilesWatcher::Process(const Web::Request &request)
-        {
-            ASSERT(_skipURL <= request.Path.length());
 
-            //not ready yet
-        }
-
- 
         uint32_t FilesWatcher::AddFile(const string &file)
         {
-
             std::ifstream ifile;
             ifile.open(file);
             auto found = _listOfFiles.find(FileObserver(this, file)) != _listOfFiles.end();
@@ -108,12 +90,10 @@ namespace WPEFramework
 
         void FilesWatcher::Updated(const string &filePath)
         {
-            string id="FilesWatcherFileChange";
+            string id = "FilesWatcherFileChange";
             // here we receive notification from the system that the file has been changed --> fire notification for users
-            event_statechange(id,filePath);
+            event_statechange(id, filePath);
         }
-
-  
 
     } // namespace Plugin
 } // namespace WPEFramework

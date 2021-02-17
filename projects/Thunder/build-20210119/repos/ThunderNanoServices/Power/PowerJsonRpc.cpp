@@ -34,6 +34,7 @@ namespace Plugin {
     {
         PluginHost::JSONRPC::Register<PowerData,void>(_T("set"), &Power::endpoint_set, this);
         PluginHost::JSONRPC::Property<Core::JSON::EnumType<StateType>>(_T("state"), &Power::get_state, nullptr, this);
+        PluginHost::JSONRPC::Property<Core::JSON::EnumType<StateType>>(_T("state"), &Power::get_state, nullptr, this);
     }
 
     void Power::UnregisterAll()
